@@ -7,6 +7,12 @@ publicly released. Exact artifacts and acceptance belong to their release record
 
 ## Unreleased / 未发布变更
 
+- Add the GAgent logo, redesigned bilingual landing pages, ecosystem/download
+  navigation, practical case guides and evidence-linked development milestones.
+- Add a complete capability setup matrix and importable service-profile example;
+  clarify YOLO installation, visual-model setup and independent verification.
+- Permit reviewed public website navigation in source docs while retaining
+  credential, runtime-endpoint and APK/archive checks; add focused regressions.
 - Rewrite English and Chinese READMEs around actual capabilities, setup and limits.
 - Add first-run, development, testing, troubleshooting, validation and release guides.
 - Define contribution/review requirements, bilingual PR and issue templates,

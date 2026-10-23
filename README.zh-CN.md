@@ -1,86 +1,126 @@
-# GAgent
+<div align="center">
+  <img src="docs/assets/gagent-logo.png" width="128" height="128" alt="GAgent：开放的 G 循环与蓝色行动节点">
+  <h1>GAgent</h1>
+  <p><strong>让智能体住进你的手机。</strong></p>
+  <p>Python 工具 · 视觉操作 · 记忆复用 · 自选模型</p>
+  <p><a href="README.md">English</a> · <a href="#start">快速开始</a> · <a href="docs/CONFIGURATION.md">开启功能</a> · <a href="docs/README.md">开发文档</a></p>
+  <p><a href="https://gaagent.ai/">官网</a> · <a href="https://app.gaagent.ai/">GA 手机版 APK</a> · <a href="https://github.com/lsdefine/GenericAgent">GenericAgent</a> · <a href="https://androidbench.gaagent.ai/">AndroidBench</a></p>
+</div>
 
-**运行在 Android 手机上的 Python 智能体框架，连接原生设备工具和你选择的模型服务。**
+[Apache-2.0](LICENSE) · 视觉操作要求 Android 11+ · arm64-v8a · [最早 Android 记录：2026-06-13](docs/HISTORY.md)
 
-[English](README.md) · [开始使用](docs/GETTING_STARTED.md) · [文档导航](docs/README.md) · [参与贡献](CONTRIBUTING.zh-CN.md)
+GAgent 将 [GenericAgent](https://github.com/lsdefine/GenericAgent) 的执行循环带到 Android。
+给出任务后，它观察屏幕、调用工具、验证结果，并可保留有用的操作方法。
+Python、文件与记忆运行在手机上，推理由你配置的模型接口提供；日常使用不依赖电脑或 USB。
 
-GAgent 将一个请求推进为“观察、调用工具、验证结果”的循环。Python 运行时、会话、文件和记忆保存在手机上；模型推理由你配置的接口提供，截图和必要的工具结果可能发送给该服务。日常手机操作不需要电脑或 USB 连接。
+> **公开前的私有候选 · 2.33.3 / 136。** 公开时间由所有者决定。
+> 要使用本仓库源码对应的版本，请获取**本仓库构建**。GA 手机版下载站属于另一分发渠道，
+> [渠道说明及旧地址 apk.gaagent.ai](docs/ECOSYSTEM.md)列出了区别。
 
-> **项目状态：**公开前的私有候选，Android 基线为 2.33.3 / 136。
-> 已验证范围见[验收记录](docs/VALIDATION.md)，尚未解决的原生依赖问题见
-> [依赖安全](docs/DEPENDENCY_SECURITY.md)。仓库可见性和公开时间由所有者决定。
+## 核心能力
 
-## 可以用它做什么
+| 观察 | 执行 | 复用 |
+| --- | --- | --- |
+| 截图、内置 OCR、可选 YOLO、已配置的视觉模型 | Python 工具和 Android 原生手势、文件、浏览器、设备适配 | 会话、本地记忆、可复用规程，以及可选的电脑与服务连接 |
 
-| 能力 | 实现方式 |
+主循环聚焦规划与执行；屏幕几何、权限、模型协议和远程服务各有明确边界。
+[查看架构 →](docs/ARCHITECTURE.md)
+
+<a id="cases"></a>
+## 实操案例
+
+先从能直接核验结果的小任务开始。下表来自已记录的开发验收；
+[案例指南](docs/CASES.md)提供可复用指令、前置条件和检查方法。
+
+| 任务 | 实际结果 | 证据 |
+| --- | --- | --- |
+| 调整系统亮度 | 读回亮度与模式，测试后恢复原设置 | [通过](docs/CASES.md#settings) |
+| B 站搜索视频 | 核对“播放多”选中态及标题、UP；复杂组合筛选仍部分完成 | [通过 / 部分完成](docs/CASES.md#video-search) |
+| 高德查询路线 | 读回时间和距离，未启动导航；利用了匹配的历史路线 | [通过，暖态](docs/CASES.md#route) |
+| 微信麦当劳小程序 | 纯 GUI 选好套餐，停在手机号登录；未结算、下单或付款 | [部分完成 / 登录边界](docs/CASES.md#wechat) |
+
+还可以尝试[本地文件与电脑协作示例](docs/CASES.md#recipes)。更多公开过程见
+[AndroidBench 案例](https://androidbench.gaagent.ai/#traces) 与 [评测方法](https://androidbench.gaagent.ai/#method)。
+各研究的设备、模型与协议独立记录，不作为所有 GAgent 版本的统一成绩。
+
+<a id="start"></a>
+## 快速开始
+
+1. **安装：**使用 arm64-v8a、Android 11 / API 30+ 手机，从本仓库
+   [Actions](https://github.com/shenhao-stu/GAgent/actions/workflows/android.yml) 或
+   [Releases](https://github.com/shenhao-stu/GAgent/releases)获取核验后的 APK，或[自行构建](docs/BUILD.md)。
+   私有制品需要仓库权限；Manifest 的 API 24 最低安装版本不等于完整截图支持。
+2. **配置模型：**在「设置 → 服务商与模型」填写服务地址、自己的密钥与模型，选择匹配协议。
+   分别验证文本、工具和图像能力，见[模型与视觉配置](docs/CONFIGURATION.md#models)。
+3. **开启手机操作：**授予无障碍与悬浮窗权限；需要跨应用持续显示进度时开启「悬浮窗常开」。
+   其他权限按工具需要授权。
+4. **做一个小任务：**“打开设置，描述当前画面，不修改任何设置。”核对真实画面，并试用停止按钮。
+
+正式版包名 `io.github.shenhaostu.gagent`，调试版为 `io.github.shenhaostu.gagent.debug`。
+两者数据独立，均可与旧应用共存。保留现有数据；签名不匹配时先核对和安排迁移，不直接卸载。
+[首次使用指南](docs/GETTING_STARTED.md) · [排障指南](docs/TROUBLESHOOTING.md)
+
+<a id="capabilities"></a>
+## 开启你需要的功能
+
+| 能力 | 开启方式 |
 | --- | --- |
-| 操作手机 | 观察当前画面、定位目标、执行动作、核验结果。普通应用可使用无障碍工具；微信使用截图、OCR、可选视觉检测与手势，不读取其节点树。 |
-| 本地工具与记忆 | 运行 Python 工具、处理文件、保存会话状态和复用设备上的操作说明。 |
-| 选择模型 | 自行配置服务地址、密钥与模型。现有适配器支持多种协议；服务商支持时可使用原生工具调用。 |
-| 视觉定位 | 默认包含 PaddleOCR；兼容 YOLO 权重可由用户按适用许可自行安装。 |
-| 可选连接 | 在兼容服务已部署的前提下，接入 PC Link/P2P、GAnet、流式语音或 APK 构建服务。 |
+| 对话、工具、记忆、本地文件 | 配置支持工具的模型；访问共享文件时授权 |
+| 手机 GUI 与 OCR | 开启无障碍、悬浮窗；OCR 已内置 |
+| 看图问答 | 为本地视觉适配器配置支持图像的服务商，用合成图片自测 |
+| YOLO 图标检测 | 按模型许可安装兼容 ONNX，重启并验证实际检测，见[完整步骤](docs/OPTIONAL_YOLO.md) |
+| 语音 / PC Link / GAnet / APK 构建 | 「设置 → 可选组件」，填写兼容服务地址和自己的限定权限凭据 |
+| GA Plan | 作为普通模型服务商接入，填写自己的用户密钥 |
+| 定时任务、通知、飞书、感知、无线 ADB、虚拟屏、Jev | 按[功能清单](docs/CONFIGURATION.md)逐项配置，前置条件与限制各不相同 |
 
-框架不要求购买套餐或登录托管账号。GA Plan 可以作为普通模型服务商接入。
-本仓库不包含这些组件的完整服务端、生产凭据或商业支付流程，边界详见
-[功能去留清单](docs/FEATURE_SCOPE.md)和[官方组件方案](docs/OFFICIAL_MODULES.md)。
+没有统一的“全部解锁”开关。框架无需强制托管登录或购买套餐；可选客户端不等于服务端安装器，
+交付给客户端的秘密也不能保证无法提取。
+[完整配置指南](docs/CONFIGURATION.md) · [官方组件与权限边界](docs/OFFICIAL_MODULES.md)
 
-## 在手机上开始
+<a id="roadmap-news"></a>
+## Roadmap & News
 
-1. 截图与手势工作流请使用 **Android 11 / API 30 及以上的 arm64-v8a 手机**。
-   Manifest 的最低安装版本为 API 24，但这不表示旧版本支持完整截图能力。
-2. [自行构建 APK](docs/BUILD.md)，或从本仓库
-   [Actions](https://github.com/shenhao-stu/GAgent/actions/workflows/android.yml)、
-   [Releases](https://github.com/shenhao-stu/GAgent/releases)获取已提供并核验的制品。
-   私有制品需要仓库访问权限。
-3. 在「设置 → 服务商与模型」填写自己的接口、凭据和模型，分别检查文本、工具调用和图像能力。
-4. 手机操作需要无障碍与悬浮窗权限；麦克风、文件等能力按实际使用需要授权。
-5. 先试一个小任务，例如“打开设置，描述当前画面，不修改任何设置”，确认结果后再尝试长任务。
+最早可核验的 Android 实现日期为 **2026 年 6 月 13 日**：私有前身已包含 Python 智能体、
+设备桥接与视觉管线，当日 README 记录了构建及真机检查。这是开发沿革，**不是公开开源日期**。
 
-[首次使用指南](docs/GETTING_STARTED.md)说明安装身份、权限和模型配置；
-接口超时或浮窗消失时，先看[排障指南](docs/TROUBLESHOOTING.md)。
-
-| 构建类型 | 应用 ID |
+| 日期 · UTC+8 | 重要节点 |
 | --- | --- |
-| Release | `io.github.shenhaostu.gagent` |
-| Debug | `io.github.shenhaostu.gagent.debug` |
+| **2026-10-23** | 整理 Apache-2.0 私有开源候选；组件改为主动接入；微信纯 GUI、网络/浮窗/旋转修复与有限 Pixel 验收 |
+| **2026-08-06 → 08-13** | PC Link/P2P 客户端与 GAnet 集成记录 |
+| **2026-07-15 → 07-18** | 定时唤起任务与原生通知触发自动化 |
+| **2026-06-27 → 07-03** | 本地修改保留、无线 ADB、内置浏览器控制与虚拟屏适配 |
+| **2026-06-24** | 将旧检测器替换为 Android 专用 YOLOv8n，识别 21 类 UI 控件 |
+| **2026-06-16** | 流式语音输入 |
+| **2026-06-13** | Android 实现及当日构建、真机验证记录 |
 
-两个类型有独立数据目录，也能与旧应用共存。密钥、账号和会话不会静默迁移。
-本地签名包不一定能覆盖维护者签名的安装包，不要通过清除数据解决签名不匹配。
+[历史节点与源码依据](docs/HISTORY.md) · [变更记录](CHANGELOG.md)
 
-## 使用边界
+后续重点：
 
-- **本地运行不等于离线推理。** 凭据保存在应用私有存储，调用时用于向所选服务认证；
-  任务文本、图片和工具输出可能随请求发送。
-- **框架不是沙箱。** 生成的 Python 和设备动作可以在已授予权限内影响真实文件、应用和账号。
-- **支持范围以证据为准。** 当前实机验收覆盖 Pixel 10 / Android 16。
-  旋转与边界检查不能代替所有折叠屏、厂商系统、外接屏及 16 KB 页大小设备的验收。
-- **完成任务需要结果证据。** 接口成功或点击被系统接受，不代表排序、购买流程等多步任务已经完成。
-- **可选模型有独立条款。** 默认不捆绑或自动下载 YOLO，见[安装与许可](docs/OPTIONAL_YOLO.md)。
+- **发布准备：**迁移受支持的 Python/原生依赖，明确模型再分发权利，完善制品来源记录。
+- **跨设备能力：**真实折叠/展开、更多厂商系统、16 KB 页大小与后台生命周期验收。
+- **任务可靠性：**加强筛选/排序结果核验、可重复对照测试和限定权限的组件接入。
 
-本分发停用了自动托管遥测和提问收集。[安全说明](SECURITY.md)列出了数据流、报告方式与信任边界。
+[路线图与验收条件 →](docs/ROADMAP.md)
 
-## 开发与贡献
+## 开发、贡献与验证
 
-设计原则是把变化集中在明确边界，将不变量落实为小而可测的函数。
-能在设备或服务适配层解决的问题，优先不改变智能体主循环。
+[构建](docs/BUILD.md) · [架构](docs/ARCHITECTURE.md) · [开发](docs/DEVELOPMENT.md) · [测试](docs/TESTING.md) · [贡献](CONTRIBUTING.zh-CN.md) · [PR 要求](.github/PULL_REQUEST_TEMPLATE.md)
 
-| 目标 | 入口 |
-| --- | --- |
-| 构建、签名 Android 包 | [构建指南](docs/BUILD.md) |
-| 理解运行过程和扩展位置 | [架构](docs/ARCHITECTURE.md)、[开发指南](docs/DEVELOPMENT.md) |
-| 修复问题并选择验证范围 | [测试指南](docs/TESTING.md) |
-| 提建议、提交 PR | [贡献指南](CONTRIBUTING.zh-CN.md) |
-| 核对证据、准备发布 | [验收记录](docs/VALIDATION.md)、[发布指南](docs/RELEASING.md) |
-| 了解当前优先事项 | [路线图](docs/ROADMAP.md) |
+保持高内聚，明确变化的输入，用小而可测的函数维护不变量，隔离网络、文件与 Android 副作用。
+能由适配层解决的问题优先不改变 GA 主循环，欢迎中英文贡献。
 
-欢迎中英文贡献。一个 PR 聚焦一个行为变化，提供可复现证据，并保留第三方署名。
-[PR 模板](.github/PULL_REQUEST_TEMPLATE.md)列出了必要审查信息。
+当前实机证据覆盖 **Pixel 10 / Android 16**。点击成功不等于任务完成，旋转测试不代表全部折叠屏或 OEM 均兼容。
+详见[验收记录](docs/VALIDATION.md)和[依赖待办](docs/DEPENDENCY_SECURITY.md)。
+任务文本、截图和工具结果可能发送给所选模型；生成代码使用你授予的能力执行，框架不是恶意代码沙箱。
+[安全与数据流](SECURITY.md)。
 
 ## 许可证与来源
 
-项目自有代码采用 [Apache-2.0](LICENSE)。GAgent 源自 **Liang Jiaqing 及贡献者**
-的 GenericAgent / GAndroid，原作者署名保留于 [NOTICE](NOTICE)。
+项目自有代码采用 [Apache-2.0](LICENSE)。GAgent 源自 **Liang Jiaqing 及贡献者**的
+GenericAgent / GAndroid，署名保留于 [NOTICE](NOTICE)。[第三方库、模型和字体](THIRD_PARTY.md)沿用各自条款。
+YOLO 权重可选安装、默认不捆绑。本仓库分发 Android，iOS 与 ESP32 开发仍独立维护。
 
-第三方库、模型和字体沿用各自许可，见 [THIRD_PARTY.md](THIRD_PARTY.md)。
-项目许可证不授予私有服务凭据、服务商标或独立模型权重的权利。
-本仓库分发 Android 工程；iOS 与 ESP32 开发仍独立维护。
+[官网](https://gaagent.ai/) · [上游框架](https://github.com/lsdefine/GenericAgent) · [生态与下载渠道](docs/ECOSYSTEM.md) · [Logo](docs/assets/README.md)
+
+旧 APK 地址：[apk.gaagent.ai](https://apk.gaagent.ai/)（2026-10-23 检查为 HTTP 404，当前下载站见上方入口）。

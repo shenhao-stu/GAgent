@@ -88,6 +88,11 @@ recipe instead of copying it into many pages. Do not claim a roadmap item is shi
 A docs-only change needs factual, link and formatting review, not invented behavior
 tests.
 
+For README cases and news, distinguish a reusable example from an observed run.
+Link the tested revision, conditions and outcome; keep partial and blocked results
+visible. Date milestones from reviewed history and distinguish implementation,
+release and public-launch dates. Download links must identify their distribution.
+
 Follow the [Code of Conduct](CODE_OF_CONDUCT.md). Report vulnerabilities through
 [SECURITY.md](SECURITY.md), not ordinary bug reports. Submit only material you have
 the right to contribute under the project's [Apache-2.0 license](LICENSE), and
