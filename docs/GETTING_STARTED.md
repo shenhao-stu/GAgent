@@ -80,7 +80,7 @@ to begin with the ordinary screenshot/gesture route.
 Try “Open Settings and describe the visible screen without changing any settings.”
 Check that the intended app opened, the screen description matches, and the task
 can be stopped. Move GAgent to the background during a harmless task to check its
-overlay. Enable **Floating window always on** if you want it retained in apps
+overlay. Enable **Always-on floating window** if you want it retained in apps
 whose visual-only policy otherwise hides it.
 
 可先让它“打开设置，描述画面，不修改设置”。检查实际画面，并试用停止按钮。

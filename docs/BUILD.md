@@ -20,6 +20,7 @@ include a Gradle wrapper. Run commands below from the repository root.
 | Android SDK / build tools | 34 / 34.0.0 | Workflow, app/build.gradle |
 | Android NDK | 25.1.8937393 | Workflow, app/build.gradle |
 | Build Python / embedded Python | 3.10 / Chaquopy 3.10 line | Workflow, app/build.gradle |
+| Node.js for JavaScript checks | Runner-provided in CI; version not pinned by the workflow | Android workflow |
 | Go | 1.27.3 | Workflow, tsbridge/go.mod |
 | gomobile / mesh dependencies | Pinned module revisions | tsbridge/go.mod, tsbridge/go.sum |
 | Target device | arm64-v8a, minSdk 24, targetSdk 34 | app/build.gradle |
