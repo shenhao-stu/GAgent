@@ -1,5 +1,6 @@
 """Optional text grounding; the planner owns intent and completion verification."""
 import json
+import os
 import math
 import re
 import threading
@@ -133,7 +134,7 @@ def _tap_target(device, target, package, timeout, result, use_jev):
     """One bounded navigation tap, or an explicit no-action fallback. Never retry."""
     if not isinstance(target, str) or not 1 <= len(target.strip()) <= 240:
         raise ValueError("target must be a short navigation description")
-    if not isinstance(package, str) or "." not in package or package == "com.ljq.ga":
+    if not isinstance(package, str) or "." not in package or package in {"com.ljq.ga", os.environ.get("GA_PACKAGE", "io.github.shenhaostu.gagent")}:
         raise ValueError("package must name the expected foreground app")
     if type(timeout) not in (int, float) or not math.isfinite(timeout) or not 0.5 <= timeout <= 8:
         raise ValueError("timeout must be 0.5..8 seconds")

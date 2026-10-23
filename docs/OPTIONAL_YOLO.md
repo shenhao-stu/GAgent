@@ -44,7 +44,25 @@ YOLO("best.pt").export(format="onnx", imgsz=640, dynamic=True,
 
 Required contract: float32 RGB `[1,3,H,W]`, NMS output `[1,300,6]` with `x1,y1,x2,y2,confidence,class_id`, and the 21 classes in `ui_detect_lite.NAMES` order. Exporter versions may differ; validate compatibility first. The recipe was not re-exported in this release.
 
-## 3. 安装到自己的手机 / Install on your phone
+## 3. 从设置导入 / Import from Settings
+
+在设置中打开「本地图标识别」，选择你已有的兼容 `.onnx` 文件（不超过 32 MiB）。
+无需模型 API Key。应用会先在手机上执行方形、矩形两种输入的 ONNX 推理校验，
+通过后才切换模型；失败会保留之前的模型。模型独立存放于 `user_models/`，
+配置位于 `kv/ga.detector.json`，覆盖安装不会替换该文件。导入后点击「检测当前屏幕」，
+核对实际图标数、文字数、屏幕尺寸和耗时。文件存在不等于实际检测通过。
+
+Open Settings → Local icon detection and select your compatible `.onnx` file
+(up to 32 MiB). No provider key is required. The app runs square and rectangular
+inference checks before switching models; failed imports preserve the previous
+model. User models and selection survive APK upgrades. Use “Test current screen”
+to verify actual icon/text detections, screen dimensions and elapsed time.
+
+The APK still excludes the optional weights; importing a model does not change
+its licensing terms or grant redistribution rights.
+
+## 4. 兼容旧安装方式 / Legacy installation
+
 
 将兼容的 ONNX 重命名为 `ui_detect_yolo.onnx`，记录其 SHA-256，并通过 USB/系统文件选择放到手机 Download 目录。让 GAgent 在本机执行以下代码（把摘要替换为你实际核验的值），或 debug 安装使用 `adb shell run-as` 写入相同私有路径。无需官方账号、订阅或密钥。
 

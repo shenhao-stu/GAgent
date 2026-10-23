@@ -2630,7 +2630,6 @@ function _normAvatarToken(v){if(!v)return '';
 function setUserAvatar(token,opts){opts=opts||{};const prev=userAv;userAv=token;   // 写本地+持久(失败回滚, 不与渲染分叉)
   if(!LS.set('userAvatar',token)){userAv=prev;toast(t('t_attSaveFail'));return false}
   refreshAvatarRow();if(curConvo&&!running)renderConvo(curConvo);                 // 刷新设置/抽屉/账户页头像 + 已有气泡
-  if(opts.sync)                     // 远程同步(跨设备/重装)
   return true}
 // 后端头像(登录回填/注册上传)落本地展示: 仅当本地未自定义图片头像时(尊重本地选择), 不回写后端。
 function hydrateAvatarFromBackend(av){const tok=_normAvatarToken(av);if(!tok)return;
@@ -3013,7 +3012,12 @@ function _reflectUpdateBadge(){   // 持久反映"有可用更新"(关于行 + �
   const av=LS.get('ota.availCode',0),cur=_appCode(),skip=LS.get('ota.skip',0),show=(av>cur&&av!==skip)?'':'none';
   ['updateBadge','updBadge2'].forEach(id=>{const b=$(id);if(b)b.style.display=show});}
 function openUpdatePage(){setNav('updatePanel',t('appUpdate'),'appUpdate')}   // 集中入口: 检查更新(热更新) + 演化融合, 各带说明
+function _updateSource(){try{return JSON.parse(GA.appVersion())||{}}catch(e){return {}}}
 function renderUpdatePage(){
+  const avInfo=_updateSource(), external=avInfo.updatesConfigured===false;
+  const row=$('swOtaBeta');if(row)row.closest('.row').style.display=external?'none':'';
+  const label=$('rowDoUpdate').querySelector('.k');if(label)label.textContent=external?(lang==='en'?'Releases & downloads':'发布与下载'):t('checkUpdate');
+  const hint=$('updatePanel').querySelector('[data-i18n=updHint]');if(hint&&external)hint.textContent=lang==='en'?'Automatic updates are not configured. Visit this app’s GitHub Releases page to check for available downloads. A package with the same identity and signing certificate retains data.':'尚未配置自动更新。请前往本应用的 GitHub Releases 页面查看可用下载；安装同包名、同签名版本可保留数据。';
   const v=$('updCurVer');if(v){let av=null;try{av=JSON.parse((window.GA&&GA.appVersion&&GA.appVersion())||'null')}catch(e){}
     let s=(av&&av.name)?('v'+av.name+(av.code?' ('+av.code+')':'')):'—';
     if(av&&av.channel==='beta')s+=' · '+t('otaChannelBeta');
@@ -3034,6 +3038,7 @@ function toggleOtaBeta(btn){   // 设置覆盖 OTA 通道: on→beta / off→off
 }
 function _otaStopPoll(){if(_otaPoll)_otaPoll.stop();_otaPoll=null}
 function checkUpdate(manual){
+  const source=_updateSource();if(source.updatesConfigured===false){if(manual)GA.openUrl((source.repositoryUrl||'https://github.com/shenhao-stu/GAgent')+'/releases');return}
   if(!(window.GA&&GA.otaManifest)){if(manual)toast(t('t_checkFail'));return}   // 浏览器预览/旧壳无桥
   if(manual)toast(t('t_checking'));
   setTimeout(()=>{                                  // otaManifest 同步阻塞网络(原生后台线程)→ 让 toast 先渲染
@@ -3658,7 +3663,7 @@ window.startAdbAssist=function(promptKey){                                      
    已开启未授权→保护卡按钮升为主 CTA(此时它是页面唯一待办)。②授权路径恒可达: 未授权时无论
    selfAdbOn 与否都有按钮(一键开启 / 开始设置→复用 startAdbAssist 无线调试引导), 电脑 adb 恒为折叠兜底。
    旧壳(webui 热更早于 APK)桥缺失 → 服务态退回老桥 a11yOn, 保护卡显示「更新应用后可用」。*/
-const AP_CMD_FALLBACK='adb shell pm grant com.ljq.ga android.permission.WRITE_SECURE_SETTINGS';
+function apGrantFallback(){let p='io.github.shenhaostu.gagent';try{p=JSON.parse(GA.appVersion()).packageName||p}catch(e){}return 'adb shell pm grant '+p+' android.permission.WRITE_SECURE_SETTINGS'}
 function apStatus(){try{return JSON.parse(GA.a11yPersistStatus())}catch(e){return null}}
 window.openA11yPersistPage=function(){if(!setStack.length)openSettings();setNav('a11yPersistPanel',t('a11yPerm'),'a11yPerm')};   // 顶栏入口无设置上下文 → 先进设置(返回链自然)
 function renderA11yPersistPage(){
@@ -3688,13 +3693,13 @@ function renderA11yPersistPage(){
         :btn('apSetupBtn','apSetup',on)+'<p class="hint apHintTight">'+_escd(t('apSetupHint'))+'</p>')
       +'</div>';
     wrap.innerHTML='<details class="apFold"'+(advOpen?' open':'')+'><summary>'+_escd(t('apAdvPc'))+'</summary>'
-      +'<div class="card apAdvCard"><code class="apCmd">'+_escd(st.grantCmd||AP_CMD_FALLBACK)+'</code>'
+      +'<div class="card apAdvCard"><code class="apCmd">'+_escd(st.grantCmd||apGrantFallback())+'</code>'
       +'<button id="apCopyBtn" class="otaGhost apCopyBtn">'+_escd(t('apCopyCmd'))+'</button>'
       +'<p class="hint apHintTight">'+_escd(t('apCmdHint'))+'</p></div></details>';
     const gb=$('apGrantBtn');if(gb){gb.onclick=apGrantSelfAdb;
       if(_apGrantBusy){gb.disabled=true;gb.textContent=t('apGranting')}}   // 45s 授权轮询中重渲染(onResume/切语言)不抹 busy 视觉, 否则再点被防重入静默吞
     const sb=$('apSetupBtn');if(sb)sb.onclick=()=>startAdbAssist('apAdbAssistPrompt');
-    const cp=$('apCopyBtn');if(cp)cp.onclick=()=>copyText((st.grantCmd||AP_CMD_FALLBACK),()=>toast(t('copied')))}
+    const cp=$('apCopyBtn');if(cp)cp.onclick=()=>copyText((st.grantCmd||apGrantFallback()),()=>toast(t('copied')))}
 }
 window.toggleA11yPersist=function(e){                 // 真值源=原生 SP(不落 LS); v2.33 起开关仅在已授权(perm)态渲染
   const want=e.classList.toggle('on');e.setAttribute('aria-checked',want?'true':'false');

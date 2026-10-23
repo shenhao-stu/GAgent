@@ -2201,6 +2201,12 @@ def _cmd_rollback(text):                # 重试/编辑: 从 LLM 上下文真正
     except Exception: n = 1
     return _rollback(n)
 
+def _cmd_detector(text):
+    import detector_models
+    if text == '/detector.status':
+        return detector_models.handle(text)
+    return json.dumps({'job': _run_job(detector_models.handle, text)})
+
 def _cmd_integrations_get(text):
     import service_config
     return json.dumps(service_config.public_config(), ensure_ascii=False)
@@ -2214,6 +2220,7 @@ def _cmd_integrations_save(text):
         return json.dumps({'ok': False, 'error': str(exc)})
 
 _CMDS = [                        # 斜杠命令注册表: (matcher, handler); matcher 原样保留每条的 == / startswith 判定式, 按原 if 链顺序注册 = 分发即等价(首匹配优先)
+    (lambda text: text.startswith('/detector.'), _cmd_detector),
     (lambda text: text == '/integrations.get', _cmd_integrations_get),
     (lambda text: text.startswith('/integrations.save '), _cmd_integrations_save),
     (lambda text: text.startswith('/provider.save '), _cmd_provider_save),

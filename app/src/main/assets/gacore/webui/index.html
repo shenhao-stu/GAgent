@@ -41,9 +41,6 @@ try{var _th=JSON.parse(localStorage.getItem('ga.theme')||'"system"');
       <span class="gearDot" id="gearDot" hidden></span><!-- 无障碍未开启时齿轮红点, 提示用户进设置; 状态由 refreshA11y 刷新 -->
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </button>
-    <button class="dwIcon" onclick="doLogout()" data-i18n-aria="logout" aria-label="退出登录">
-      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-    </button>
   </div>
 </div>
 
@@ -331,6 +328,8 @@ try{var _th=JSON.parse(localStorage.getItem('ga.theme')||'"system"');
       </div>
       
 
+      <div class="secLbl"><span data-i18n="localDetector">本地图标识别</span></div>
+      <div class="card"><button class="row rowBtn" id="localDetectorRow" onclick="openDetector()"><span class="k" data-i18n="localDetector">本地图标识别</span><span class="v">›</span></button></div>
       <div class="secLbl"><span data-i18n="integrations">可选组件</span></div>
       <div class="card"><button class="row rowBtn" onclick="openIntegrations()"><span class="k" data-i18n="integrations">可选组件</span><span class="v">›</span></button></div>
       <div class="secLbl"><span data-i18n="grpAbout">关于</span></div>
@@ -343,12 +342,12 @@ try{var _th=JSON.parse(localStorage.getItem('ga.theme')||'"system"');
         <button class="row rowBtn" onclick="openWebsite()">
           <span class="rowIco ic-cyan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
           <span class="k" data-i18n="officialSite">官网</span>
-          <span class="v"><span class="vMut">example.invalid</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+          <span class="v"><span class="vMut">GAgent</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
         </button>
         <button class="row rowBtn" onclick="openGithub()">
           <span class="rowIco ic-graphite"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 1.5a10.5 10.5 0 0 0-3.32 20.47c.53.1.72-.23.72-.5v-1.8c-2.92.64-3.54-1.25-3.54-1.25-.48-1.22-1.17-1.54-1.17-1.54-.95-.65.08-.64.08-.64 1.05.07 1.6 1.08 1.6 1.08.94 1.6 2.47 1.14 3.07.87.1-.68.37-1.14.66-1.4-2.33-.27-4.78-1.17-4.78-5.18 0-1.15.4-2.08 1.08-2.81-.11-.27-.47-1.34.1-2.78 0 0 .88-.28 2.88 1.07a10 10 0 0 1 5.24 0c2-1.35 2.88-1.07 2.88-1.07.57 1.44.21 2.51.1 2.78.68.73 1.08 1.66 1.08 2.81 0 4.02-2.46 4.9-4.8 5.16.38.33.72.97.72 1.96v2.9c0 .28.19.61.73.5A10.5 10.5 0 0 0 12 1.5z"/></svg></span>
           <span class="k">GitHub</span>
-          <span class="v"><span class="vMut">GenericAgent</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+          <span class="v"><span class="vMut">shenhao-stu/GAgent</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
         </button>
         <button class="row rowBtn" onclick="openStatsPage()">
           <span class="rowIco ic-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="8"/><line x1="18" y1="20" x2="18" y2="4"/></svg></span>
@@ -670,4 +669,5 @@ try{var _th=JSON.parse(localStorage.getItem('ga.theme')||'"system"');
 </div>
 <div id="toast" role="status" aria-live="polite"></div>
 
-<script src="assets/icons.js"></script><script src="assets/util.js"></script><script src="assets/shim.js"></script><script src="assets/i18n.js"></script><script src="assets/humanize.js"></script><script src="share_poster.js"></script><script src="render.js"></script><script src="assets/pace.js"></script><script src="assets/spring.js"></script><script src="app.js"></script><script src="assets/push.js"></script><script src="pclink.js"></script><script src="voice.js"></script><script src="integrations.js"></script></body></html>
+<script src="assets/icons.js"></script><script src="assets/util.js"></script><script src="assets/shim.js"></script><script src="assets/i18n.js"></script><script src="assets/humanize.js"></script><script src="share_poster.js"></script><script src="render.js"></script><script src="assets/pace.js"></script><script src="assets/spring.js"></script><script src="app.js"></script><script src="assets/push.js"></script><script src="pclink.js"></script><script src="voice.js"></script><script src="integrations.js"></script>
+<script src="detector.js"></script></body></html>

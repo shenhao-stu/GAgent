@@ -146,3 +146,5 @@ GenericAgent / GAndroid**; attribution remains in [NOTICE](NOTICE).
 YOLO weights are optional and not bundled. iOS and ESP32 development remain separate.
 
 [Website](https://gaagent.ai/) · [GA Mobile](https://app.gaagent.ai/) · [GenericAgent](https://github.com/lsdefine/GenericAgent) · [AndroidBench](https://androidbench.gaagent.ai/) · [Logo](docs/assets/README.md)
+
+Settings → Local icon detection now imports and validates a user-supplied compatible ONNX model without a provider key, and can test a real screenshot. Optional detector weights remain separately supplied; see [setup](docs/OPTIONAL_YOLO.md).

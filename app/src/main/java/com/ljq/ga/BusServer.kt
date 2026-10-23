@@ -20,18 +20,32 @@ object Bus {
     private var httpd: BusHttpd? = null
     @Volatile var appCtx: android.content.Context? = null   // /adb/* 端点需 Context 建 AdbController
 
-    fun start(ctx: android.content.Context) {
+    @Synchronized fun start(ctx: android.content.Context) {
         appCtx = ctx.applicationContext
         if (httpd != null) return
         val auth = LocalBusAuth.create()
         val directory = File(ctx.filesDir, "ga").apply { mkdirs() }
         val tokenFile = File(directory, ".bus_token")
-        tokenFile.writeText(auth.token)
-        android.system.Os.chmod(tokenFile.absolutePath, 0x180) // 0600
+        // Prefer the documented port; coexist with another installed variant.
         val server = BusHttpd(PORT, auth)
-        server.start(NanoHTTPD.SOCKET_READ_TIMEOUT, true)
-        httpd = server
-        directory.resolve("bus_port.txt").writeText(PORT.toString())
+        val bound = try {
+            server.start(NanoHTTPD.SOCKET_READ_TIMEOUT, true)
+            server
+        } catch (e: java.io.IOException) {
+            server.stop()
+            BusHttpd(0, auth).also { it.start(NanoHTTPD.SOCKET_READ_TIMEOUT, true) }
+        }
+        try {
+            tokenFile.writeText(auth.token)
+            android.system.Os.chmod(tokenFile.absolutePath, 0x180) // 0600
+            val portFile = directory.resolve("bus_port.txt.tmp")
+            portFile.writeText(bound.listeningPort.toString())
+            check(portFile.renameTo(directory.resolve("bus_port.txt")))
+            httpd = bound
+        } catch (e: Exception) {
+            bound.stop()
+            throw e
+        }
 
     }
 }
@@ -196,7 +210,7 @@ class BusHttpd(port: Int, private val auth: LocalBusAuth) : NanoHTTPD("127.0.0.1
         )
 
         val HELP: String by lazy {
-            val header = "GA bus v${Bus.VER} @127.0.0.1:${Bus.PORT}  (正典封装: files/ga/droid.py, 优先用它)"
+            val header = "GA bus v${Bus.VER} @127.0.0.1:${listeningPort}  (正典封装: files/ga/droid.py, 优先用它)"
             (listOf(header) + ROUTE_DOCS.map { it.second }).joinToString("\n")
         }
     }

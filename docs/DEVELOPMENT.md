@@ -108,3 +108,12 @@ Use [Testing](TESTING.md) to select checks. Include the trigger, before/after
 behavior, evidence, compatibility impact and remaining uncertainty in the PR.
 Avoid unrelated formatting, mass renames and dependency upgrades. A broad refactor
 needs a concrete problem and migration path, not only a style preference.
+
+### Local runtime compatibility
+
+The device bus prefers loopback port 18765 and uses an OS-assigned loopback port
+when another installed variant already owns it. Read the app's `bus_port.txt`
+and `.bus_token` together through the shipped wrappers; credentials are never
+attached to another origin. Debug and release keep separate app data.
+The open-source update page opens this repository's Releases page when no OTA
+manifest is configured; it does not advertise an inactive beta channel.

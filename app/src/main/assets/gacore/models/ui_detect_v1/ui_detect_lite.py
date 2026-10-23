@@ -76,9 +76,11 @@ def _letterbox(img):
 def _yolo(img, conf):
     """YOLO ONNX(内置NMS, 输出(1,300,6)) → [[x1,y1,x2,y2,conf,cls],...] 还原到原图坐标。"""
     x, r, left, top = _letterbox(img)
-    if not os.path.isfile(YOLO_MODEL):
+    import detector_models
+    model = str(detector_models.model_path())
+    if not os.path.isfile(model):
         return []
-    sess = _session(YOLO_MODEL)
+    sess = _session(model)
     out = sess.run(None, {sess.get_inputs()[0].name: x})[0][0]  # (300,6)
     boxes = []
     for x1, y1, x2, y2, c, cls in out:

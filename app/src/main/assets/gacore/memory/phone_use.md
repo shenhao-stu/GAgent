@@ -88,7 +88,7 @@
 - 🔴dump 风险红线(封号): 敏感 App(清单见 `droid.SENSITIVE_APPS` 注册表——代码是唯一真相源, 本文不复制清单)及已识别的风控/安全验证界面上禁用 dump——读控件树=已成文封号元凶(执行细则见 §5), 只走 shot()+ui_detect/ocr+tap(x,y) 视觉路径。机理: 风险主体是「已启用的无障碍服务(会被枚举上报)+注入式动作+行为模式」, 不只是字面上那次被动读树; 且此类 App 会对读树者返回**故意伪造/投毒的节点数据**——走视觉既收敛风险面, 又不拿假数据行动。**代码层强制(fail-closed)**: `droid.dump()` 检测到前台为敏感 App(或前台未解析)时直接返回空列表 `[]`, 上层拿不到任何节点→只能走视觉; 无需也不该再依赖上层自觉判断。**dump 恒返回 `[]` = 敏感置空信号 → 直接转 shot()+ui_detect/ocr, 勿当"空壳树/真空 UI"反复重试 dump**。
 - 第三方 FLAG_SECURE 防截屏(部分金融/腾讯系 App 的登录后页面, 状态依赖非恒黑): a11y 截图不报错而恒返回**纯黑帧**——`droid.shot()` 同前台连续 2 帧黑会显式抛错, 勿再重截。降级链: 该 App 不在 SENSITIVE_APPS→改 `dump()` 节点 bounds 导航(无视觉复核, 关键步骤先向用户确认); 在册→引导用户手动。与 §2 登录浏览器 FLAG_SECURE 同语义, 只是发生在第三方 App。
 - dump 树质量降级(非风险项): 游戏(SurfaceView/GL 渲染→无有效 a11y 节点)、第三方 App 内嵌 WebView(节点虚拟化/不可靠)上 dump 常为空壳→直接走视觉。GA 自身网页任务走 webcdp(CDP 驱动内置 WebView), 不读任何第三方 a11y 树——本条仅指**其他 App**的内嵌 WebView; 敏感 App 内的 WebView(如微信小程序/H5)按上条红线处理: 风险源于宿主是微信这类敏感 App 本身, 不在于"WebView"。
-- 前台检测: ping/dump 走 getWindows(已排除 GA 自身与输入法); 偶见 pkg=com.ljq.ga 直接重查。GA 悬浮片触摸穿透, 顶部坐标可直接 tap。
+- 前台检测: ping/dump 走 getWindows(已排除 GA 自身与输入法); 偶见 pkg 等于当前 GA 包名（`os.environ.get("GA_PACKAGE", "io.github.shenhaostu.gagent")`）直接重查。GA 悬浮片触摸穿透, 顶部坐标可直接 tap。
 - 屏幕宽高、旋转、折叠状态和系统布局都是变量；坐标必须属于定位时的当前帧。纯视觉定位用 `frame = droid.capture()`，将 `frame['image']` 交给 `droid.ui_detect`/OCR/`ask_vision`，按当帧框定位后 `droid.tap(x, y, screen=frame['screen'])`；滑动同样支持 `screen=`。`capture()` 会核对截图尺寸和采集前后旋转；设备派发前再核对，变化则报错，重新观察，不缩放旧坐标猜点击。宽大于高不能代表折叠/分屏状态；180°旋转即使宽高不变也会失效。截图被缩放或裁剪后先恢复整屏物理像素；不同系统的栏、刘海、键盘和弹窗从当帧识别，不复制某型号坐标。旧 `tap(x,y)` 仍可用，但不能替调用者绑定更早的观察帧。
 
 ## §2 三种操作屏路由(开工前按任务选对)

@@ -188,7 +188,7 @@ class MainActivity : Activity() {
                         val p = params   // 局部 val 才能在 && 右侧智能转换为非空(params?.x==true 不触发智能转换)
                         p != null && p.isCaptureEnabled &&
                         (p.acceptTypes?.let { a -> a.isEmpty() || a.any { it.startsWith("image") || it == "*/*" } } ?: true)
-                    } catch (e: Exception) { true }
+                    } catch (e: Exception) { false }
                     if (wantCamera && launchCamera(false)) return true
                     val intent = (try { params?.createIntent() } catch (e: Exception) { null })
                         ?: Intent(Intent.ACTION_GET_CONTENT).apply { type = "*/*"; addCategory(Intent.CATEGORY_OPENABLE) }
@@ -204,19 +204,13 @@ class MainActivity : Activity() {
             // 必须显式设 WebViewClient: 不设时 WebView 默认把【顶层导航】(如登录成功后 location.reload()
             //   重新跳到 file://index.html)当外部 URL 丢给系统 startActivity(Intent) → file:// URI 触发
             //   android.os.FileUriExposedException → 进程崩(华为 WebView 实证, 栈 shouldOverrideUrlLoadingExtend)。
-            // 解法: 本地资源(file://)与同 host 全部返回 false 让 WebView 自己加载, 仅真正外链才交系统且 try 兜底。
+            // 顶层外链交系统处理；不允许远端页面替换带原生桥的聊天页。
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(wv: WebView?, req: WebResourceRequest?): Boolean {
                     val url = req?.url ?: return false
-                    val scheme = url.scheme?.lowercase()
-                    // 主聊天页内所有 file:// 顶层跳转都来自未接管的 Markdown 相对链接。允许它导航会用文件/错误页替换 Agent UI；
-                    // app.js 已把存在的产物接入统一预览，漏网/陈旧链接在边界直接拦下，子资源请求不经过这里。
-                    if (scheme == "file") return true
-                    // about: / data: / javascript: → WebView 内部自加载(绝不交系统)
-                    if (scheme !in setOf("http", "https", "mailto", "tel")) return true
-                    // http(s) 外链: 交系统浏览器, 失败兜底 WebView 自加载, 决不让异常冒泡崩进程
-                    return try { startActivity(Intent(Intent.ACTION_VIEW, url)); true }
-                    catch (e: Exception) { true }
+                    if (url.toString() == "about:blank") return false
+                    openExternalLink(url.toString())
+                    return true // Remote pages never inherit the chat's native bridge.
                 }
             }
         }
@@ -274,14 +268,16 @@ class MainActivity : Activity() {
             // channel=有效 OTA 通道(设置覆盖优先); buildChannel=构建戳(Analytics 同源)
             "{\"name\":${JSONObject.quote(pi.versionName ?: "")},\"code\":$code," +
                 "\"channel\":${JSONObject.quote(Updater.channel(this@MainActivity))}," +
-                "\"buildChannel\":${JSONObject.quote(BuildConfig.CHANNEL)}}"
+                "\"buildChannel\":${JSONObject.quote(BuildConfig.CHANNEL)}," +
+                "\"packageName\":${JSONObject.quote(packageName)},\"repositoryUrl\":${JSONObject.quote(Endpoints.REPOSITORY_URL)}," +
+                "\"updatesConfigured\":${Updater.manifestUrl(this@MainActivity).isNotBlank()}}"
         }.getOrElse { "{\"name\":\"\",\"code\":0,\"channel\":\"official\",\"buildChannel\":\"official\"}" }
         // 打开外部链接(官网/GitHub): 本壳未装 WebViewClient → 页面 <a href> 会把 file:// 页导航走,
-        //  故外链一律走原生 ACTION_VIEW 交系统浏览器。仅放行 http/https(挡 file://intent://javascript:)。
+        //  外链交系统可浏览 Activity；本地与可执行协议始终拒绝。
         @JavascriptInterface fun openUrl(url: String) {
-            if (!url.startsWith("http://") && !url.startsWith("https://")) return
-            runOnUiThread { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+            runOnUiThread { openExternalLink(url) }
         }
+
         // 可见登录浏览器(BrowserActivity, 与离屏自动化 WebView 共享 CookieManager 登录态)。
         // 固定空白起始页: 不接受任何预填 URL——"空白起始页"从调用点约定升级为 bridge 边界不变量,
         // 杜绝"预填 URL 钓鱼"原语(任何能在对话 WebView 执行 JS 的路径都无法让受信登录浏览器直落仿冒登录页)。
@@ -832,6 +828,30 @@ class MainActivity : Activity() {
     // 起相机: 输出到 cacheDir/cam 经 FileProvider 暴露给相机 App 写入; 取回后交给 WebView。
     // 不声明 CAMERA 权限——ACTION_IMAGE_CAPTURE 由相机 App 完成; 一旦声明反而要运行时授权(issue#1)。
     // forBridge=true 表示经 GA.openCamera 直连(结果回推 WebUI), false 表示经 onShowFileChooser(回填 fileCb)。
+    private fun openExternalLink(raw: String) {
+        if (!ExternalLinkPolicy.canOpen(raw)) return
+        try {
+            val intent = if (raw.startsWith("intent:", ignoreCase = true))
+                Intent.parseUri(raw, Intent.URI_INTENT_SCHEME) else Intent(Intent.ACTION_VIEW, Uri.parse(raw))
+            val fallback = intent.getStringExtra("browser_fallback_url")
+            intent.action = Intent.ACTION_VIEW
+            intent.component = null
+            intent.selector = null
+            intent.addCategory(Intent.CATEGORY_BROWSABLE)
+            intent.flags = 0
+            intent.removeExtra("browser_fallback_url")
+            if (!ExternalLinkPolicy.canOpen(intent.dataString.orEmpty())) return
+            try { startActivity(intent) }
+            catch (e: android.content.ActivityNotFoundException) {
+                if (fallback != null && fallback.startsWith("https://"))
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(fallback)).addCategory(Intent.CATEGORY_BROWSABLE))
+                else throw e
+            }
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(this, "No app can open this link / 没有可打开此链接的应用", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun launchCamera(forBridge: Boolean): Boolean = try {
         val dir = File(cacheDir, "cam").apply { mkdirs() }
         val f = File(dir, "IMG_${System.currentTimeMillis()}.jpg")
@@ -841,7 +861,7 @@ class MainActivity : Activity() {
             .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
         if (intent.resolveActivity(packageManager) == null) false
         else { camUri = uri; camFile = f; camForBridge = forBridge; startActivityForResult(intent, FILE_REQ); true }
-    } catch (e: Exception) { true }
+    } catch (e: Exception) { camUri = null; camFile = null; camForBridge = false; false }
 
     /** 启动 ZXing 扫码页。返回 ok / need-perm / no-camera / err。 */
     private fun launchQrScan(): String {
