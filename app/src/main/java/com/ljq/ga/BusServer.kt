@@ -18,6 +18,7 @@ object Bus {
     const val PORT = 18765
     const val VER = "0.5"
     private var httpd: BusHttpd? = null
+    val boundPort: Int get() = httpd?.listeningPort ?: PORT
     @Volatile var appCtx: android.content.Context? = null   // /adb/* 端点需 Context 建 AdbController
 
     @Synchronized fun start(ctx: android.content.Context) {
@@ -210,7 +211,7 @@ class BusHttpd(port: Int, private val auth: LocalBusAuth) : NanoHTTPD("127.0.0.1
         )
 
         val HELP: String by lazy {
-            val header = "GA bus v${Bus.VER} @127.0.0.1:${listeningPort}  (正典封装: files/ga/droid.py, 优先用它)"
+            val header = "GA bus v${Bus.VER} @127.0.0.1:${Bus.boundPort}  (正典封装: files/ga/droid.py, 优先用它)"
             (listOf(header) + ROUTE_DOCS.map { it.second }).joinToString("\n")
         }
     }
