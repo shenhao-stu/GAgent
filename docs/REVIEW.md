@@ -1,4 +1,10 @@
-# Extraction review
+# Extraction review / 剥离审查
+
+This file records the initial extraction boundary. It is not the latest device
+acceptance record; see [Validation](VALIDATION.md) for the dated 2.33.3 snapshot
+and [Contributing](../CONTRIBUTING.md) for current PR review requirements.
+
+本页保留初始剥离审查的范围；当前实机证据和贡献审查要求分别见上述文档。
 
 Scope: Android beta 2.33.0 / 133 plus later PC Link changes from the former main,
 released as candidate 2.33.1 / 134. A fresh Git repository excludes private history.

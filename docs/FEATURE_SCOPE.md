@@ -12,12 +12,12 @@ means removed from this distribution; the original projects remain intact.
 The owner confirmed that Android APKs and the necessary Kotlin device layer stay.
 Kotlin currently provides application startup, the Python bridge, accessibility,
 screenshots, overlays, microphone access and background work. Removing it without
-a replacement would remove those capabilities. The current tree has 35 application
-Kotlin files, one Kotlin test and one Kotlin APK-template file. This is the retained
-native layer, not a claim that every inherited module is already minimal.
+a replacement would remove those capabilities. Native source and unit tests live
+under app/src/main/java and app/src/test/java. This retained layer is not a claim
+that every inherited module is already minimal.
 
-用户已确认：保留 Android APK 和必要的 Kotlin 设备层。当前有 35 个应用 Kotlin 文件，
-另有 1 个测试文件、1 个 APK 模板文件。源码加密已经移除；设备适配层继续保留。
+保留 Android APK 和必要的 Kotlin 设备层，源码与测试以当前目录为准。
+源码加密已经移除；设备适配层继续保留。
 HTTPS/WSS、P2P 传输加密和设备总线鉴权继续保留，它们承担通信和访问安全。
 现有原生层仍有大模块，本次没有宣称已经完成全部精简。
 
