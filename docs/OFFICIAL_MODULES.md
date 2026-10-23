@@ -44,11 +44,12 @@ its user key comes from the deployed portal. Integration profiles are configurat
 only, never downloaded executable code. They should be delivered over an
 authenticated channel and reviewed before saving.
 
-PC Link no longer contains a default shared signing key. A compatible relay must
-issue an individual credential for the request-signing protocol. Do not copy a
-server-wide signing secret into profiles. Legacy official relays that only accept
-a shared application key need an issuer/protocol migration before enabling this
-client. Disabling or changing the relay prevents reuse of saved-room credentials.
+PC Link source has no default shared signing key. A trusted build may inject a
+relay bootstrap as described in [Configuration](CONFIGURATION.md#pc-link-build-bootstrap--构建默认配置).
+Such client material is extractable from the APK and is not an account or admin
+secret. Pairing remains explicit. User overrides replace both endpoint and token;
+a changed endpoint cannot inherit either the bootstrap token or a saved room.
+Clearing the override restores the build default; unpairing stops reconnection.
 
 Automatic official login, token renewal and a new server-side capability issuer
 are **not included** in this Android extraction. Existing services must support the

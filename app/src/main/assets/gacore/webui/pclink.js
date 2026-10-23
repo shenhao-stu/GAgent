@@ -21,7 +21,7 @@ if(typeof I18N!=='undefined'){
     pcUnpair:'解除链接',pcUnpairAsk:'解除与 PC 端 GA 的链接？',pcView:'PC 会话',pcBack:'返回本机',
     pcNoPeer:'暂无 PC 会话',pcOffline:'未连接(自动重连中)',pcSend:'发送到 PC',pcAbort:'停止',pcAborted:'已发送停止',
     pcSent:'已发送',pcRunning:'运行中',grpPcLink:'PC 互联',pcNoMsgs:'还没有消息',
-    pcOn:'已连接',pcNotPaired:'未链接',pcPairSteps:'在电脑端 GA 打开「设置 → 手机互联」出示二维码，或打开 hub /pair 页面手输 9 位数字',
+    pcConfigure:'请先配置 PC Link 服务',pcOn:'已连接',pcNotPaired:'未链接',pcPairSteps:'在电脑端 GA 打开「设置 → 手机互联」出示二维码，或打开 hub /pair 页面手输 9 位数字',
     pcIdle:'空闲',pcNoGet:'不可读取',pcMsgsUnit:'条消息',pcRetry:'重新检查',pcGone:'该会话已在电脑上关闭',
     pcHomeT:'还没有可用的 PC 会话',
     pcHomeP:'手机已经链接到你的电脑，但电脑上没有正在运行的 GA 会话。',
@@ -41,7 +41,7 @@ if(typeof I18N!=='undefined'){
     pcUnpair:'Unlink',pcUnpairAsk:'Unlink from PC GA?',pcView:'PC Sessions',pcBack:'Back to local',
     pcNoPeer:'No PC sessions',pcOffline:'Offline (reconnecting)',pcSend:'Send to PC',pcAbort:'Abort',pcAborted:'Abort sent',
     pcSent:'Sent',pcRunning:'running',grpPcLink:'PC Link',pcNoMsgs:'No messages yet',
-    pcOn:'Connected',pcNotPaired:'Not linked',pcPairSteps:'On PC open Settings → Link phone for the QR, or hub /pair and type the 9 digits',
+    pcConfigure:'Configure PC Link service first',pcOn:'Connected',pcNotPaired:'Not linked',pcPairSteps:'On PC open Settings → Link phone for the QR, or hub /pair and type the 9 digits',
     pcIdle:'idle',pcNoGet:'no read access',pcMsgsUnit:'msgs',pcRetry:'Re-check',pcGone:'That session was closed on the computer',
     pcHomeT:'No PC session yet',
     pcHomeP:'Your phone is linked, but no GA session is running on the computer.',
@@ -182,7 +182,8 @@ let segTxt={};                                              // 'i/j' -> {txt,n}:
 let taskSnap=[];                                            // 当前 peer 全量 tasks 快照(since 切片合并后的权威序, 供 paint/tsig)
 let peerRun=false;                                          // 当前 peer 运行态(messages.run), 驱动发送↔停止双态
 let gen=0;                                                  // 世代守卫(#032-F2): pullMsgs 自增, 在飞回调世代不符即弃 → 切 peer 不串画/不错段, 并发轮询幂等去重(F6)
-function refreshStatus(cb,resume){call(resume?'/pclink.resume':'/pclink.status',r=>{paired=!!(r&&r.paired);connected=!!(r&&r.connected);renderRow();showFab();
+let configError='';
+function refreshStatus(cb,resume){call(resume?'/pclink.resume':'/pclink.status',r=>{configError=!r||!r.ok?String(r&&r.error||'PC Link status unavailable'):(r.configured===false?t('pcConfigure'):'');paired=!!(r&&r.paired);connected=!!(r&&r.connected);renderRow();showFab();
   if(document.getElementById('pcHdSub'))setPcHd(undefined,curPeer||'',peerRun);cb&&cb(r)})}
 /* ---- 设置页行(动态注入 homePanel 末尾, 不改 index.html 结构) ---- */
 function renderRow(){
@@ -202,7 +203,7 @@ function renderRow(){
   // 配色复用设置页既有的 .a11yValOn/.a11yValOff, 不引入新色。
   const v=document.getElementById('pcLinkV');
   const key=paired?(connected?'pcOn':'pcOffline'):'pcNotPaired';
-  v.textContent=t(key);v.className=paired&&connected?'a11yValOn':(paired?'a11yValOff':'vMut')}
+  v.textContent=configError||t(key);v.className=paired&&connected?'a11yValOn':(paired?'a11yValOff':'vMut')}
 function parsePairPayload(raw){
   raw=String(raw||'').trim();
   const m=raw.match(/^ga-pclink:v1:(\d{9})$/i);
@@ -232,6 +233,7 @@ function openManualPair(){
     if(!code)return toast(t('pcPairFail')+'9?');
     doPair(code,'manual')}})}
 function onRowTap(){
+  if(configError){toast(configError);if(typeof openIntegrations==='function')openIntegrations();return}
   if(paired){gaConfirm(t('pcUnpair'),t('pcUnpairAsk'),()=>call('/pclink.unpair',r=>{paired=connected=false;renderRow();showFab();track('pclink_unpair');toast(t('pcUnpair'))}),true);return}
   gaModal({title:t('pcPairTitle'),msg:t('pcPairHint'),okText:t('pcScan'),cancelText:t('pcManual'),
     onOk:()=>startScan(),onCancel:()=>openManualPair()})}

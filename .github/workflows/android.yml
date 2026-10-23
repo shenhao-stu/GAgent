@@ -89,6 +89,10 @@ jobs:
             printf '%s' "$GAGENT_RELEASE_KEYSTORE" | base64 --decode > "$RUNNER_TEMP/gagent.p12"
             printf 'GAGENT_KEYSTORE_PATH=%s/gagent.p12\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
           fi
+      - name: Inject optional PC Link bootstrap
+        env:
+          GAGENT_PCLINK_DEFAULTS: ${{ secrets.GAGENT_PCLINK_DEFAULTS }}
+        run: python tools/write_pclink_defaults.py
       - name: Test and build both Android variants
         env:
           GAGENT_STORE_PASSWORD: ${{ secrets.GAGENT_STORE_PASSWORD }}

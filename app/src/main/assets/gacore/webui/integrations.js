@@ -7,7 +7,7 @@ function openIntegrations(){
   panel.className='modalCard';
   const title=document.createElement('h3');title.textContent=english?'Optional modules':'可选组件';panel.appendChild(title);
   const hint=document.createElement('p');hint.className='hint';
-  hint.textContent=english?'Optional. Only endpoints you configure are used. Blank tokens keep the saved value only when the URL is unchanged.':'可选，只连接你配置的服务。令牌留空仅在地址未变时保留旧值；清空地址可停用。';panel.appendChild(hint);
+  hint.textContent=english?'PC Link can use build-provided defaults; blank PC Link URL restores them. Other blank URLs disable the module. Blank tokens retain saved values only for unchanged URLs.':'PC Link 可使用安装包的默认服务；清空 PC Link 地址恢复默认，其他组件清空地址停用。令牌留空仅在地址未变时保留旧值。';panel.appendChild(hint);
   const models=document.createElement('button');models.textContent=english?'Model provider / GA Plan':'模型服务商 / GA Plan';
   models.onclick=()=>{overlay.remove();openProviders()};panel.appendChild(models);
   const upload=document.createElement('input');upload.type='file';upload.accept='.json,application/json';

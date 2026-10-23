@@ -112,3 +112,18 @@ def _save_config(updates):
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
+
+
+# Build-provided PC Link bootstrap is independent of user integration settings.
+# Never combine its credential with a user-supplied endpoint.
+PCLINK_DEFAULTS = Path(__file__).resolve().with_name('pclink_defaults.json')
+
+
+def pclink_config():
+    explicit = load_config().get('pclink')
+    if explicit:
+        return explicit
+    if not PCLINK_DEFAULTS.exists():
+        return None
+    value = json.loads(PCLINK_DEFAULTS.read_text(encoding='utf-8'))
+    return validate_service('pclink', value) or None
