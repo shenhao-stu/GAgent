@@ -6,8 +6,9 @@ from playwright.sync_api import sync_playwright, expect
 WEB=Path(__file__).parents[1]/'app/src/main/assets/gacore/webui'
 
 
+@pytest.mark.parametrize('theme',['light','dark'])
 @pytest.mark.parametrize('language',['en','zh'])
-def test_local_settings_import_and_update_actions(language):
+def test_local_settings_import_and_update_actions(language,theme):
     with sync_playwright() as engine:
         browser=engine.chromium.launch(executable_path=os.environ.get('PLAYWRIGHT_CHROMIUM_EXECUTABLE'))
         page=browser.new_page(locale=language)
@@ -38,6 +39,15 @@ def test_local_settings_import_and_update_actions(language):
         assert page.evaluate('opened')==['https://github.com/shenhao-stu/GAgent/releases']
         page.evaluate('openSettings();openDetector()')
         modal=page.locator('#detectorDialog')
+        page.evaluate('(theme)=>document.documentElement.dataset.theme=theme',theme)
+        colors=modal.locator('.modalCard').evaluate('(el)=>{const s=getComputedStyle(el);return [s.color,s.backgroundColor]}')
+        def luminance(color):
+            import re
+            rgb=[int(n)/255 for n in re.findall(r'\d+',color)[:3]]
+            linear=[c/12.92 if c<=0.04045 else ((c+0.055)/1.055)**2.4 for c in rgb]
+            return sum(c*w for c,w in zip(linear,[0.2126,0.7152,0.0722]))
+        fg,bg=map(luminance,colors)
+        assert (max(fg,bg)+0.05)/(min(fg,bg)+0.05)>=4.5
         modal.locator('input').set_input_files({'name':'model.onnx','mimeType':'application/octet-stream','buffer':b'fixture graph'})
         expect(modal.locator('#detectorState')).to_contain_text('7')
         modal.get_by_role('button',name='Test current screen' if language=='en' else '检测当前屏幕',exact=True).click()

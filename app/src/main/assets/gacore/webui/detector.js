@@ -6,13 +6,14 @@ function openDetector(){
   const overlay=document.createElement('div');overlay.id='detectorDialog';
   overlay.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:grid;place-items:center;padding:24px';
   const card=document.createElement('div');card.className='modalCard';
-  card.style.cssText='background:var(--bg,#fff);color:var(--fg,#111);padding:20px;border-radius:16px;width:min(520px,100%);max-height:85vh;overflow:auto';
+  card.style.cssText='background:var(--bg,#fff);color:var(--txt,#111);padding:20px;border-radius:16px;width:min(520px,100%);max-height:85vh;overflow:auto;overflow-wrap:anywhere';
   const title=document.createElement('h3');title.textContent=t('localDetector');card.appendChild(title);
   const hint=document.createElement('p');hint.textContent=en?'OCR is included. Import your compatible 21-class Android UI ONNX model to detect icons without text. No account or cloud service is used. Only import a trusted model under its applicable license.':'已内置 OCR。导入你持有的兼容 21 类 Android UI ONNX 模型，可补全无文字图标检测；无需账号或云服务。仅导入来源可信且符合适用许可的模型。';card.appendChild(hint);
   const state=document.createElement('p');state.id='detectorState';card.appendChild(state);
   const file=document.createElement('input');file.type='file';file.accept='*/*';file.setAttribute('aria-label',en?'Import ONNX model':'导入 ONNX 模型');card.appendChild(file);
-  const test=document.createElement('button');test.textContent=en?'Test current screen':'检测当前屏幕';card.appendChild(test);
-  const close=document.createElement('button');close.textContent=en?'Close':'关闭';close.onclick=()=>overlay.remove();card.appendChild(close);
+  const buttons=document.createElement('div');buttons.className='modalBtns';card.appendChild(buttons);
+  const test=document.createElement('button');test.className='ok';test.textContent=en?'Test current screen':'检测当前屏幕';buttons.appendChild(test);
+  const close=document.createElement('button');close.className='cancel';close.textContent=en?'Close':'关闭';close.onclick=()=>overlay.remove();buttons.appendChild(close);
   overlay.appendChild(card);document.body.appendChild(overlay);
   function display(r){state.textContent=!r.ok?(r.error||'Error'):(r.installed?(en?'Icon model installed':'图标模型已安装'):(en?'OCR only — import an icon model':'当前仅 OCR，请导入图标模型'));
     if(r.sha256)state.textContent+=' · SHA-256 '+r.sha256;
