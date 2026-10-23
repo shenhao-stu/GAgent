@@ -89,14 +89,14 @@ The target is the current app's private `files/ga/models/ui_detect_v1/models/ui_
 Release and debug installations are independent. Back up an existing detector
 before replacement. Root is not required; resolve file-access permission if Downloads cannot be read.
 
-## 4. 验证与停用 / Verify and disable
+## 5. 验证与停用 / Verify and disable
 
-重启 GAgent 后运行 `print(droid.look(cache=False))`。`droid.ping()['loaded']` 应包含 `ui_detect_yolo.onnx`，检测项应有 `Icon`/`TextButton` 等类别。不要仅凭文件存在宣称模型工作。
+重启 GAgent 后运行 `print(droid.look(cache=False))`。`droid.ping()['loaded']` 应包含 `detector_models.model_path()` 返回的模型路径，检测项应有 `Icon`/`TextButton` 等类别。不要仅凭文件存在宣称模型工作。
 
 Restart GAgent, then run `print(droid.look(cache=False))`. Confirm the detector appears in `droid.ping()['loaded']` and that actual predictions contain UI classes such as `Icon` or `TextButton`.
 
-删除这个可选文件并重启即可退回 OCR。模型安装仅作用于 App 私有数据，不会加入 Git 源码历史或默认发布包。
-Delete the optional file and restart to return to OCR. Device installation does not add the model to Git history or default release artifacts.
+若通过设置导入，移除 `kv/ga.detector.json` 后重启可取消该选择，`user_models/` 中原模型仍保留。若还存在旧安装路径的 `ui_detect_yolo.onnx`，需先备份并移开它才能退回仅 OCR。模型安装仅作用于 App 私有数据，不会加入 Git 源码历史或默认发布包。
+For a Settings import, remove `kv/ga.detector.json` and restart to clear the selection; weights in `user_models/` remain preserved. Also move aside any legacy `ui_detect_yolo.onnx` to return to OCR only. Device installation does not add the model to Git history or default release artifacts.
 
 
 可直接对 GAgent 说：
