@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation / 文档导航
+    url: https://github.com/shenhao-stu/GAgent/blob/main/docs/README.md
+    about: Setup, development, troubleshooting and release guides / 使用、开发、排障与发布指南
+  - name: Security reporting / 安全报告
+    url: https://github.com/shenhao-stu/GAgent/blob/main/SECURITY.md
+    about: Read the private reporting procedure before disclosing a vulnerability / 披露漏洞前阅读私密报告流程

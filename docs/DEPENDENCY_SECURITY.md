@@ -1,12 +1,14 @@
 # Dependency review / 依赖安全边界
 
-This is a private release candidate. A passing build or a secret scan is not a
-claim that every bundled runtime is current. Review this file before public release.
-本版是私有候选；构建和密钥扫描通过不代表所有依赖没有已知漏洞。
+This is an open-source preview. Source publication does not resolve the native
+findings below. The supported Python/native-wheel migration remains a **stable
+APK release gate**; CI artifacts are development builds, not a security certification.
+本版为开源预览；源码公开不代表依赖问题已修复。受支持的 Python/原生依赖迁移仍是
+**稳定 APK 发布门槛**。以下发现与限定条件继续保留，构建和密钥扫描不能替代修复。
 
 | Dependency | Change / observation | Remaining boundary |
 | --- | --- | --- |
-| CPython / OpenSSL | Chaquopy17.1.0 supplies CPython3.10.22 and OpenSSL3.5.9; CI verifies the packaged native library | Replaces the initial candidate's actual OpenSSL3.0.5. Python3.10 reached upstream end of life on2026-10-01; a supported Python/native-wheel migration remains a public-release gate |
+| CPython / OpenSSL | Chaquopy17.1.0 supplies CPython3.10.22 and OpenSSL3.5.9; CI verifies the packaged native library | Replaces the initial candidate's actual OpenSSL3.0.5. Python3.10 reached upstream end of life on2026-10-01; a supported Python/native-wheel migration remains a stable APK release gate |
 | Go mesh | Go1.27.3; x/net0.60, x/crypto0.57, x/text0.42, compress1.18.7 | Module scan only flags deprecated OpenPGP (GO-2026-5932); the inspected dependency graph does not import it |
 | DOMPurify | 3.4.17 | WebView still executes model-rendering code, so keep sanitization and bridge separation |
 | certifi | 2026.10.19 in runtime and bundled Lark dependencies; also replaces Chaquopy's default CA asset before its integrity hashes are calculated | Android-native TLS uses the device/provider trust store separately |
@@ -25,7 +27,7 @@ The desktop regression environment uses cryptography50.0.2 and cannot substitute
 for testing the Android binary. Generated Python artifacts replace public upstream
 build-user paths with equal-length anonymous strings before packaging.
 
-公开前仍需完成受支持的 Android 原生依赖迁移及真机验收。配置默认关闭、禁用易损算法
+稳定 APK 发布前仍需完成受支持的 Android 原生依赖迁移及真机验收。配置默认关闭、禁用易损算法
 或未走到特定 API，都是限定条件下的风险收敛，不能宣传为依赖已经全部打补丁。
 
 Sources: [Go report](https://pkg.go.dev/vuln/GO-2026-5932),
