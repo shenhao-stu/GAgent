@@ -6,13 +6,16 @@ the same supported scope; deeper guides keep API names and commands unchanged.
 
 | Audience / 读者 | Reading path / 阅读顺序 |
 | --- | --- |
-| First-time user / 首次使用 | [Get started / 开始使用](GETTING_STARTED.md) → [Troubleshooting / 排障](TROUBLESHOOTING.md) |
+| First-time user / 首次使用 | [Get started / 开始使用](GETTING_STARTED.md) → [Enable capabilities / 开启功能](CONFIGURATION.md) → [Practical cases / 实操案例](CASES.md) |
 | Contributor / 开发者 | [Build / 构建](BUILD.md) → [Architecture / 架构](ARCHITECTURE.md) → [Development / 开发](DEVELOPMENT.md) → [Testing / 测试](TESTING.md) |
 | PR author or reviewer / PR 作者与审查者 | [Contributing](../CONTRIBUTING.md) / [中文贡献指南](../CONTRIBUTING.zh-CN.md) → [PR template / 模板](../.github/PULL_REQUEST_TEMPLATE.md) |
 | Maintainer / 维护者 | [Validation / 验收](VALIDATION.md) → [Dependency security / 依赖安全](DEPENDENCY_SECURITY.md) → [Releasing / 发布](RELEASING.md) |
 
 ## Specific topics / 专题
 
+- [Ecosystem and download channels / 生态与下载渠道](ECOSYSTEM.md)
+- [News and dated development milestones / 新闻与开发节点](HISTORY.md)
+- [Troubleshooting / 排障](TROUBLESHOOTING.md)
 - [Phone-side networking / 手机模型网络](NETWORK.md)
 - [Screen geometry and overlay invariants / 屏幕与悬浮窗不变量](SCREEN_GEOMETRY.md)
 - [Optional YOLO installation and licensing / YOLO 安装与许可](OPTIONAL_YOLO.md)
@@ -24,6 +27,7 @@ the same supported scope; deeper guides keep API names and commands unchanged.
 - [Third-party notices / 第三方声明](../THIRD_PARTY.md)
 - [Project decisions / 项目治理](../GOVERNANCE.md) and [community conduct / 社区行为](../CODE_OF_CONDUCT.md)
 - [Changes / 变更记录](../CHANGELOG.md)
+- [Logo and usage / 标识与使用](assets/README.md)
 
 ## Documentation contract / 文档约定
 

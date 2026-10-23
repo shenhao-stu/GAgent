@@ -26,3 +26,4 @@ orientation, initial state and final-state evidence. Mark untested/blocked items
 - [ ] Documentation and English/Chinese user-facing text match the behavior. / 文档与中英文文案一致。
 - [ ] No credentials, personal data or private runtime artifacts are included. / 未包含秘密或个人运行数据。
 - [ ] Dependency/model provenance and licenses are updated, or unchanged. / 依赖与模型来源许可已更新或未变。
+- [ ] New cases/news cite evidence and identify examples, observed outcomes and dates accurately, or are not applicable. / 新案例与节点有依据，区分示例、实测与日期，或不适用。

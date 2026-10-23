@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "integrations": {
+    "pclink": {
+      "url": "wss://relay.example.invalid",
+      "token": "REPLACE_WITH_YOUR_USER_CREDENTIAL"
+    },
+    "ganet": {
+      "url": "https://mesh.example.invalid",
+      "token": "REPLACE_WITH_YOUR_USER_CREDENTIAL",
+      "owner_id": "12345"
+    },
+    "voice": {
+      "url": "wss://voice.example.invalid",
+      "token": "REPLACE_WITH_YOUR_USER_CREDENTIAL",
+      "model": "REPLACE_WITH_YOUR_ASR_MODEL"
+    },
+    "apk": {
+      "url": "https://build.example.invalid",
+      "token": "REPLACE_WITH_YOUR_USER_CREDENTIAL"
+    }
+  }
+}

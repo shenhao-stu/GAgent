@@ -1,8 +1,15 @@
-# Engineering priorities / 工程路线图
+# Roadmap / 工程路线图
+
+[News & completed milestones / 已完成节点](HISTORY.md) · [Current setup / 当前配置](CONFIGURATION.md)
 
 This is a list of open work and acceptance criteria, not a delivery schedule.
 Completed behavior belongs in release notes and validation records. Discuss a
 substantial proposal in an issue and link its evidence when completed.
+
+The Android implementation is traceable to June 13, 2026; the dated history is
+separate from this list of future work. Current source has the local runtime,
+visual phone tools, memory and optional clients. Cross-device certification,
+complete native migration and automatic service onboarding are not marked done.
 
 这里列待办和验收条件，不承诺时间，也不把计划写成已发布功能。
 

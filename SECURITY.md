@@ -80,6 +80,9 @@ issuer or automatic renewal for every legacy service; see
 
 `tools/audit_source.py` scans source, nested archives and APK contents; CI also
 runs a redacted full-history secret scan and packaged-runtime inventory checks.
+The source audit permits exact public navigation links in reviewed documentation
+files. This exception does not permit API paths, URL credentials or queries, does
+not skip secret rules, and does not apply to APKs or nested archives.
 These are bounded detection tools, not proof that arbitrary text contains no
 private data or that every dependency is safe.
 

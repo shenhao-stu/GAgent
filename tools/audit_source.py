@@ -13,6 +13,7 @@ import zipfile
 import tarfile
 import io
 from pathlib import Path
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 SKIP = {'.git', '.gradle', 'build', '.pytest_cache', '__pycache__', '.venv', 'dist', '.kotlin'}
@@ -31,8 +32,37 @@ RULES = {
     'personal-path': re.compile(rb'/Users/(?!user/|example/)[A-Za-z0-9_.-]+/'),
 }
 
+# Navigation in reviewed source documentation is not a runtime service default.
+# Exact files, HTTPS origins, root paths and public anchors only; no credentials
+# or queries. APKs and nested archives never receive this exception.
+PUBLIC_LINK_DOCS = {'README.md', 'README.zh-CN.md', 'docs/CASES.md',
+                    'docs/CONFIGURATION.md', 'docs/ECOSYSTEM.md'}
+PUBLIC_SITE_ANCHORS = {
+    'gaagent.ai': {''},
+    'app.gaagent.ai': {''},
+    'apk.gaagent.ai': {''},
+    'androidbench.gaagent.ai': {'', 'traces', 'method', 'jev-study'},
+}
 
-def audit_blob(name, data):
+
+def public_documentation_link(name, data, start, end):
+    if name not in PUBLIC_LINK_DOCS:
+        return False
+    # The endpoint rule ends at the hostname. Inspect the entire URL so a path,
+    # query, suffix domain or embedded credential cannot inherit the exception.
+    token = re.match(rb'[^\s\x00\x22\x27<>`)\]]+', data[start:])
+    if token is None or start + token.end() < end:
+        return False
+    try:
+        url = urlsplit(token.group().decode('ascii'))
+    except (UnicodeError, ValueError):
+        return False
+    return (url.scheme == 'https' and url.netloc in PUBLIC_SITE_ANCHORS
+            and url.path in ('', '/') and not url.query
+            and url.fragment in PUBLIC_SITE_ANCHORS[url.netloc])
+
+
+def audit_blob(name, data, *, allow_public_docs=False):
     path = Path(name)
     findings = []
     public_ca = path.name == 'cacert.pem' and b'-----BEGIN CERTIFICATE-----' in data
@@ -40,12 +70,15 @@ def audit_blob(name, data):
         findings.append({'path': name, 'rule': 'credential-or-runtime-file', 'line': 0})
     for rule, pattern in RULES.items():
         for match in pattern.finditer(data):
+            if (rule == 'hosted-endpoint' and allow_public_docs
+                    and public_documentation_link(name, data, match.start(), match.end())):
+                continue
             findings.append({'path': name, 'rule': rule, 'line': data.count(b'\n', 0, match.start()) + 1})
     return findings
 
 
-def audit_archive(name, data, depth=0):
-    findings = audit_blob(name, data)
+def audit_archive(name, data, depth=0, *, allow_public_docs=False):
+    findings = audit_blob(name, data, allow_public_docs=allow_public_docs)
     if depth > 4:
         return findings + [{'path': name, 'rule': 'archive-depth-limit', 'line': 0}]
     if name.endswith(('.tgz', '.tar.gz')):
@@ -89,7 +122,7 @@ def audit_tree(root):
         if path.is_symlink():
             findings.append({'path': name, 'rule': 'symlink', 'line': 0})
             continue
-        findings.extend(audit_archive(name, path.read_bytes()))
+        findings.extend(audit_archive(name, path.read_bytes(), allow_public_docs=True))
         count += 1
     return count, findings
 

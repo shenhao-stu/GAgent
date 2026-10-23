@@ -1,5 +1,7 @@
 # Optional official modules / 可选官方组件
 
+[Configuration fields and profile import / 配置字段与导入](CONFIGURATION.md#modules)
+
 P2P, GAnet, GA Plan and streaming voice can be offered as official services while
 the Android framework remains independently usable. All integrations start
 disabled. A connection profile supplies addresses and a user's credentials;

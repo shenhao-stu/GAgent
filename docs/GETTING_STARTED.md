@@ -1,6 +1,6 @@
 # Get started / 开始使用
 
-[Documentation](README.md) · [Troubleshooting](TROUBLESHOOTING.md)
+[Documentation](README.md) · [All capability setup](CONFIGURATION.md) · [Practical cases](CASES.md) · [Troubleshooting](TROUBLESHOOTING.md)
 
 ## 1. Choose a device and build / 选择设备与安装包
 
@@ -99,7 +99,8 @@ GA Plan is configured as a normal model provider. Review
 [protocol and credential requirements](OFFICIAL_MODULES.md) before enabling them.
 
 默认无需可选服务。先验收基本模型与设备路径，再逐项接入；客户端配置成功不代表服务端部署通过。
-YOLO 的独立安装与许可见[可选检测模型](OPTIONAL_YOLO.md)。
+YOLO 的独立安装与许可见[可选检测模型](OPTIONAL_YOLO.md)，所有保留能力的开启与核验入口见
+[功能配置清单](CONFIGURATION.md)。[生态与渠道](ECOSYSTEM.md)区分本仓库制品、官方手机版和上游桌面框架。
 
 ## First-run evidence / 首次验收记录
 
