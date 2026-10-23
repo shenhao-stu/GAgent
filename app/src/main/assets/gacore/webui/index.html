@@ -426,7 +426,7 @@ try{var _th=JSON.parse(localStorage.getItem('ga.theme')||'"system"');
       <div class="welcome" id="welcome" style="display:none">
         <div class="wordmarkWrap"><span class="spark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 C12.8 4 18 11.2 22 12 C20 12.8 12.8 18 12 22 C11.2 20 6 12.8 2 12 C4 11.2 11.2 6 12 2 Z"/></svg></span><span class="gaWordmark">Generic Agent</span></div>
         <h2 data-i18n="welcomeH">欢迎使用 GenericAgent</h2>
-        <p data-i18n="welcomeP">添加一个模型服务商即可开始。密钥仅保存在本机，不会离开设备。</p>
+        <p data-i18n="welcomeP">添加一个模型服务商即可开始。密钥保存在本机，调用时用于向你选择的服务商认证。</p>
       </div>
       <div class="secLbl"><span data-i18n="configured">已配置服务商</span></div>
       <div id="provList"></div>
@@ -434,7 +434,7 @@ try{var _th=JSON.parse(localStorage.getItem('ga.theme')||'"system"');
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         <span data-i18n="addProvider">添加服务商</span>
       </button>
-      <p class="hint" data-i18n="provListHint">密钥仅保存在本机，不会离开设备。同一服务商可填多个模型，发送时在输入框上方切换。</p>
+      <p class="hint" data-i18n="provListHint">密钥保存在本机，调用时用于向你选择的服务商认证。同一服务商可填多个模型，发送时在输入框上方切换。</p>
     </div>
 
     <!-- 存储空间子页 (kelivo 风格: 堆叠条 + 分类清单, 行可点看详情) -->

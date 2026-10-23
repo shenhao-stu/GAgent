@@ -1,0 +1,37 @@
+name: Feature or design proposal / 功能与设计建议
+description: Describe a user problem and the smallest useful change / 说明用户问题与最小有效改动
+title: "[Proposal] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Start with the problem, not a predetermined framework or rewrite.
+        请从实际问题出发，不预设必须重写或新增一套框架。
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem / 用户问题
+      description: Who is affected, under what conditions, and what cannot be done today?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Observable outcome / 可观察的目标
+      description: What result would show that this proposal works?
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints and compatibility / 约束与兼容
+      description: Relevant devices, permissions, data preservation, service or licensing requirements.
+    validations:
+      required: false
+  - type: textarea
+    id: approach
+    attributes:
+      label: Existing options and proposed boundary / 已有方案与建议边界
+      description: What can be reused? Include alternatives and acceptance checks if known.
+    validations:
+      required: false
