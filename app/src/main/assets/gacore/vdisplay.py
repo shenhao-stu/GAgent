@@ -33,6 +33,7 @@
 被系统落回默认屏, vd_start 已内置检测+撤回报错, 此时降级前台模式并告知用户)。
 """
 import base64
+import os
 import re
 import shlex
 import time

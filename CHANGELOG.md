@@ -7,6 +7,8 @@ publicly released. Exact artifacts and acceptance belong to their release record
 
 ## Unreleased / 未发布变更
 
+- Fix virtual-display adapter import: load `os` before reading the installation's
+  package identity; cover default and debug identities without device access.
 - Present the public source preview with a sourced DeepSeek Android comparison,
   scoped core-size claims, memory/token guidance and optional workflow setup.
 
