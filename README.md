@@ -16,8 +16,8 @@ phone. Inference uses your configured model endpoint. Everyday use needs no PC o
 
 > **Private pre-publication candidate · 2.33.3 / 136.** Public launch remains an
 > owner decision. Use **this repository's builds** for this source. The GA Mobile
-> download portal is a separate distribution; [channel details and the legacy
-> apk.gaagent.ai address](docs/ECOSYSTEM.md) explain the distinction.
+> download portal is a separate distribution; see the
+> [download channel guide](docs/ECOSYSTEM.md).
 
 ## What makes it useful
 
@@ -139,5 +139,3 @@ YOLO weights are optional and not bundled. This repository distributes Android;
 iOS and ESP32 development remain separate.
 
 [Website](https://gaagent.ai/) · [Upstream framework](https://github.com/lsdefine/GenericAgent) · [Ecosystem & download channels](docs/ECOSYSTEM.md) · [Logo](docs/assets/README.md)
-
-Legacy APK address: [apk.gaagent.ai](https://apk.gaagent.ai/) — HTTP 404 when checked on 2026-10-23; use the current portal linked above.

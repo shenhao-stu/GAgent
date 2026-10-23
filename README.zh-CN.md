@@ -15,7 +15,7 @@ Python、文件与记忆运行在手机上，推理由你配置的模型接口�
 
 > **公开前的私有候选 · 2.33.3 / 136。** 公开时间由所有者决定。
 > 要使用本仓库源码对应的版本，请获取**本仓库构建**。GA 手机版下载站属于另一分发渠道，
-> [渠道说明及旧地址 apk.gaagent.ai](docs/ECOSYSTEM.md)列出了区别。
+> 具体区别见[下载渠道说明](docs/ECOSYSTEM.md)。
 
 ## 核心能力
 
@@ -122,5 +122,3 @@ GenericAgent / GAndroid，署名保留于 [NOTICE](NOTICE)。[第三方库、模
 YOLO 权重可选安装、默认不捆绑。本仓库分发 Android，iOS 与 ESP32 开发仍独立维护。
 
 [官网](https://gaagent.ai/) · [上游框架](https://github.com/lsdefine/GenericAgent) · [生态与下载渠道](docs/ECOSYSTEM.md) · [Logo](docs/assets/README.md)
-
-旧 APK 地址：[apk.gaagent.ai](https://apk.gaagent.ai/)（2026-10-23 检查为 HTTP 404，当前下载站见上方入口）。
