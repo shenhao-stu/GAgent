@@ -62,6 +62,26 @@ def public_documentation_link(name, data, start, end):
             and url.fragment in PUBLIC_SITE_ANCHORS[url.netloc])
 
 
+def is_pclink_bootstrap(name, data):
+    # Only this generated asset may contain a hosted relay endpoint. All other
+    # secret-format rules still apply. A bootstrap is extractable from the APK;
+    # it must never be a provider, account, or administrator credential.
+    if name not in ('app/src/main/assets/gacore/pclink_defaults.json',
+                    'assets/gacore/pclink_defaults.json'):
+        return False
+    try:
+        value = json.loads(data)
+        if set(value) != {'url', 'token'} or not all(isinstance(v, str) for v in value.values()):
+            return False
+        url = urlsplit(value['url'])
+        return (url.scheme == 'wss' and bool(url.hostname) and not url.username
+                and not url.password and not url.query and not url.fragment
+                and bool(value['token']) and all(ord(c) >= 33 for c in value['url'])
+                and '\n' not in value['token'] and '\r' not in value['token'])
+    except (ValueError, TypeError):
+        return False
+
+
 def audit_blob(name, data, *, allow_public_docs=False):
     path = Path(name)
     findings = []
@@ -70,6 +90,8 @@ def audit_blob(name, data, *, allow_public_docs=False):
         findings.append({'path': name, 'rule': 'credential-or-runtime-file', 'line': 0})
     for rule, pattern in RULES.items():
         for match in pattern.finditer(data):
+            if rule == 'hosted-endpoint' and is_pclink_bootstrap(name, data):
+                continue
             if (rule == 'hosted-endpoint' and allow_public_docs
                     and public_documentation_link(name, data, match.start(), match.end())):
                 continue

@@ -70,8 +70,7 @@ https://github.com/shenhao-stu/GAgent/blob/main/docs/INSTALL_WITH_AGENT.md
 | 🎙️ **Step Voice 流式语音输入** | 说出任务，核对转写后发送。通过配置的兼容 WSS 服务接入 Step ASR 流式路径。 |
 | 🛠️ **APK 工厂：做出你想要的 App** | 用自然语言描述小应用，生成工程，再通过已配置的构建服务提交、查询和下载 APK；仓库保留模板与客户端。 |
 
-**本地工具直接配置，可选服务主动接入。** PC Link、语音和 APK 工厂不附带服务端密钥、
-构建工作节点或自动注册权限。[完整开启步骤](docs/CONFIGURATION.md) · [组件与服务端边界](docs/OFFICIAL_MODULES.md)
+**本地工具直接配置，可选服务主动接入。** 受信构建可附带 PC Link 默认中继配置，扫码配对即可使用，无需手填中继。源码自行构建需配置兼容中继。语音和 APK 工厂不附带服务凭据或构建节点。[完整开启步骤](docs/CONFIGURATION.md) · [组件与服务端边界](docs/OFFICIAL_MODULES.md)
 
 ## 🧠 小内核，长记忆，减少重复 Token
 

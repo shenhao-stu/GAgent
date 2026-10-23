@@ -137,3 +137,22 @@ Jev 单独配置、默认关闭，不是“选成主模型就生效”。只用�
 
 Record the configuration names and outcomes, not keys. Hardware and service
 coverage remain bounded by [Validation](VALIDATION.md).
+
+### PC Link build bootstrap / 构建默认配置
+
+A trusted build can set the Actions secret `GAGENT_PCLINK_DEFAULTS` to a JSON
+object containing `url` (WSS) and `token` (relay request signing). The build writes
+an ignored `pclink_defaults.json` asset. This is extractable client access material,
+not an account, model-provider or administrator secret. Never put those secrets
+in this profile. Source and APK audits still reject other secret formats.
+No default is committed to source. Missing bootstrap leaves PC Link unconfigured
+and the UI opens Optional modules. A custom PC Link URL and token override the
+entire bootstrap; clearing that URL restores the build default. Unpair to stop
+saved-room reconnect. Network connection starts only after pairing or restoring
+an existing pair. The original `ga-pclink:v1:` nine-digit QR protocol is unchanged.
+
+受信构建可通过上述 Actions secret 注入默认中继，源码不保存凭据。
+安装包中的中继接入材料可被提取，不可使用账户、模型服务商或管理密钥。
+扫码后才连接；已有配对会自动重连。自定义地址和令牌整体覆盖默认配置，
+清空 PC Link 地址恢复默认，解除配对停止重连。无默认配置的自行构建包会
+明确提示打开可选组件配置，不再把缺配置显示成普通未链接。

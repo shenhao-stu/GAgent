@@ -67,7 +67,7 @@ async def _keeper():
         ev.clear()
         delay = 2
         try:
-            config = service_config.load_config().get('pclink')
+            config = service_config.pclink_config()
             if _sock is not None and config != _sock_config:
                 await _drop(_sock)
             if config and _sock is None and _paired():
@@ -75,7 +75,7 @@ async def _keeper():
                 if saved['signal_url'] != config['url']:
                     raise ValueError('Relay address changed; pair again before reconnecting')
                 s = await p2p.connect_saved(NAME, path=ROOMS, access_key=config['token'])
-                if service_config.load_config().get('pclink') != config:
+                if service_config.pclink_config() != config:
                     await s.close()
                     continue
                 _attach(s, config)
@@ -147,7 +147,7 @@ async def _api(method, target, body, timeout=22, *, count_timeout=True):
     s = _sock
     if s is None:
         raise RuntimeError('not connected')
-    if service_config.load_config().get('pclink') != _sock_config:
+    if service_config.pclink_config() != _sock_config:
         raise RuntimeError('Relay disabled or configuration changed')
     _seq[0] += 1
     rid = 'ga%d' % _seq[0]
@@ -217,11 +217,13 @@ async def _resume():
 async def _pair(code):
     """兑换 9 位配对码并接管连接(替换旧连接); UUID 自动落盘 ROOMS."""
     import p2p_ws_client as p2p
-    config = service_config.get_service('pclink')
+    config = service_config.pclink_config()
+    if not config:
+        raise ValueError('Configure PC Link in Settings > Optional modules first')
     if _sock is not None:
         await _drop(_sock)
     s = await p2p.connect_code(config['url'], code, name=NAME, rooms_file=ROOMS, access_key=config['token'])
-    if service_config.load_config().get('pclink') != config:
+    if service_config.pclink_config() != config:
         await s.close()
         raise ValueError('Relay configuration changed during pairing')
     _attach(s, config)
@@ -254,14 +256,15 @@ def handle(text):
     try:
         cmd = text[len('/pclink.'):].strip()
         if cmd in ('status', 'resume'):
-            if _paired():
+            config = service_config.pclink_config()
+            if config and _paired():
                 _ensure_loop()                    # 冷启动时顺手踢 keeper 开始重连
                 if cmd == 'resume':
                     asyncio.run_coroutine_threadsafe(_resume(), _loop)
                 # status 只读本地状态，不因 UI 轮询持续发网络探活。
-            return json.dumps({'ok': 1, 'paired': _paired(),
+            return json.dumps({'ok': 1, 'configured': bool(config), 'paired': _paired(),
                                'connected': _sock is not None, 'err': _err[0],
-                               'signal': _signal()})   # 回带当前信令入口: 配对失败时先看这里, 免去猜是不是配置没生效
+                               'signal': config['url'] if config else ''})   # 回带当前信令入口: 配对失败时先看这里, 免去猜是不是配置没生效
         if cmd.startswith('pair '):
             _call(_pair(cmd[5:].strip()), 45)
             return json.dumps({'ok': 1, 'paired': True, 'connected': True})
@@ -288,4 +291,5 @@ def handle(text):
 
 
 def _signal():
-    return service_config.get_service('pclink')['url']
+    config = service_config.pclink_config()
+    return config['url'] if config else ''

@@ -76,9 +76,7 @@ the entire APK or Android codebase**. [Core, memory and counting scope →](docs
 | 🎙️ **Step Voice streaming input** | Speak a task and review the transcript. The client supports the Step ASR streaming path through a configured compatible WSS service. |
 | 🛠️ **APK Factory** | Describe a small app, generate its project, then submit, track and fetch its APK through your configured build service. Templates and clients are included. |
 
-**Local tools are ready to configure; hosted integrations are opt-in.** PC Link,
-voice and APK Factory do not ship server credentials, build workers or automatic
-service enrollment. [All setup steps](docs/CONFIGURATION.md) · [Component boundaries](docs/OFFICIAL_MODULES.md)
+**Local tools are ready to configure; hosted integrations are opt-in.** Trusted builds may include a PC Link relay bootstrap: scan the computer QR to pair, with no manual relay setup. Source-only builds need a compatible relay profile. Voice and APK Factory do not include service credentials or build workers. [All setup steps](docs/CONFIGURATION.md) · [Component boundaries](docs/OFFICIAL_MODULES.md)
 
 ## 🧠 A small core, useful memory, less repeated context
 
