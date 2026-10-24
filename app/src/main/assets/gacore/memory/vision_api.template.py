@@ -14,6 +14,10 @@ MODELSCOPE_API_KEY = ''                  # 直接填 ModelScope token
 DEFAULT_BACKEND = 'claude'               # 默认后端: 'claude' / 'openai' / 'modelscope'
 # =================================================================
 
+# 看图问答默认关闭 Anthropic 协议的扩展推理: 识别界面/状态属于感知问题, 推理与回答又共用 max_tokens。
+# 实测(同模型、同截图、同问题): 默认推理 45-48 s, 关闭后 18 s。需要服务商默认行为时调用传 thinking='auto'。
+DEFAULT_THINKING = 'disabled'
+
 MODELSCOPE_API_BASE = 'https://api-inference.modelscope.cn'
 MODELSCOPE_MODEL = 'Qwen/Qwen3-VL-235B-A22B-Instruct'
 
@@ -21,14 +25,14 @@ _DIR = os.path.dirname(os.path.abspath(__file__))
 for _p in [os.path.join(_DIR, '..')]:
     if _p not in sys.path: sys.path.insert(0, _p)
 
-def ask_vision(image_input, prompt="详细描述这张图片的内容", timeout=60, max_pixels=1440000, backend=DEFAULT_BACKEND):
+def ask_vision(image_input, prompt="详细描述这张图片的内容", timeout=60, max_pixels=1440000, backend=DEFAULT_BACKEND, thinking=DEFAULT_THINKING):
     try:
         b64 = _prepare_image(image_input, max_pixels)
     except Exception as e:
         return f"Error: 图片处理失败 - {type(e).__name__}: {e}"
     try:
         if backend == 'claude':
-            return _call_claude(b64, prompt, timeout)
+            return _call_claude(b64, prompt, timeout, thinking=thinking)
         elif backend == 'openai':
             cfg = _cfg(OPENAI_CONFIG_KEY)
             return _call_openai_compat(
@@ -78,7 +82,7 @@ def _cfg(key):
     mk = llmcore.mykeys
     return mk[key] if isinstance(mk, dict) else getattr(mk, key)
 
-def _call_claude(b64, prompt, timeout, max_tokens=None):
+def _call_claude(b64, prompt, timeout, max_tokens=None, thinking=DEFAULT_THINKING):
     cfg = _cfg(CLAUDE_CONFIG_KEY)
     if max_tokens is None:
         max_tokens = cfg.get('max_tokens')
@@ -95,13 +99,19 @@ def _call_claude(b64, prompt, timeout, max_tokens=None):
                 {'type': 'text', 'text': prompt}
             ]
         }]}
-    if cfg.get('thinking_type') == 'disabled':
+    by_config = cfg.get('thinking_type') == 'disabled'
+    if by_config or thinking == 'disabled':
         payload['thinking'] = {'type': 'disabled'}
-    resp = requests.post(
-        __import__('llmcore').auto_make_url(cfg['apibase'], 'messages'), json=payload,
-        headers={'x-api-key': cfg['apikey'], 'anthropic-version': '2023-06-01', 'content-type': 'application/json'},
-        timeout=timeout, proxies=proxies
-    )
+    def post():
+        return requests.post(
+            __import__('llmcore').auto_make_url(cfg['apibase'], 'messages'), json=payload,
+            headers={'x-api-key': cfg['apikey'], 'anthropic-version': '2023-06-01', 'content-type': 'application/json'},
+            timeout=timeout, proxies=proxies
+        )
+    resp = post()
+    if resp.status_code == 400 and 'thinking' in payload and not by_config:
+        payload.pop('thinking')                  # 服务商不接受该参数: 只退回其默认行为一次, 不改用户配置
+        resp = post()
     resp.raise_for_status()
     data = resp.json()
     if data.get('stop_reason') == 'max_tokens':

@@ -498,6 +498,7 @@ def init(ga_dir):
     patches.patch_usage()                             # 猴补丁 token 用量采集 → poll 上报
     patches.patch_abort()                             # 让"停止"真正中断在飞 LLM 流(close socket + 不重试/不故障转移续命)
     _safe(patches.patch_route_probe)                   # 故障转移路由可视化: 记录当前实际路由到的成员 → poll.route → UI 显示
+    _safe(patches.patch_llm_timing)                    # 主模型请求计时: 首包/推理/文字/工具首 token、上下文规模、重试 → poll.llm(只观察)
     try: _hist[:] = json.load(open(os.path.join(ga_dir, 'chat.json'), encoding='utf-8'))
     except Exception as e: _swallow('init_load_hist', e)
     if has_key():                                    # 预热 agent(后台导入 Chaquopy 模块), 避免首发消息冷启动卡 UI
@@ -2437,6 +2438,7 @@ def _poll_for(sess, since='0', summary=False, legacy=False):
         d['cache_read'] = st.get('cache_read', 0); d['cache_write'] = st.get('cache_write', 0)
         d['ask'] = st.get('ask')
         d['end'] = st.get('end', '')
+        d['llm'] = [] if summary else [dict(x) for x in (st.get('llm') or []) if x.get('gen') == st.get('gen')]   # 本任务各次主模型请求计时(patches.patch_llm_timing)
         if not readonly and st.get('ask'):
             try: st['ask'] = ''
             except Exception: pass

@@ -250,7 +250,8 @@ def t03_bind_convo_same_source():
 HEAD_POLL_KEYS = {'running', 'status', 'gen', 'final', 'prompt', 'nsteps', 'steps', 'cmd_error',
                   'tok_in', 'tok_out', 'cache_read', 'cache_write', 'ask', 'route', 'active_convo',
                   'elapsed', 'lang', 'hist', 'cid', 'tool_events',
-                  'end'}   # end: 结束原因 done/stopped/error(悬浮窗区分中止/出错与完成); 旧客户端忽略未知键
+                  'end',   # end: 结束原因 done/stopped/error(悬浮窗区分中止/出错与完成); 旧客户端忽略未知键
+                  'llm'}   # llm: 本任务主模型请求计时(首包/首 token/上下文规模/重试), 只观察
 
 
 def t04_poll_contract():

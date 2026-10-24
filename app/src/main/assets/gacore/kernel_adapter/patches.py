@@ -78,7 +78,7 @@ def _cancel_for(sess):
     return bool(a and getattr(a, 'stop_sig', False))
 
 
-def _wrap_iter_lines(r, sess=None):
+def _wrap_iter_lines(r, sess=None, rec=None):
     orig = getattr(r, 'iter_lines', None)
     if orig is None or getattr(orig, '_ga_wrapped', False): return
     # 捕获登记时的 sess，避免迭代时 TLS 漂移
@@ -95,6 +95,7 @@ def _wrap_iter_lines(r, sess=None):
             except Exception:
                 if _cancel_for(owner): raise _Aborted()   # close() 唤醒的读异常 → 归一为中止(_stream_with_retry 的 except Exception: 不重试)
                 raise
+            if rec is not None: _llmt_line(rec, line)
             yield line
     wrapped._ga_wrapped = True
     try: r.iter_lines = wrapped
@@ -107,11 +108,16 @@ class _ReqProxy:
         import requests; return getattr(requests, n)
     def post(self, *a, **k):
         if _cancel_now(): raise _Aborted()           # 已中止: 不再发起新请求 → 快速跳出重试/故障转移
+        rec = getattr(_tls, 'llmt', None)
+        if rec is not None: rec['attempts'] += 1
         import requests; r = requests.post(*a, **k)
         sess = current_sess()
         try:
+            if rec is not None:
+                if rec['hdr'] is None: rec['hdr'] = _llmt_dt(rec)
+                rec['http'] = int(getattr(r, 'status_code', 0) or 0)
             _sess_resps(sess).add(r)
-            _wrap_iter_lines(r, sess)
+            _wrap_iter_lines(r, sess, rec)
         except Exception: pass
         return r
 
@@ -211,6 +217,118 @@ def patch_usage():
         llmcore._ga_usage_patched = _ae
     except Exception:
         pass
+
+
+# ---------- 主模型请求计时(只观察, 不改请求/重试/返回) ----------
+_LLMT_CAP = 40
+# 首 token 分类(Anthropic / Chat Completions / Responses SSE); 值为 null 或空串的占位字段不算
+_LLMT_MARKS = None
+
+
+def _llmt_marks():
+    global _LLMT_MARKS
+    if _LLMT_MARKS is None:
+        import re
+        _LLMT_MARKS = (
+            (re.compile(rb'"thinking_delta"|"(?:reasoning_content|reasoning)"\s*:\s*"[^"]|reasoning[a-z_]*\.delta'), 'think'),
+            (re.compile(rb'"input_json_delta"|"type"\s*:\s*"tool_use"|"tool_calls"\s*:\s*\[|function_call[a-z_]*\.delta'), 'tool'),
+            (re.compile(rb'"text_delta"|output_text\.delta|"content"\s*:\s*"[^"]'), 'text'),
+        )
+    return _LLMT_MARKS
+
+
+def _llmt_dt(rec):
+    import time
+    return round(time.time() - rec['t_req'], 2)
+
+
+def _llmt_open(payload):
+    """每次 _stream_with_retry 一条记录: 上下文规模在发出前量, 时间点相对 t_req(秒)。无归属会话不记。"""
+    import json, time
+    s = current_sess()
+    st = getattr(s, 'state', None) if s is not None else None
+    if not isinstance(st, dict) or not isinstance(payload, dict): return None
+    def size(v):
+        try: return len(json.dumps(v, ensure_ascii=False, default=str))
+        except Exception: return 0
+    msgs = payload.get('messages') or payload.get('input') or []
+    try: body = json.dumps(msgs, ensure_ascii=False, default=str)
+    except Exception: body = ''
+    rec = {'gen': int(st.get('gen', 0) or 0), 'i': 0, 't_req': round(time.time(), 3),
+           'model': str(payload.get('model') or '')[:60], 'n_msgs': len(msgs) if isinstance(msgs, list) else 0,
+           'ctx_chars': len(body), 'sys_chars': size(payload.get('system') or ''), 'tools_chars': size(payload.get('tools') or []),
+           'n_img': body.count('"type": "image"') + body.count('"image_url"'),
+           'attempts': 0, 'http': 0, 'errors': 0, 'last_error': '',
+           'hdr': None, 'first': None, 'think': None, 'text': None, 'tool': None, 'end': None,
+           'in_tok': 0, 'out_tok': 0, 'cache_read': 0}
+    lock = getattr(s, 'lock', None)
+    try:
+        if lock is not None: lock.acquire()
+        lst = st.get('llm')
+        if not isinstance(lst, list): lst = st['llm'] = []
+        lst[:] = [x for x in lst if x.get('gen') == rec['gen']][-(_LLMT_CAP - 1):]
+        rec['i'] = (lst[-1]['i'] + 1) if lst else 1
+        lst.append(rec)
+    finally:
+        if lock is not None: lock.release()
+    return rec
+
+
+def _llmt_line(rec, line):
+    """SSE 行打点: 首个 data 行/首个推理/首个可见文字/首个工具调用 + 用量。字节匹配, 不解码正文。"""
+    try:
+        if not line: return
+        b = line if isinstance(line, bytes) else str(line).encode('utf-8', 'replace')
+        if not b.startswith(b'data:'): return
+        if rec['first'] is None: rec['first'] = _llmt_dt(rec)
+        for rx, key in _llmt_marks():
+            if rec[key] is None and rx.search(b): rec[key] = _llmt_dt(rec)
+        if b'"usage"' in b and b'"usage":null' not in b:
+            import json
+            evt = json.loads(b[5:].decode('utf-8', 'replace').strip())
+            u = evt.get('usage') or (evt.get('message') or {}).get('usage') or {}
+            inp = (u.get('input_tokens') or u.get('prompt_tokens') or 0) + (u.get('cache_read_input_tokens') or 0) + (u.get('cache_creation_input_tokens') or 0)
+            out = u.get('output_tokens') or u.get('completion_tokens') or 0
+            cr = u.get('cache_read_input_tokens') or ((u.get('prompt_tokens_details') or {}).get('cached_tokens')) or 0
+            if inp: rec['in_tok'] = max(rec['in_tok'], int(inp))
+            if out: rec['out_tok'] = max(rec['out_tok'], int(out))
+            if cr: rec['cache_read'] = max(rec['cache_read'], int(cr))
+    except Exception:
+        pass
+
+
+def patch_llm_timing():
+    """胶水猴补丁(不改 llmcore): 包 _stream_with_retry, 给每次主模型请求记 发出→响应头→首个 SSE→推理/文字/工具首 token→结束,
+    以及发出时的上下文字符数、图片数、重试/报错与服务端用量; 写入当前归属 sess.state['llm'] → poll.llm。
+    只观察: 原样转发 chunk/返回值/异常, 记录失败静默。"""
+    import android_entry as _ae
+    import llmcore
+    if getattr(llmcore, '_ga_llmt_patched', None) is _ae: return
+    orig = getattr(llmcore, '_ga_llmt_orig', None) or llmcore._stream_with_retry
+    def _stream_with_retry(sess, url, headers, payload, parse_fn):
+        try: rec = _llmt_open(payload)
+        except Exception: rec = None
+        prev = getattr(_tls, 'llmt', None)
+        _tls.llmt = rec
+        g = orig(sess, url, headers, payload, parse_fn)
+        try:
+            while True:
+                try: chunk = next(g)
+                except StopIteration as e: return e.value
+                if rec is not None and isinstance(chunk, str) and chunk.lstrip().startswith(('!!!Error', '[!!!')):
+                    rec['errors'] += 1; rec['last_error'] = chunk.strip()[:120]
+                yield chunk
+        finally:
+            _tls.llmt = prev
+            try: g.close()
+            except Exception: pass
+            if rec is not None:
+                try: rec['end'] = _llmt_dt(rec)
+                except Exception: pass
+    _stream_with_retry.__wrapped__ = orig
+    llmcore._ga_llmt_orig = orig
+    llmcore._stream_with_retry = _stream_with_retry
+    llmcore._ga_llmt_patched = _ae
 
 
 def patch_abort():

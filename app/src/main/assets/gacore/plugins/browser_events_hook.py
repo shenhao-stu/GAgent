@@ -94,6 +94,17 @@ def _pick_url(args, kwargs, take_first_pos):
     return _text(u, URL_CAP) if isinstance(u, str) else ''
 
 
+def _arg(v):
+    """图像数组只记形状: 看图入口的首参是整屏像素, 不能把数组文本塞进摘要。"""
+    shape = getattr(v, 'shape', None)
+    if shape is not None and hasattr(v, 'dtype'):
+        try:
+            return 'ndarray%s' % (list(shape),)
+        except Exception:
+            return 'ndarray'
+    return v
+
+
 def _open_event(label, action, phase, args, kwargs, url_from_args):
     sess = _sess()
     if sess is None:
@@ -101,10 +112,10 @@ def _open_event(label, action, phase, args, kwargs, url_from_args):
     try:
         arg_summary = {}
         for i, v in enumerate(args):
-            arg_summary['a%d' % i] = v
+            arg_summary['a%d' % i] = _arg(v)
         for k, v in kwargs.items():
             if not str(k).startswith('_'):
-                arg_summary[k] = v
+                arg_summary[k] = _arg(v)
         with sess.lock:
             st = sess.state
             gen = int(st.get('gen', 0) or 0)
@@ -190,6 +201,9 @@ def _close_event(rec, action, ret, err):
             ev['t_end'] = round(time.time(), 3)
             is_err = err is not None or (isinstance(ret, dict)
                                          and str(ret.get('status', '')).lower() == 'error')
+            if action == 'vision' and isinstance(ret, str):
+                ev['out_len'] = len(ret)             # 看图回答长度: 与耗时一起判断生成成本
+                is_err = is_err or ret.startswith('Error:')   # 模板以 'Error: ...' 返回失败而非抛异常
             if is_err:
                 ev['status'] = 'error'
                 ev['phase'] = 'error'
@@ -198,7 +212,9 @@ def _close_event(rec, action, ret, err):
             else:
                 ev['status'] = 'done'
                 ev['phase'] = 'loaded' if ev.get('phase') == 'navigating' else 'done'
-            if isinstance(ret, (dict, list, str, int, float, bool)) or ret is None:
+            if isinstance(ret, list) and action in _LIST_ACTIONS:
+                ev['result_summary'] = _text('n=%d %s' % (len(ret), _text(ret[:3], SUM_CAP)), SUM_CAP)
+            elif isinstance(ret, (dict, list, str, int, float, bool)) or ret is None:
                 ev['result_summary'] = _text(ret if ret is not None else '', SUM_CAP)
             else:
                 ev['result_summary'] = type(ret).__name__      # ndarray 等大对象只记类型名
@@ -212,6 +228,9 @@ def _close_event(rec, action, ret, err):
                 ev['screenshot_id'] = sid
     except Exception:
         pass
+
+
+_LIST_ACTIONS = ('dump', 'find', 'look')   # 观察结果为节点/检测列表: 摘要记条数+前 3 项
 
 
 # ---------- 观察性包装 ----------
@@ -268,6 +287,14 @@ def _install():
         _wrap(droid, 'back', 'back', 'acting')
         _wrap(droid, 'paste', 'paste', 'acting')
         _wrap(droid, 'shot', 'screenshot', 'verifying')
+        # 观察侧也记一跳: code_run 内的节点读取、OCR 检测与看图问答原先不在 tool_events 中,
+        # 长 code_run 无法区分等待、检测与远端视觉。嵌套调用(如 look 内的 shot)由 _depth 只记外层。
+        _wrap(droid, 'dump', 'dump', 'verifying')
+        _wrap(droid, 'find', 'find', 'verifying')
+        _wrap(droid, 'tap_text', 'tap', 'acting')
+        _wrap(droid, 'scroll_view', 'scroll', 'acting')
+        _wrap(droid, 'look', 'look', 'verifying')
+        _wrap(droid, 'ask_vision', 'vision', 'verifying')
     except Exception:
         pass
 

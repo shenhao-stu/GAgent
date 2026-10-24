@@ -49,7 +49,15 @@ Completions**, not Responses. An existing user-created `memory/vision_api.py` is
 preserved on upgrade: compare its URL construction with the current template if
 vision still returns 404. Back up that file before adapting it.
 
-中文要点：视觉适配器引用已有配置的**名称**，不复制密钥。两种协议复用内核的 URL 规则；
+The Anthropic-protocol path sends `thinking: {"type": "disabled"}` by default:
+screen questions are perception, and reasoning shares the output budget. With the
+same model, screenshot and question, default reasoning took 45–48 s and the disabled
+request about 18 s. Pass `thinking='auto'` for the provider default. If the provider
+rejects the parameter with HTTP 400, the template retries once without it. Older
+copies lack this option; back them up and replace only the code below the header.
+
+中文要点：视觉适配器引用已有配置的**名称**，不复制密钥。Anthropic 协议看图默认关闭扩展推理
+（同图同问实测 45–48 s → 约 18 s），需要时传 `thinking='auto'`；服务商不支持该参数时只退回一次。两种协议复用内核的 URL 规则；
 OpenAI 模板使用 Chat Completions。升级会保留用户已有的 `vision_api.py`，旧适配器仍报 404
 时先备份，再按新模板修正路径。只查看配置名称与协议元信息，不打印凭据对象。
 
