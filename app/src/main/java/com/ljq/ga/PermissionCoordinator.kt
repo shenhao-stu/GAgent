@@ -85,10 +85,22 @@ class PermissionCoordinator(
                 Analytics.track("""{"event":"a11y_heal","props":{"ok":$healed}}""")
             }
         }
+        // 无线调试自动开启(与上行同钥匙 WRITE_SECURE_SETTINGS, 幂等 best-effort): 省掉用户手动进开发者选项,
+        // 让 self-ADB 这条 shell 通道随时可连(stepOS 全屏启动的前提)。必须在下行 onAdb 回推**之前**:
+        // 前端拿到的即开启后的真值, 不会出现"设置页显示关、实际已开"的分叉。失败半径=维持现状(用户仍可手动开)。
+        runCatching {
+            if (A11yPersist.hasWriteSecure(activity)) {
+                val wifiOn = A11yPersist.ensureWirelessDebugging(activity)
+                if (wifiOn && !activity.adbWifiOn()) Analytics.track("""{"event":"adb_wifi_auto","props":{"ok":true}}""")
+            }
+        }
         // 回推无障碍最新状态: 用户可能刚从系统无障碍设置页开完权限返回, 让前端即时更新横幅/红点/引导。
         webCallbacks.onA11y(activity.isA11yOn())
         // 回推无线调试自连最新状态: 用户可能刚从开发者选项/无线调试页返回; JS 侧自己重读 adbSelfStatus, 单一真值源(无需入参)。
         webCallbacks.onAdb()
+        // 回推 Shizuku 状态: 用户可能在管理器里授权后直接切回 GA, 不会经过 GA 自己的
+        // requestPermission 回调; 不在这里重读, 状态行/红点会一直停在旧值。
+        webCallbacks.onShizuku()
         return true
     }
 }

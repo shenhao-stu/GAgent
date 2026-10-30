@@ -55,6 +55,28 @@ def test_normal_completion_is_done(entry, monkeypatch):
     assert poll['end'] == 'done' and poll['status'].startswith('完成')
 
 
+def test_poll_exposes_the_backend_run_span(entry, monkeypatch):
+    """UI 计时必须以真实运行起点/终点为准，不能用以 WebView 挂接时刻新建的本地 t0。
+
+    真机回归(2026-10-27): 任务跑了 387.6s，但 UI 在结束前 8s 才重新挂接，
+    `newTask()` 用 Date.now() 重置计时锚 → 显示 8s。后端 t0 一直是对的，
+    只是 poll 没把它交给前端。"""
+    sess = _running(entry, monkeypatch, 'ga_span')
+    sess.state['t0'] = 1234.5
+    _finish(entry, sess, {'done': 'ok'})
+    d = json.loads(entry._poll_for(sess, '0', summary=True))
+    assert d['started_at'] == 1234.5
+    assert d['ended_at'] >= 1234.5
+
+
+def test_running_poll_exposes_started_at_before_the_run_ends(entry, monkeypatch):
+    sess = _running(entry, monkeypatch, 'ga_span_live')
+    sess.state['t0'] = 1234.5
+    d = json.loads(entry._poll_for(sess, '0'))
+    assert d['started_at'] == 1234.5
+    assert d['ended_at'] == 0
+
+
 @pytest.mark.parametrize('lang,label', [('zh', '待命'), ('en', 'Idle')])
 def test_idle_status_is_shown_in_the_ui_language(entry, monkeypatch, lang, label):
     """The header and capsule show the backend status verbatim, so idle must not be the raw word 'idle'."""

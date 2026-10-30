@@ -19,11 +19,13 @@ def modules_in(aar):
         if not libraries:
             raise ValueError('No Go native runtime in AAR')
         for name in libraries:
-            with tempfile.NamedTemporaryFile(suffix='.so') as library:
-                library.write(archive.read(name))
-                library.flush()
+            with tempfile.TemporaryDirectory() as folder:
+                # Windows: `go version -m` fails on a file still held open by Python,
+                # so extract to a path that is closed before the subprocess reads it.
+                library = Path(folder) / 'libgojni.so'
+                library.write_bytes(archive.read(name))
                 info = json.loads(subprocess.check_output(
-                    ['go', 'version', '-m', '-json', library.name], text=True, timeout=60))
+                    ['go', 'version', '-m', '-json', str(library)], text=True, timeout=60))
                 paths.update(module['Path'] for module in info['Deps'])
     modules = {}
     for path in sorted(paths):

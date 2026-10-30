@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 CORE = Path(__file__).resolve().parents[1] / 'app/src/main/assets/gacore'
 sys.path.insert(0, str(CORE))
@@ -169,12 +169,49 @@ class VisionResponseTest(unittest.TestCase):
 
 
 class VisionEntryTest(unittest.TestCase):
-    def test_droid_vision_entry_loads_user_adapter_only_when_called(self):
-        from types import SimpleNamespace
-        adapter = SimpleNamespace(ask_vision=lambda image, prompt, **kw: (image, prompt, kw))
-        with patch.dict(sys.modules, {'vision_api': adapter}):
-            self.assertEqual(droid.ask_vision('image', 'read', timeout=15),
-                             ('image', 'read', {'timeout': 15}))
+    """视觉入口的响应契约。
+
+    机制已换: 旧走 memory/vision_api.py 用户适配器(要自己拷模板自己配 key), 现在走
+    vision_llm.ask_with_backend 复用任务页当前模型。下面两条响应契约**原样保留**,
+    只是换成了新后端——它们都是真机踩出来的, 与用哪个后端无关。
+    """
+
+    def _active(self):
+        droid.set_active_backend(object())
+        self.addCleanup(droid.set_active_backend, None)
+        droid.reset_vision_fuse()
+        self.addCleanup(droid.reset_vision_fuse)
+
+    def test_entry_needs_no_vision_api_module(self):
+        """视觉入口不得再依赖 memory/vision_api.py: 那个文件默认不存在(只有 .template.py),
+        旧实现因此必然报"视觉不可用"。"""
+        import vision_llm
+        self._active()
+        ask = Mock(wraps=lambda backend, image, prompt, **kw: 'ok')
+        with patch.dict(sys.modules), patch.object(vision_llm, 'ask_with_backend', ask):
+            sys.modules.pop('vision_api', None)
+            self.assertEqual(droid.ask_vision('image', 'read', timeout=15), 'ok')
+        self.assertEqual(ask.call_args.kwargs['timeout'], 15)
+
+    def test_empty_vision_answer_raises_instead_of_passing_through_silently(self):
+        # 真机实证: 某轮 ask_vision 返回空串, stdout 只剩 _prepare_image 的「缩放/Base64」两行 print,
+        # agent 把"没有回答"当成功并整轮重问同一问题(白付一轮模型 + ~17s)。
+        # 空/纯空白一律显式失败, 不让无信号结果流过。
+        import vision_llm
+        for empty in ('', '   ', '\n\t', None):
+            self._active()
+            with patch.object(vision_llm, 'ask_with_backend',
+                              lambda backend, image, prompt, _v=empty, **kw: _v):
+                with self.assertRaisesRegex(RuntimeError, '空响应'):
+                    droid.ask_vision('image', 'read')
+
+    def test_visible_error_string_still_passes_through(self):
+        """"Error: ..." 是可见失败, 由调用方按错误处理; 不在此改写成异常。"""
+        import vision_llm
+        self._active()
+        with patch.object(vision_llm, 'ask_with_backend',
+                          lambda backend, image, prompt, **kw: 'Error: 请求超时'):
+            self.assertEqual(droid.ask_vision('image', 'read'), 'Error: 请求超时')
 
     def test_code_run_exposes_lazy_vision_entry(self):
         import subprocess
@@ -206,8 +243,8 @@ class VisualObservationTest(unittest.TestCase):
                               {'bbox': [30, 6, 50, 26], 'label': '搜索'},
                               {'bbox': [55, 6, 75, 26], 'label': '取消'},
                               {'bbox': [80, 6, 90, 26], 'label': None}]
-                cache = {'thumb': None, 'roi': None, 'dets': None}
-                with patch.object(droid, '_LOOK_CACHE', cache), \
+                cache = {'thumb': None, 'roi': None, 'pkg': None, 'rot': None, 'res': None}
+                with patch.object(droid, '_OBS_CACHE', cache), \
                      patch.object(droid, 'shot', return_value=frame) as shot, \
                      patch.object(droid, 'ui_detect', return_value=detections) as detect:
                     hits = droid.look(roi='lower', label='搜索')
@@ -230,7 +267,7 @@ class VisualObservationTest(unittest.TestCase):
 
     def test_look_rejects_prompts_before_capturing_a_frame(self):
         with patch.object(droid, 'shot') as shot:
-            with self.assertRaisesRegex(ValueError, 'ask_vision'):
+            with self.assertRaisesRegex(ValueError, 'see\\(\\)'):
                 droid.look('read the first two cards')
         shot.assert_not_called()
 
@@ -271,12 +308,15 @@ class TaskBudgetTest(unittest.TestCase):
         with self.assertRaises(RuntimeError): droid._gate_injection('tap', 'com.tencent.mm')
 
     def test_visual_only_paste_never_calls_node_paste(self):
+        """视觉型 App 只能走"剪贴板 + 可见 GUI 粘贴": 无论自动那一步成不成, 都不许下发节点输入,
+        而且必须如实说明文本仍在剪贴板(不能把"已设剪贴板"当成已输入)。"""
         output = io.StringIO()
         with patch.object(droid, '_sensitive_fg', return_value=True), patch.object(droid, '_act', return_value={'ok': True}) as act, redirect_stdout(output):
             result = droid.paste('search query')
-        self.assertIn('尚未输入', output.getvalue())
+        self.assertIn('剪贴板', output.getvalue())
         self.assertNotIn('search query', output.getvalue())
-        self.assertEqual(act.call_args.kwargs['op'], 'clipboard')
+        self.assertNotIn('paste', [c.kwargs.get('op') for c in act.call_args_list])
+        self.assertEqual(act.call_args_list[0].kwargs['op'], 'clipboard')
         self.assertFalse(result['hit'])
         self.assertTrue(result['needs_gui_paste'])
 

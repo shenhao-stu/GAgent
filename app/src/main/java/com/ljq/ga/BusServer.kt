@@ -180,7 +180,7 @@ class BusHttpd(port: Int, private val auth: LocalBusAuth) : NanoHTTPD("127.0.0.1
             "/adb/shell" to "POST /adb/shell   body {cmd,timeout_ms,max_bytes?} -> {out} 非交互命令收全输出(断线自愈重连); 超max_bytes(默认256KB)报错须分页/落文件; 勿用top/logcat -f长驻",
             "/adb/shell_detached" to "POST /adb/shell_detached body {tag,cmd}  -> {ok,tag} 起held-stream命令(流不关,立即返回): 保活常驻子进程(如VdHelper); 命令须自带 1>_LOG 2>&1 3>&-",
             "/adb/shell_close" to "POST /adb/shell_close    body {tag}      -> {ok,closed} 清该tag的GA侧held流引用(真kill靠调用方pid kill, 因3>&-断fd3)",
-            "/adb/status" to "GET  /adb/status                         -> {connected,paired,error,port} connected=libadb派生真值; port=上次成功端口",
+            "/adb/status" to "GET  /adb/status                         -> {connected,paired,error,port,shizuku} connected=libadb派生真值; port=上次成功端口; shizuku=第二条shell通道是否就绪(stepOS全屏启动用, 与self-ADB等价)",
             "/web/ensure_fg" to "--- 浏览器容器(webcdp.py 正典封装, 优先用它; 默认走前台) ---\nGET/POST /web/ensure_fg                  -> {ok,url,visible} 幂等拉起/复用前台任务浏览器(可见+可截图+可CDP, webcdp role='fg' 默认路)",
             "/web/ensure" to "GET/POST /web/ensure                     -> {ok,title,url,viewport} 幂等建/复用离屏浏览器WebView(后台不遮挡对话页, webcdp role='browser')",
             "/notifications" to "--- 通知读取/回复/控制(用户须先手动: 设置>通知>通知使用权限>GA 允许) ---\nGET  /notifications                      -> JSON [{key,pkg,title,text,time,canReply}] 当前所有系统通知列表",
@@ -295,11 +295,15 @@ class BusHttpd(port: Int, private val auth: LocalBusAuth) : NanoHTTPD("127.0.0.1
         },
         "/adb/status" to { _, _ ->
             val s = AdbController.status(adbCtx())
+            // shizuku: 第二条 shell 通道(stepOS 全屏启动用)。与 self-ADB 等价, 只是来源不同;
+            // 两条都不可用时 droid.launch() 只能落小窗, 故这里把两条的真值一并暴露, 让诊断面能说清「为什么不是全屏」。
             json(JSONObject()
                 .put("connected", s.connected)
                 .put("paired", s.paired)
                 .put("error", s.error)
-                .put("port", s.port).toString())
+                .put("port", s.port)
+                .put("shizuku", ShizukuShell.ready())
+                .toString())
         },
         "/web/ensure" to { _, _ -> json(WebController.ensure(adbCtx())) },
         "/web/ensure_fg" to { _, _ -> json(AgentBrowser.ensure(adbCtx())) },   // 前台任务浏览器(可见+可截图+可CDP), webcdp role='fg' 默认路

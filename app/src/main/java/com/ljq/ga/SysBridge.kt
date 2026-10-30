@@ -41,6 +41,21 @@ class SysBridge(private val activity: MainActivity) {
             .put("grantCmd", "adb shell " + A11yPersist.grantCmd(activity))
             .toString()
     }.getOrElse { """{"a11yOn":false,"hasWriteSecure":false,"persistEnabled":false,"selfAdbOn":false}""" }
+    // ── Shizuku 第二条 shell 通道(stepOS 全屏启动用; 与 self-ADB 等价, 只是来源不同) ──
+    // installed = 管理器是否已装(用于 UI 区分「未安装」与「未授权」两种引导);
+    // ready = binder 活着 ∧ 已授权(真值源全在 Kotlin, 前端零缓存零镜像)。
+    fun shizukuStatus(): String = org.json.JSONObject()
+        .put("installed", ShizukuShell.installed(activity))
+        .put("ready", ShizukuShell.ready())
+        .toString()
+
+    /** 跳 Shizuku 管理器(未安装/服务未启动时引导用户去那边操作)。返回是否真的拉起了管理器页面。 */
+    fun openShizukuManager(): Boolean {
+        val pm = activity.packageManager
+        val intent = pm.getLaunchIntentForPackage("moe.shizuku.privileged.api")
+            ?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) ?: return false
+        return runCatching { activity.startActivity(intent); true }.getOrDefault(false)
+    }
     // P1 一键授权: 复用既有自连通道(AdbController.shell 以 shell 身份跑 pm grant, 零新实现)。
     // 异步 jobId+轮询(仿 pdfRender): shell 是 @Synchronized 阻塞调用(可能与 agent 的 adb 使用串行排队), 不能冻结 JS 桥。
     fun a11yGrantViaSelfAdb(): String {

@@ -10,5 +10,6 @@ class App : Application() {
         // 总线起不来只影响设备能力, 不应让整个 App 打不开(否则连设置/诊断都看不到); 设备工具会显式报连接失败
         runCatching { Bus.start(this) }.onFailure { Diag.log("bus", "start failed: ${it.javaClass.simpleName}: ${it.message}") }
         Analytics.init(this)
+        ShizukuShell.init(this)   // Shizuku binder 监听(第二条 shell 通道, stepOS 全屏启动用); 未装管理器时零副作用
     }
 }

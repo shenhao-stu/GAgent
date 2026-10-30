@@ -1,0 +1,19 @@
+<?xml version='1.0' encoding='utf-8'?>
+<appfunctions>
+  <appfunction>
+    <function_id>com.ljq.ga.amoo.GaAppFunctionService#capabilities</function_id>
+    <enabled_by_default>true</enabled_by_default>
+  </appfunction>
+  <appfunction>
+    <function_id>com.ljq.ga.amoo.GaAppFunctionService#startTask</function_id>
+    <enabled_by_default>true</enabled_by_default>
+  </appfunction>
+  <appfunction>
+    <function_id>com.ljq.ga.amoo.GaAppFunctionService#taskStatus</function_id>
+    <enabled_by_default>true</enabled_by_default>
+  </appfunction>
+  <appfunction>
+    <function_id>com.ljq.ga.amoo.GaAppFunctionService#cancelTask</function_id>
+    <enabled_by_default>true</enabled_by_default>
+  </appfunction>
+</appfunctions>

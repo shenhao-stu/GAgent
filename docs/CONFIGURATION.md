@@ -68,7 +68,7 @@ OpenAI 模板使用 Chat Completions。升级会保留用户已有的 `vision_ap
 | GUI and screenshots / 手机操作与截图 | Android 11+ arm64; enable GAgent accessibility and overlay access / 开启无障碍与悬浮窗 | `droid.ping()` reports the device; a fresh screenshot matches the current screen / 新截图与当前画面一致 |
 | Persistent progress / 持续显示进度 | Settings → Always-on floating window / 设置 → 悬浮窗常开 | During a harmless running task: Home → GAgent → Home / 运行无副作用任务时切后台核验 |
 | OCR / 文字识别 | Bundled; no separate account or model download / 已内置 | `droid.look(cache=False)` returns readable labels on a text-rich screen / 有文字页面返回识别项 |
-| YOLO / 图标检测 | Install compatible ONNX; [guide](OPTIONAL_YOLO.md) / 按指南独立安装 | Real detections and loaded model, not just a file / 实际检测与已加载模型 |
+| YOLO / 图标检测 | Bundled in local builds; otherwise install compatible ONNX per [guide](OPTIONAL_YOLO.md) / 本机构建已内置，其余按指南安装 | Real detections and loaded model, not just a file / 实际检测与已加载模型 |
 | Files and memory / 文件与记忆 | Local tools are included; allow shared-storage access when needed / 本地工具已含，按需授权共享存储 | Create and read back a new test file; review saved procedures / 创建并读回测试文件 |
 | Browser / 内置浏览器 | Sign in through the app browser; task/background WebViews share cookies / 在内置浏览器登录，任务与后台 WebView 复用 Cookie | Verify the URL, content and session; [background guide](../app/src/main/assets/gacore/memory/offscreen_sop.md) / 核对地址、内容与登录态 |
 | Scheduled agent tasks / 定时任务 | Ask the agent to create a bounded schedule using `droid.alarm_set` / 创建明确的定时任务 | `droid.alarm_list()`; check actual delivery and cancellation / 核验列表、到达与取消 |

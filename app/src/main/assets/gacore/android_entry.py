@@ -12,6 +12,7 @@ from provider_config import (
 )
 # Android端GA入口: Kotlin壳只调 init/send/poll/abort, 维护升级都改这里(随assets热更新)
 import os, sys, json, re, shutil, threading, traceback, time
+import agent_settings   # 运行期开关(kv): 读的是 GA_DIR/kv/*.json, 与 /kv.* 桥同一份存储
 import ast, py_compile, secrets, zipfile, queue
 from collections import deque
 from xml.etree import ElementTree as ET
@@ -22,7 +23,7 @@ agent = None
 _LANG = os.environ.get('GA_LANG', 'zh')   # UI 语言, 由 /lang 设置(写 env); 读 env 使重导入后语言不回退中文
 def _L(zh, en): return en if _LANG == 'en' else zh
 def _new_state():   # t0=本次运行起点(秒, send 时置), 此处先种键使"运行⇒有 t0"契约结构性显式(poll 仍带 running 守卫)
-    return {'running': False, 't0': 0, 'status': _L('待命', 'Idle'), 'gen': 0, 'steps': [], 'final': '', 'prompt': '', 'cmd_error': '', 'tok_in': 0, 'tok_out': 0, 'cache_read': 0, 'cache_write': 0, 'ask': None, 'ask_open': None, 'end': ''}
+    return {'running': False, 't0': 0, 't1': 0, 'status': _L('待命', 'Idle'), 'gen': 0, 'steps': [], 'final': '', 'prompt': '', 'cmd_error': '', 'tok_in': 0, 'tok_out': 0, 'cache_read': 0, 'cache_write': 0, 'ask': None, 'ask_open': None, 'end': ''}
 _lock = threading.RLock()
 _state = _new_state()
 _jobs = {}            # 异步作业(如 /models 网络请求): id -> {'done':bool,'result':str}; 让桥调用立即返回, UI 轮询取结果, 不冻 UI
@@ -220,7 +221,8 @@ def _migrate_old_convos():
 _SUM = re.compile(r'<summary>(.*?)</summary>', re.S)
 _STRIP = [re.compile(p, re.S) for p in (
     r'<thinking>.*?</thinking>', r'<summary>.*?</summary>',
-    r'<tool_use>.*?</tool_use>', r'<file_content>.*?</file_content>')]
+    r'<tool_use>.*?</tool_use>', r'<tool_call>.*?</tool_call>',
+    r'<file_content>.*?</file_content>', r'<update_working_checkpoint>.*?</update_working_checkpoint>')]
 
 def _proxy_path():
     return os.path.join(GA_DIR, 'proxy.txt')
@@ -553,6 +555,46 @@ def _callable_model_id(mid):
     return bool(mid) and len(mid) <= 128 and not _MODEL_ID_BAD.search(mid)
 
 
+_STEP_PLAN_BASE = 'https://api.stepfun.com/step_plan'   # StepFun 官方 Step Plan 订阅端点(OpenAI 兼容 /v1 与 Anthropic 兼容裸路径同源)
+_STEP_API_BASE = 'https://api.stepfun.com/v1'           # StepFun 官方标准按量端点
+_STEP_PLAN_MODELS = ('step-5-preview', 'step-3.7-flash', 'step-3.5-flash', 'step-3.5-flash-2603', 'step-router-v1')
+_STEP_PLAN_MODEL_PREFIXES = ('stepaudio-2.5', 'step-audio-2.5')   # StepAudio 2.5 家族(订阅内含; 文档只给了 asr 的精确 id, 其余按前缀覆盖 realtime/chat/tts)
+
+
+def _stepfun_scope(base):
+    """apibase 命中哪个 StepFun 官方端点目录: 'plan' / 'api' / None。
+
+    只认文档中的两个官方 URL(容忍结尾 '/' 与 chat 精确路径后缀 '$'); 自定义网关/代理
+    一律 None——不过滤, 现有行为不变。"""
+    b = (base or '').strip().lower().rstrip('/')
+    if b.endswith('$'): b = b[:-1].rstrip('/')
+    for scope, root in (('plan', _STEP_PLAN_BASE), ('api', _STEP_API_BASE)):
+        if b == root or b.startswith(root + '/'): return scope
+    return None
+
+
+def _is_step_plan_model(mid):
+    """模型是否属于 Step Plan 订阅目录(StepFun 官方 step-plan 文档所列)。"""
+    m = str(mid or '').lower()
+    return m in _STEP_PLAN_MODELS or m.startswith(_STEP_PLAN_MODEL_PREFIXES)
+
+
+def _scope_stepfun_models(base, ids):
+    """按端点裁剪 StepFun 模型目录。
+
+    两端点的 /models 返回同一份全量目录(step_plan/v1/models 同样吐出标准按量模型),
+    于是「选了 Plan 却列出所有模型」——订阅外模型选了也发不通。这里按端点一分为二:
+    Plan 端点只留订阅内模型, 标准端点剔除订阅专属模型。
+    非官方端点原样返回; 裁剪后为空(上游目录漂移、集合过时)时退回全量——把改版显示成
+    「没有模型」比不过滤更糟。"""
+    scope = _stepfun_scope(base)
+    if scope == 'plan':
+        return [i for i in ids if _is_step_plan_model(i)] or list(ids)
+    if scope == 'api':
+        return [i for i in ids if not _is_step_plan_model(i)] or list(ids)
+    return ids
+
+
 def _list_models(cfg_json):
     """UI 调用: 拉取某服务商的可用模型 id 列表。返回 {ok, models|error} 的 JSON。
     走 requests, 支持 cfg['proxy'](修复直连DNS解析不了时经本地代理出网)。"""
@@ -581,6 +623,7 @@ def _list_models(cfg_json):
         data = j.get('data', j) if isinstance(j, dict) else j
         raw = {m.get('id') for m in data if isinstance(m, dict) and m.get('id')} if isinstance(data, list) else set()
         ids = _fold_vendor_aliases(sorted(i for i in raw if _callable_model_id(i)))
+        ids = _scope_stepfun_models(base, ids)   # StepFun 双端点目录裁剪(见 _scope_stepfun_models)
         if not ids:
             err = (j.get('error') if isinstance(j, dict) else None) or f'未返回模型 (HTTP {r.status_code})'
             return json.dumps({'ok': False, 'error': str(err)[:200]}, ensure_ascii=False)
@@ -1941,6 +1984,12 @@ def _pc_cmd(arg):
     import ganet
     sub = (arg or '').strip()
     def _wrap(msg='', convo_id=None, **extra):
+        import service_config
+        if not service_config.load_config().get('ganet'):   # 未配置: 静默空态。聊天输入栏每次载入都会轮询 /pc status,
+                                                            # 直接抛 ValueError 会在欢迎页弹原始报错(真机实测), 且违背
+                                                            # "未配置模块不请求服务"; 显式失败留给主动 bind/use 时。
+            return json.dumps({'ok': True, 'active_convo': _pub_cid(_focus_cid) or '',
+                               'current': None, 'devices': [], 'msg': msg, 'not_configured': True}, ensure_ascii=False)
         try:
             devs = ganet.list_devices()
             if convo_id:
@@ -2046,6 +2095,13 @@ def _cmd_kv_del(text):
         with _kv_lock: os.remove(_kv_path(text[8:].strip()))
     except Exception as e: _swallow('_cmd_kv_del', e)
     return 'ok'
+def _cmd_vision(text):                                        # 看图模式开关: /vision off|auto|always(空=查询)
+    mode, msg = agent_settings.parse_vision_cmd(text)
+    if mode:
+        try: agent_settings.kv_set(agent_settings.KEY_VISION_IN_TURN, mode, root=GA_DIR)
+        except Exception as e: return json.dumps({'ok': False, 'error': str(e)[:120]}, ensure_ascii=False)
+    return json.dumps({'ok': bool(mode) or not msg.startswith('unknown'),
+                       'mode': msg}, ensure_ascii=False)
 def _cmd_detectproxy(text): return json.dumps({'proxy': _detect_proxy()})  # 一键识别本机代理: 探常见本地代理端口
 def _cmd_storageinfo(text): return json.dumps(_storage_info())             # 存储路径 + 占用 + 可用
 def _cmd_cleartemp(text): return json.dumps({'removed': _clear_temp()})    # 一键清理临时文件
@@ -2248,6 +2304,7 @@ _CMDS = [                        # 斜杠命令注册表: (matcher, handler); ma
     (lambda text: text.startswith('/kv.set '), _cmd_kv_set),
     (lambda text: text.startswith('/kv.get '), _cmd_kv_get),
     (lambda text: text.startswith('/kv.del '), _cmd_kv_del),
+    (lambda text: text.startswith('/vision'), _cmd_vision),   # 看图模式: /vision off|auto|always
     (lambda text: text == '/detectproxy', _cmd_detectproxy),
     (lambda text: text == '/storageinfo', _cmd_storageinfo),
     (lambda text: text == '/cleartemp', _cmd_cleartemp),
@@ -2347,7 +2404,7 @@ def _send_for(sess, text):
     for _try in range(2):
         with sess.lock:
             if not sess.retired:
-                sess.state.update(running=True, t0=time.time(), status=_L('思考中', 'Thinking…'), steps=[], final='', prompt=text, gen=_next_gen(), tok_in=0, tok_out=0, cache_read=0, cache_write=0, ask=None, ask_open=None, end='')   # t0=本任务起点(秒): 供悬浮窗竖丸按真实运行时长加深颜色(比 FloatService 自计更准, 浮窗中途打开也对)
+                sess.state.update(running=True, t0=time.time(), t1=0, status=_L('思考中', 'Thinking…'), steps=[], final='', prompt=text, gen=_next_gen(), tok_in=0, tok_out=0, cache_read=0, cache_write=0, ask=None, ask_open=None, end='')   # t0=本任务起点(秒): 供悬浮窗竖丸按真实运行时长加深颜色(比 FloatService 自计更准, 浮窗中途打开也对); t1=结束点, 供 UI 冻结真实时长
                 patches._ROUTE['cur'] = None                      # 新任务: 清空上一轮的故障转移路由, 由探针在本轮实际路由时重写
                 mygen = sess.state['gen']                         # 本次任务的代号, 用于作废 /clear 或新任务后的陈旧 drain
                 mycid = _pub_cid(sess.cid)
@@ -2392,7 +2449,7 @@ def _drain_loop(q, mygen, sess, cid=None):
                 with sess.lock:
                     if sess.retired or st['gen'] != mygen: return
                     turn = len(st['steps'])
-                    st.update(running=False, status=_L(f'出错 · {turn}步', f'Error · {turn} steps'), end='error',
+                    st.update(running=False, t1=time.time(), status=_L(f'出错 · {turn}步', f'Error · {turn} steps'), end='error',
                               final=_L('!!!Error: 会话线程已退出, 任务未完成', '!!!Error: session worker exited, task unfinished'), ask=None, ask_open=None)
                 _swallow('_drain', RuntimeError('session worker thread is dead'))
                 return
@@ -2410,7 +2467,7 @@ def _drain_loop(q, mygen, sess, cid=None):
                 end = _end_reason(st.get('end') == 'stopped', final, outs[-1] if outs else '')
                 status = {'stopped': _L(f'已停止 · {turn}步', f'Stopped · {turn} steps'),
                           'error': _L(f'出错 · {turn}步', f'Error · {turn} steps')}.get(end) or _L(f'完成 · {turn}步', f'Done · {turn} steps')
-                st.update(running=False, status=status, final=final, ask=ask, ask_open=ask, end=end)
+                st.update(running=False, t1=time.time(), status=status, final=final, ask=ask, ask_open=ask, end=end)
                 pcid = cid or _pub_cid(sess.cid)
                 with _hist_lock:
                     _hist.append({'prompt': st['prompt'], 'final': final, 'convo': pcid,   # 标记本轮归属的前端会话 id(随 chat.json 持久→跨进程被杀仍在): 冷启对账据此精确补全被后台完成截断的会话步骤(修「UI 显 N 步/实际更多步」)。不再靠 prompt 启发——payload 经 goal/附件/override 变换后与气泡 raw text 必不相等, 长多步任务正是命中此变换者
@@ -2469,6 +2526,8 @@ def _poll_for(sess, since='0', summary=False, legacy=False):
             except Exception: pass
         d['route'] = sess.route or patches._ROUTE['cur']
         d['active_convo'] = _pub_cid(_focus_cid)
+        d['started_at'] = st.get('t0', 0)      # 真实运行起点(秒): UI 重新挂接时用它做计时锚
+        d['ended_at'] = st.get('t1', 0)        # 真实结束点(秒); 运行中为 0
         d['elapsed'] = max(0.0, time.time() - st['t0']) if st.get('running') and st.get('t0') else 0.0
         d['lang'] = _LANG
         if notif is not None:

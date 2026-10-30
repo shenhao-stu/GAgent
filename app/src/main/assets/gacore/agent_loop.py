@@ -74,7 +74,9 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
         for ii, tc in enumerate(tool_calls):
             tool_name, args, tid = tc['tool_name'], tc['args'], tc.get('id', '')
             if tool_name == 'no_tool': pass
-            else: 
+            elif tool_name == 'finish_task':
+                pass                     # 最终交付由 finish_task.result 直接展示, 不显示工具头
+            else:
                 if verbose: yield f"🛠️ Tool: `{tool_name}`  📥 args:\n````text\n{get_pretty_json(args)}\n````\n"
                 else: yield f"🛠️ {tool_name}({_compact_tool_args(tool_name, args)})\n\n\n"
             handler.current_turn = turn
@@ -87,8 +89,12 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                 if verbose: yield '`````\n'
             except StopIteration as e: outcome = e.value
             
-            if outcome.should_exit: 
-                exit_reason = {'result': 'EXITED', 'data': outcome.data}; break
+            if outcome.should_exit:
+                if tool_name == 'finish_task' and isinstance(outcome.data, dict) \
+                        and str(outcome.data.get('result') or '').strip():
+                    yield '\n\n' + str(outcome.data['result']).strip() + '\n'
+                exit_reason = {'result': 'FINISH_TASK' if tool_name == 'finish_task' else 'EXITED',
+                               'data': outcome.data}; break
             if not outcome.next_prompt: 
                 exit_reason = {'result': 'CURRENT_TASK_DONE', 'data': outcome.data}; break
             if outcome.next_prompt.startswith('未知工具'): client.last_tools = ''
@@ -101,7 +107,15 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
             next_prompts.add(handler._done_hooks.pop(0))
         next_prompt = handler.turn_end_callback(response, tool_calls, tool_results, turn, '\n'.join(next_prompts), exit_reason)
         _hook('turn_after', locals())
-        messages = [{"role": "user", "content": next_prompt, "tool_results": tool_results}]   # just new message, history is kept in *Session
+        content = next_prompt
+        # 可选: handler 给这一轮附上"当前屏幕"图片块(视觉型 App 的看图模式, 见 agent_settings)。
+        # 放在发请求前一刻取帧, 拿到的是最新画面; handler 没有这个方法时行为完全不变。
+        attach = getattr(handler, 'turn_content_blocks', None)
+        if callable(attach):
+            try: blocks = attach()
+            except Exception: blocks = None
+            if blocks: content = [{"type": "text", "text": str(next_prompt)}] + list(blocks)
+        messages = [{"role": "user", "content": content, "tool_results": tool_results}]   # just new message, history is kept in *Session
     if exit_reason: handler.turn_end_callback(response, tool_calls, tool_results, turn, '', exit_reason)
     _hook('agent_after', locals())
     return exit_reason or {'result': 'MAX_TURNS_EXCEEDED'}
@@ -116,7 +130,10 @@ def _clean_content(text):
         preview = '\n'.join(body[:5])
         return f'```{lang}\n{preview}\n  ... ({len(body)} lines)\n```'
     text = re.sub(r'```[\s\S]*?```', _shrink_code, text)
-    for p in [r'<file_content>[\s\S]*?</file_content>', r'<tool_(?:use|call)>[\s\S]*?</tool_(?:use|call)>', r'(\r?\n){3,}']:
+    for p in [r'<file_content>[\s\S]*?</file_content>',
+              r'<tool_(?:use|call)>[\s\S]*?</tool_(?:use|call)>',
+              r'<update_working_checkpoint>[\s\S]*?</update_working_checkpoint>',
+              r'(\r?\n){3,}']:
         text = re.sub(p, '\n\n' if '\\n' in p else '', text)
     return text.strip()
 

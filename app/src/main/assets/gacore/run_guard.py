@@ -19,6 +19,7 @@ code_run 超时/被停后只能放弃等待, 用户代码线程仍在后台跑; 
   永不抛(默认放行), 故对正常路径零影响。
 """
 import threading
+import time
 
 _tls = threading.local()
 
@@ -27,19 +28,51 @@ class RunCancelled(BaseException):
     """本次 code_run 已超时/被终止, 拒绝继续操作手机。继承 BaseException 以躲开 except Exception。"""
 
 
-def enter(token):
-    """_run 线程起始登记本线程的取消令牌(单元素可变容器 list[bool])。"""
+class WatchdogExpired(BaseException):
+    """本次工具调用已超过硬墙钟上限, 拒绝继续操作手机。继承 BaseException 以躲开 except Exception。"""
+
+
+def enter(token, deadline=None):
+    """_run 线程起始登记本线程的取消令牌(单元素可变容器 list[bool])与预算截止时刻。
+
+    deadline = 本次 code_run 的 wall-clock 截止(itime.time()+timeout)。为什么要发布它:
+    昂贵的一次性调用(视觉问答 15-46s)需要知道"这次脚本还剩多少预算", 才能既给足时间
+    又不把整个 code_run 预算吃光(吃光会超时+留下僵尸线程)。缺省 None = 无预算上下文
+    (主 agent 线程 / PC 调试), 调用方按自己的默认值走。"""
     _tls.token = token
+    _tls.deadline = deadline
 
 
 def leave():
     """线程结束清除登记(幂等)。"""
     _tls.token = None
+    _tls.deadline = None
+
+
+def remaining():
+    """本线程所属 code_run 的剩余秒数; None = 不在 code_run 里(无预算上下文)。"""
+    dl = getattr(_tls, 'deadline', None)
+    return None if dl is None else max(0.0, dl - time.time())
 
 
 def cancel(token):
     """监督线程置位取消 —— 对共享令牌对象本身写, 跨线程立即可见。"""
     token[0] = True
+
+
+def enter_deadline(seconds):
+    """登记本线程的看门狗截止时刻(time.monotonic()+seconds)。None/<=0 = 不设。"""
+    _tls.watchdog = (time.monotonic() + float(seconds)) if seconds and float(seconds) > 0 else None
+
+
+def clear_deadline():
+    _tls.watchdog = None
+
+
+def watchdog_left():
+    """看门狗剩余秒数; None = 没设截止。"""
+    dl = getattr(_tls, 'watchdog', None)
+    return None if dl is None else max(0.0, dl - time.monotonic())
 
 
 def cancelled():
@@ -48,9 +81,18 @@ def cancelled():
 
 
 def check():
-    """副作用入口检查点: 本线程令牌已取消则抛 RunCancelled 终结僵尸线程。"""
-    if cancelled():
+    """副作用入口检查点: 令牌已取消抛 RunCancelled; 超过看门狗截止抛 WatchdogExpired。
+
+    兼作看门狗检查点, 不新增调用点: droid 的每个读写入口早已调 check()
+    (droid.py:180/429/435/990/1947/1957/1972/2062/2077/2090), 于是墙钟一超, 下一个
+    设备操作即自裁 —— 治真机 213s/260s 那种"工具调用挂住 + 空 tool_result", 它的恢复
+    只能中止整个任务并从原 prompt 重启, 此前进度全部作废。"""
+    tok = getattr(_tls, "token", None)
+    if tok and tok[0]:
         raise RunCancelled("code_run 已超时/被终止, 拒绝继续操作手机(僵尸线程护栏)")
+    dl = getattr(_tls, 'watchdog', None)
+    if dl is not None and time.monotonic() > dl:
+        raise WatchdogExpired("工具调用超过墙钟上限, 已停止继续操作手机(看门狗)")
 
 
 def install_thread_inheritance():

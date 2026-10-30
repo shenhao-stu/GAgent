@@ -43,6 +43,9 @@ an OCR-only fresh installation.
 | Rotation 0° / 90° / 180° / 270° | Screenshot and display geometry agreed; stale and out-of-bounds coordinates were rejected |
 | Fresh portrait/landscape gesture | Own-app input focused and keyboard appeared; no text submitted |
 | Settings preservation | Rotation settings restored after testing; no ADB reverse transport used |
+| Loop guard ladder (2026-10-26, `3fc9709`..`1c52a08`) | Repeated identical taps on a static screen: attempts 1–2 dispatched, 3/4/5 substituted by the guard with WAIT/BACK/HOME, 6–7 returned `aborted` without dispatch; repeated identical swipes were refused from attempt 5 with `repeated_no_effect`; a productive tap (diff 20.137%) cleared the guard. Driven from a PC-side gacore over the bus with `adb forward` |
+| `dump_state()` degradation codes (2026-10-26, `f357556`) | Launcher tree: 13 nodes, `degraded=None`. WeChat: 0 nodes with `degraded={'reason':'sensitive_blank'}` while `dump()` still returned `[]` (contract unchanged). Game (SurfaceView): 1 non-interactive node, so `tree_empty` does not fire — low-information detection must use `clickable_count==0`/node-count thresholds, not emptiness alone |
+| Sensitive-app guard posture (2026-10-26, review fixes) | With WeChat foreground, repeated failed pastes record `uncertain` and never start the input ladder; the tap ladder no longer substitutes BACK/HOME under a policy-sensitive foreground |
 
 An earlier network probe observed a transient SSL EOF that recovered. A phone-local
 proxy was configured for the tested provider. This does not establish stability

@@ -63,7 +63,7 @@ https://github.com/shenhao-stu/GAgent/blob/main/docs/INSTALL_WITH_AGENT.md
 | 能力 | 能做什么 |
 | --- | --- |
 | 🧠 **让记忆成为工具** | 小索引定位相关事实、规程与脚本，跨会话复用已经验证的解决方法。 |
-| 👁️ **本地 OCR + 可选 YOLOv8n** | 在手机上识别文字与 21 类 Android UI 控件；需要理解画面语义时再调用已配置的视觉模型。[YOLO 安装指南](docs/OPTIONAL_YOLO.md)。 |
+| 👁️ **本地 OCR + YOLOv8n** | 在手机上识别文字与 21 类 Android UI 控件；需要理解画面语义时再调用已配置的视觉模型。本机构建的 APK 默认内置该检测器；仓库与 CI 构建按[安装指南](docs/OPTIONAL_YOLO.md)单独安装。 |
 | 📱 **Self-ADB，无需额外 Shizuku App** | 通过手机自身的无线调试配对，取得用户授权的 shell 能力。普通 GUI 操作只需无障碍；高级调试权限按需开启。 |
 | 🪟 **App 离屏与网页后台操作** | 支持的 App 可放入虚拟屏，网页可运行在独立后台 WebView。App 虚拟屏需要 self-ADB，并按设备验收。 |
 | 🌐 **可保留登录态的内置浏览器** | 你先完成登录，任务浏览器复用已保存的 Cookie。基于 Android WebView，无需另装桌面浏览器内核。 |
@@ -130,7 +130,7 @@ Token 效率来自这些具体机制。实际消耗取决于模型、任务、�
 
 项目自有代码采用 [Apache-2.0](LICENSE)。源自 **Liang Jiaqing 及贡献者**的 GenericAgent / GAndroid，
 署名保留于 [NOTICE](NOTICE)。[第三方库、字体与模型](THIRD_PARTY.md)沿用各自条款。
-YOLO 权重可选安装、默认不捆绑；iOS 与 ESP32 开发独立维护。
+YOLO 权重按 .gitignore 规则不进仓库：本机构建的 APK 默认内置，仓库与 CI 构建按指南单独安装（许可说明见指南）。iOS 与 ESP32 开发独立维护。
 
 [官网](https://gaagent.ai/) · [GA 手机版](https://app.gaagent.ai/) · [GenericAgent](https://github.com/lsdefine/GenericAgent) · [AndroidBench](https://androidbench.gaagent.ai/) · [Logo](docs/assets/README.md)
 

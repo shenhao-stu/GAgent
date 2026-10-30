@@ -257,6 +257,13 @@ try{var _th=JSON.parse(localStorage.getItem('ga.theme')||'"system"');
           <span class="k" data-i18n="floatAlwaysOn">悬浮窗常开</span>
           <span class="v"><button class="sw" id="swFloatAlways" role="switch" aria-checked="false" data-i18n-aria="floatAlwaysOn" aria-label="悬浮窗常开" onclick="toggleFloatAlways(this)"></button></span>
         </div>
+        <!-- 结束任务后返回桌面: 任务真正结束(done/error)时把设备退回桌面, 免得跑完还停在别人的 App 里。
+             开关状态持久化(原生 SharedPreferences home_after_task, 读桥 GA.homeAfterTask 为真值; LS 只是镜像)。结构仿 swFloatAlways。 -->
+        <div class="row">
+          <span class="rowIco ic-teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5h4v5"/></svg></span>
+          <span class="k" data-i18n="homeAfterTask">结束任务后返回桌面</span>
+          <span class="v"><button class="sw" id="swHomeAfterTask" role="switch" aria-checked="false" data-i18n-aria="homeAfterTask" aria-label="结束任务后返回桌面" onclick="toggleHomeAfterTask(this)"></button></span>
+        </div>
         <!-- 无障碍权限单入口(v2.30, 并入原「无障碍持久化」行): 未开启时磁贴角标红点+红「未开启」, 开启后「已开启」或「已开启 · 持久化」;
              点击进详情子页(服务状态+持久化授权+自动恢复开关+OEM保活); 状态由 refreshA11y 刷新, 值样式与 adbRow 同族(a11yValOn/Off)。 -->
         <button class="row rowBtn" id="a11yRow" onclick="openA11yPersistPage()">
@@ -269,6 +276,13 @@ try{var _th=JSON.parse(localStorage.getItem('ga.theme')||'"system"');
           <span class="rowIco ic-graphite"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 16 10 11.5 5 7"/><line x1="12" y1="17" x2="19" y2="17"/></svg><span class="statDot" id="adbDot" hidden></span></span>
           <span class="k" data-i18n="adbSelfTitle">无线调试自连</span>
           <span class="v"><span id="adbVal" class="a11yValOff" data-i18n="adbOff">未连接</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+        </button>
+        <!-- Shizuku 第二条 shell 通道(stepOS 全屏启动用; 与无线调试自连等价, 只是来源不同):
+             未就绪时磁贴角标红点; 点击弹引导面板(装管理器/授权/跳管理器), 状态由 refreshShizuku 刷新(结构仿 adbRow)。 -->
+        <button class="row rowBtn" id="szRow" onclick="openShizukuPanel()">
+          <span class="rowIco ic-graphite"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7v6c0 5 3.8 8.4 9 9 5.2-.6 9-4 9-9V7l-9-5z"/><polyline points="9 12 11.5 14.5 15.5 10"/></svg><span class="statDot" id="szDot" hidden></span></span>
+          <span class="k" data-i18n="szTitle">Shizuku 授权</span>
+          <span class="v"><span id="szVal" class="a11yValOff" data-i18n="szOff">未授权</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
         </button>
         <div class="row sliderRow">
           <div class="sliderTop"><span class="rowIco ic-purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7S6 8.4 6 13a6 6 0 0 0 12 0c0-4.6-6-10.3-6-10.3z"/></svg></span><span class="k" data-i18n="floatOpacity">悬浮窗透明度</span><span id="opacityVal" class="rngVal"></span></div>
@@ -435,6 +449,10 @@ try{var _th=JSON.parse(localStorage.getItem('ga.theme')||'"system"');
       </div>
       <div class="secLbl"><span data-i18n="configured">已配置服务商</span></div>
       <div id="provList"></div>
+      <button class="addProv" onclick="addProviderPreset()" style="color:var(--acc)">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 L4.5 13.5 H11 L10 22 L19.5 9.5 H13 Z"/></svg>
+        <span data-i18n="stepfunQuickStart">用 StepFun 快速开始</span>
+      </button>
       <button class="addProv" onclick="editProvider(null)">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         <span data-i18n="addProvider">添加服务商</span>
@@ -545,16 +563,15 @@ try{var _th=JSON.parse(localStorage.getItem('ga.theme')||'"system"');
         <button data-t="oai" class="on" onclick="setProvType('oai')" data-i18n="oaiCompat">OpenAI 兼容</button>
         <button data-t="claude" onclick="setProvType('claude')" data-i18n="claudeCompat">Anthropic 兼容</button>
       </div>
-      <div class="secLbl"><span data-i18n="manage">管理</span></div>
-      <div class="card">
-        <div class="row"><span class="k" data-i18n="enable">启用</span><span class="v"><button class="sw on" id="pvEnable" role="switch" aria-checked="true" aria-label="启用" onclick="toggleSw(this)"></button></span></div>
-        <div class="row" id="rowResp"><span class="k" data-i18n="respApi">Response API (/responses)</span><span class="v"><button class="sw" id="pvResp" role="switch" aria-checked="false" aria-label="Response API" onclick="toggleSw(this)"></button></span></div>
-        <div class="row" id="rowFakeCC" style="display:none"><span class="k" data-i18n="passCC">透传 CC 系统提示</span><span class="v"><button class="sw" id="pvFakeCC" role="switch" aria-checked="false" aria-label="passthrough" onclick="toggleSw(this);updateUARow()"></button></span></div>
+      <div class="secLbl"><span data-i18n="endpointPick">StepFun 端点(二选一)</span></div>
+      <div class="seg" id="pvEpSeg">
+        <button type="button" onclick="pickStepEndpoint(0)" data-i18n="epPlan">Plan</button>
+        <button type="button" onclick="pickStepEndpoint(1)" data-i18n="epStd">API</button>
       </div>
       <div class="field"><label for="pvName" data-i18n="name">名称</label><div class="inputwrap"><input id="pvName" placeholder="gpt-native" autocomplete="off" autocapitalize="off"></div></div>
       <div class="field"><label for="pvKey" data-i18n="apiKey">API Key</label><div class="inputwrap"><input id="pvKey" type="password" placeholder="sk-…" autocomplete="off" autocapitalize="off" spellcheck="false" oninput="updateModelCount()">
         <button class="eye" id="pvEye" onclick="toggleEye()" aria-label="show/hide key"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
-      <div class="field"><label for="pvBase" data-i18n="apiBase">API Base URL</label><div class="inputwrap"><input id="pvBase" placeholder="https://api.openai.com/v1" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="url" oninput="updateModelCount()"></div></div>
+      <div class="field"><label for="pvBase" data-i18n="apiBase">API Base URL</label><div class="inputwrap"><input id="pvBase" placeholder="https://api.openai.com/v1" list="pvBasePresets" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="url" oninput="updateModelCount()"><datalist id="pvBasePresets"><option value="https://api.stepfun.com/step_plan/v1">StepFun Plan</option><option value="https://api.stepfun.com/v1">StepFun</option></datalist></div></div>
       <div class="field"><label for="pvModel" data-i18n="defaultModelId">默认模型 ID</label><div class="inputwrap"><input id="pvModel" placeholder="model-id" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="pvModelHint"></div>
         <p class="hint" id="pvModelHint" style="margin-top:7px" data-i18n="modelIdHint">填入服务商提供的完整模型名即可保存，无需先获取模型列表。</p></div>
       <div class="field"><label for="pvProxy" data-i18n="proxyOpt">代理 Proxy（可空）</label><div class="inputwrap"><input id="pvProxy" placeholder="http://127.0.0.1:10809" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="url"></div>

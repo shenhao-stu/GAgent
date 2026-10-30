@@ -11,10 +11,10 @@
 系统设置优先 GUI：亮度/音量/显示等任务无需为此连接 ADB；亮度可先 `droid.quick_settings()`，用完 `droid.dismiss_shade()`。控件位置和值必须现场读取，不能凭“手势返回 ok”或亮度条标签宣布完成。
 两种观察格式不同：`dump()` 的文字键是 `t` / `d`，需要类名和完整边界时 `dump(full=True)`；滑条节点的 `range` 给出 min/max/current，按其当帧 `b` 边界拖动并回读 current 核验。`look()` 才使用 `label` / `cls`。不要用 `label` 过滤 `dump()` 后把缺失键误判为无文字。
 可选加速：用户已配置 Jev 时，当前屏幕的单步导航目标可用 `droid.tap_target(target, package=包名)`；首次先读 `memory/jev_phone_use.md`。它只选当前候选，不生成坐标或规划整段任务；无配置保持原流程，目标核验与授权规则不变。
-纯 GUI / 微信开局：`droid.launch(包名)` 后先 `print(ask_vision(droid.shot(), "描述当前可交互层：是否有弹窗、关闭按钮在哪里、可执行的下一步是什么？"))`。统一入口为 `droid.ask_vision`；`code_run` 也预导入同一个 `ask_vision`，无需猜模块名；未配置时按 `memory/vision_sop.md` 配置。进入新小程序或点击后页面未变时也先做这一视觉检查。
+纯 GUI / 微信开局：`droid.launch(包名)` 后先 `print(ask_vision(droid.shot(), "描述当前可交互层：是否有弹窗、关闭按钮在哪里、可执行的下一步是什么？"))`。统一入口为 `droid.ask_vision`；`code_run` 也预导入同一个 `ask_vision`，无需猜模块名；它默认复用任务页当前选择的模型（多模态，切换模型自动跟随），无需单独配置。进入新小程序或点击后页面未变时也先做这一视觉检查。
 定位用 `print([(d.get("label"), d.get("cls"), d["x"], d["y"]) for d in droid.look()])`；保留全部紧凑候选，匹配视觉确认的按钮与当帧坐标，再操作。弹窗存在时只操作最上层，不能点击遮罩后正文；不要用 `back()` 猜测关闭弹窗，它可能退出小程序。
 微信的 `dump/find/tap_text` 依赖被禁止的节点树，不能用它们判断按钮是否存在；文字按钮也从 `look()` 的 `label` 匹配。`ocr_text` 接受图片裁剪数组，不接受搜索词；`shot()` 返回像素数组，不能打印给模型看或使用不存在的 `save=True`。
-常用签名：`tap(x, y)`；`paste(text, replace=False)`（微信仅放剪贴板，必须继续点可见粘贴菜单/键盘候选，不能反复调用当作输入）；`swipe(x1,y1,x2,y2,dur=300)`。浏览下方内容用 `scroll_view('down')`，浏览上方用 `scroll_view('up')`（参数是浏览方向；旧 `scroll()` 参数是手指方向，与之相反）；默认 `frac=0.35, dur=600`，每次观察后再继续。返回/桌面用 `back()` / `home()`；`key('ENTER')` 仅支持回车；没有 `droid.input` 或 `droid.sh`，不调用 shell/广播输入。`look(conf=0.25, roi=None, label=None)` 返回检测框，`label` 按 OCR 文字子串筛选全部匹配项，多命中先消歧，不接受问题字符串；看图问答用 `ask_vision(droid.shot(), "问题")`。roi名称只有 top/upper/middle/lower/bottom，其他区域传矩形元组。普通App的 `find(text)` 返回列表。
+常用签名：`tap(x, y)`；`paste(text, replace=False)`（微信仅放剪贴板，必须继续点可见粘贴菜单/键盘候选，不能反复调用当作输入）；`swipe(x1,y1,x2,y2,dur=300)`。浏览下方内容用 `scroll_view('down')`，浏览上方用 `scroll_view('up')`（参数是浏览方向；旧 `scroll()` 参数是手指方向，与之相反）；默认 `frac=0.35, dur=600`，每次观察后再继续。返回/桌面用 `back()` / `home()`；`key('ENTER')` 仅支持回车；没有 `droid.input` 或 `droid.sh`，不调用 shell/广播输入。`look(conf=0.25, roi=None, label=None)` 返回检测框，`label` 按 OCR 文字子串筛选全部匹配项，多命中先消歧，不接受问题字符串；看图问答用 `ask_vision(droid.shot(), "问题")`。roi名称: top/upper/middle/lower/bottom + 实测系统 UI 锚带 status/title/navbar（`geom.BANDS`，与 `look()`、`ask_vision()`、`ask_point()` 共用同一份，见 phone_use §0.5.1）；其他区域传 0–1000 或 0~1 比例矩形元组。普通App的 `find(text)` 返回列表。
 排序/筛选必须核验当前选中项和箭头方向，不能凭两条价格恰好递增或返回 `ok` 宣称成功。文字/OCR不显示高亮或箭头颜色时，调用 `ask_vision` 看当前截图；列表不单调不能自行解释为广告。一次点击未生效就重新观察当前可见层与 `look()` 坐标，滚动吸顶后树坐标可能滞后，不连续重用旧坐标。
 用户明确要求的导航直接执行，无固定动作预算或解锁步骤。结束前重新观察停点；「去结算」不等于「提交订单」，没有提交授权就停在确认页。
 
@@ -92,7 +92,7 @@
 | 0 ping | 始终先行 | 前台包名/a11y/服务状态 | 只判状态, 不定位控件 |
 | 1 dump(a11y树) | 控件树可用时优先 | 探测控件+节点坐标, 默认按节点坐标 tap | 敏感 App/风控验证界面=红线禁用(代码层已硬门控: 前台敏感时 `droid.dump()` 直接返回 `[]`, 无需上层判断), 游戏/三方内嵌 WebView=树空壳走视觉(两类细则见表下); 只剩底栏/标题壳=主体无效 |
 | 2 shot+ui_detect | dump 空/缺目标/主体无效 | 截图检测控件, 返回 bbox+OCR 文本 | 已带 OCR, 同帧勿再 OCR; bbox=整屏物理坐标, 直接 tap 中心 |
-| 3 vision(VLM) | ui_detect 仍不足 | 仅语义理解/确认界面状态 | 不可信其坐标 |
+| 3 vision(VLM) | ui_detect 仍不足 | 语义理解/确认界面状态；**静态**界面上的无文字图标定位走 `droid.ask_point(问题, roi='title')`（固定问句、只认 0-1000、映射回整屏，返回数对原样当 gui_act 的 `rel`） | canvas/动画画面上的 VLM 坐标禁用（phone_use §0.1 第 6/7 条即停或 ask_user）；裸 `ask_vision` 的坐标不可信，别自己解析 |
 - 🔴dump 风险红线(封号): 敏感 App(清单见 `droid.SENSITIVE_APPS` 注册表——代码是唯一真相源, 本文不复制清单)及已识别的风控/安全验证界面上禁用 dump——读控件树=已成文封号元凶(执行细则见 §5), 只走 shot()+ui_detect/ocr+tap(x,y) 视觉路径。机理: 风险主体是「已启用的无障碍服务(会被枚举上报)+注入式动作+行为模式」, 不只是字面上那次被动读树; 且此类 App 会对读树者返回**故意伪造/投毒的节点数据**——走视觉既收敛风险面, 又不拿假数据行动。**代码层强制(fail-closed)**: `droid.dump()` 检测到前台为敏感 App(或前台未解析)时直接返回空列表 `[]`, 上层拿不到任何节点→只能走视觉; 无需也不该再依赖上层自觉判断。**dump 恒返回 `[]` = 敏感置空信号 → 直接转 shot()+ui_detect/ocr, 勿当"空壳树/真空 UI"反复重试 dump**。
 - 第三方 FLAG_SECURE 防截屏(部分金融/腾讯系 App 的登录后页面, 状态依赖非恒黑): a11y 截图不报错而恒返回**纯黑帧**——`droid.shot()` 同前台连续 2 帧黑会显式抛错, 勿再重截。降级链: 该 App 不在 SENSITIVE_APPS→改 `dump()` 节点 bounds 导航(无视觉复核, 关键步骤先向用户确认); 在册→引导用户手动。与 §2 登录浏览器 FLAG_SECURE 同语义, 只是发生在第三方 App。
 - dump 树质量降级(非风险项): 游戏(SurfaceView/GL 渲染→无有效 a11y 节点)、第三方 App 内嵌 WebView(节点虚拟化/不可靠)上 dump 常为空壳→直接走视觉。GA 自身网页任务走 webcdp(CDP 驱动内置 WebView), 不读任何第三方 a11y 树——本条仅指**其他 App**的内嵌 WebView; 敏感 App 内的 WebView(如微信小程序/H5)按上条红线处理: 风险源于宿主是微信这类敏感 App 本身, 不在于"WebView"。

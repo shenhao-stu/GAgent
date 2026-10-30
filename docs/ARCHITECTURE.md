@@ -62,6 +62,11 @@ which live under `app/src/main/java/com/ljq/ga/`.
 | PermissionCoordinator.kt / OverlayPolicy.kt / FloatService.kt | Permission, lifecycle and overlay placement | Respect the user's always-on preference and keep the handle within display bounds |
 | VoiceClient.kt | Streaming voice transport | TLS validation remains enabled; stale connection generations cannot publish results |
 | pclink.py / ganet.py | Pairing and remote-device clients | Explicit endpoints and peer identity, without bundled server authority |
+| memory/*.md + global_mem*.txt | L0–L3 memory and SOP store | SOP files are prose with no executor; the model is the only interpreter, and L1 is a seeded index the device evolves |
+| sense.py | Local evidence collection with coverage reporting | `_evidence` separates "not collected" from "did not happen"; `recall()` may abstain |
+| evolution.py | Three-way merge of self-evolution backups | Conflicts surface for review; no silent overwrite |
+| agent_loop.py + plugins/*_hook.py | Turn loop and observation hooks | Hooks observe only; a plugin failure never stops the loop |
+| run_metrics.py + plugins/run_metrics_hook.py | Per-turn run metrics for the SPEC phases | Observation only: no model calls, no device operations, and a failed write never affects the task |
 
 ## Variables and invariants / 变量与不变量
 

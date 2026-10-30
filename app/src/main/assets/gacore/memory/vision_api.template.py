@@ -1,4 +1,6 @@
-# vision_api 模板（Android 端）。初次构建 vision 能力:
+# vision_api 模板（Android 端，可选的后备）。
+# 默认情况下 droid.ask_vision 直接复用任务页当前选择的模型（多模态），不需要本文件；
+# 只有需要独立视觉后端/端点、或任务没有可用模型时，才复制本文件 → memory/vision_api.py。
 # 1. 复制本文件 → memory/vision_api.py
 # 2. 只改头部"用户配置区": 扫描 mykey 里的配置名(⚠️只看变量名, 禁止输出 apikey 值),
 #    填入 CLAUDE_CONFIG_KEY / OPENAI_CONFIG_KEY, 选 DEFAULT_BACKEND, 并小图实测

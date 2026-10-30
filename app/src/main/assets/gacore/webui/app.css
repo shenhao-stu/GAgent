@@ -590,7 +590,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
 .mlAddBar{position:absolute;left:0;right:0;bottom:0;display:flex;gap:10px;align-items:center;
   padding:10px 16px calc(12px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line)}
 #toast{position:fixed;left:50%;bottom:calc(100px + env(safe-area-inset-bottom));transform:translate(-50%,12px);background:var(--md-sys-color-on-surface);
-  color:var(--md-sys-color-surface);font-size:14px;padding:11px 18px;border-radius:var(--r-full);box-shadow:var(--elev-2);opacity:0;visibility:hidden;transition:.25s;z-index:var(--z-toast);max-width:80vw;text-align:center}
+  color:var(--md-sys-color-surface);font-size:14px;padding:11px 18px;border-radius:var(--r-full);box-shadow:var(--elev-2);opacity:0;visibility:hidden;transition:.25s;z-index:var(--z-toast);max-width:80vw;text-align:center;pointer-events:none}   /* 永不挡交互: 真机实测保存后 2.2s 内 toast(80vw×bottom~100px)整片盖住输入框, 点按全被吃掉=「输入框点不了/打不了字」偶现 */
 #toast.on{opacity:1;visibility:visible;transform:translate(-50%,0)}
 /* ───────── 滚动导航 (回顶/回底竖丸): 显隐仿 #toast.on; --kb 跟随键盘同 #comp; bottom=comp 实测 108px + 10px 间隙 ───────── */
 #scrollNav{position:fixed;right:14px;bottom:calc(var(--compH,108px) + 10px + env(safe-area-inset-bottom));z-index:var(--z-scrollNav);display:flex;flex-direction:column;

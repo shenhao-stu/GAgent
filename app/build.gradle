@@ -5,7 +5,7 @@ plugins {
 }
 android {
     namespace 'com.ljq.ga'
-    compileSdk 34
+    compileSdk 36
     ndkVersion "25.1.8937393"   // AGP 8.1 默认 NDK; CI(setup-android) 缺则 AGP 经 sdkmanager 自动拉取
     defaultConfig {
         applicationId "io.github.shenhaostu.gagent"
@@ -70,6 +70,11 @@ dependencies {
     implementation 'org.conscrypt:conscrypt-android:2.5.2'
     // PCLink 扫码配对(与拍照走外置相机、不声明 CAMERA 的路径分开; 扫码需应用内预览→声明 CAMERA + 运行时授权)
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+    // Shizuku: 第二条 shell 通道(用户装 Shizuku 管理器授权后即得 shell uid)，供 stepOS 全屏启动用。
+    // api = 调用面; provider = ShizukuProvider(ContentProvider)，**管理器靠它发现本 app**——缺了它
+    // 管理器「已授权应用」列表里根本看不到 GA(真机实证：只加 api 时列表为空)。
+    implementation 'dev.rikka.shizuku:api:13.1.5'
+    implementation 'dev.rikka.shizuku:provider:13.1.5'
 }
 
 

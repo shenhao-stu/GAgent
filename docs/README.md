@@ -15,6 +15,7 @@ the same supported scope; deeper guides keep API names and commands unchanged.
 ## Specific topics / 专题
 
 - [Core size, memory and token measurement / 内核规模、记忆与 Token 统计](CORE_AND_MEMORY.md)
+- [DeepSeek Android comparison and pinned sources / DeepSeek 安卓对照与固定来源](COMPARISON.md)
 - [Ecosystem and download channels / 生态与下载渠道](ECOSYSTEM.md)
 - [News and dated development milestones / 新闻与开发节点](HISTORY.md)
 - [Troubleshooting / 排障](TROUBLESHOOTING.md)
@@ -24,6 +25,8 @@ the same supported scope; deeper guides keep API names and commands unchanged.
 - [Official modules and credential boundaries / 官方组件与密钥边界](OFFICIAL_MODULES.md)
 - [Retained, removed and excluded features / 功能范围](FEATURE_SCOPE.md)
 - [Extraction review and its limits / 剥离审查与局限](REVIEW.md)
+- [Hybrid phone agent spec / 混合式手机 Agent 规格](SPEC.md)
+- [Empowerment addendum: research findings, device adaptation and work items / 赋能增补：研究发现、真机适配与工作项](SPEC-EMPOWERMENT.md)
 - [Engineering priorities / 工程路线图](ROADMAP.md)
 - [Security reporting and data flows / 安全报告与数据流](../SECURITY.md)
 - [Third-party notices / 第三方声明](../THIRD_PARTY.md)

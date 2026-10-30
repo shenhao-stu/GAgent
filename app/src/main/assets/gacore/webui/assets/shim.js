@@ -63,6 +63,10 @@ if(typeof window.GA==='undefined'){
     a11yGrantViaSelfAdb:()=>{window._apJobN=(window._apJobN||0)+1;return 'g'+window._apJobN},
     a11yGrantResult:(id)=>{window._apPermDemo=true;window._apEnDemo=true;window._a11yDemo=true;return 'ok'},
     openAppSysSettings:(w)=>{alert('打开系统设置页(demo): '+w);return true},
+    // Shizuku 第二条 shell 通道 demo: _szDemo=已授权; 控制台设 window._szDemo=true 模拟就绪
+    shizukuStatus:()=>JSON.stringify({installed:true,ready:!!window._szDemo}),
+    shizukuRequest:()=>{alert('请求 Shizuku 授权(demo)');window._szDemo=true;setTimeout(()=>{try{gaOnShizuku()}catch(e){}},400)},
+    openShizukuManager:()=>{alert('打开 Shizuku 管理器(demo)');return true},
     saveImageToGallery:(d)=>{try{window.open(d,'_blank')}catch(e){}return 'ok'},   // demo: 浏览器新开图片页代替存相册
     shareImage:(d)=>{alert('转发(demo): 已生成分享图');return 'ok'},
     // 诊断/上传 demo: 立即完成的伪 job(diagResult 首次返回 pending, 次次返回结果), 便于预览三条通道 UI

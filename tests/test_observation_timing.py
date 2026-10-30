@@ -196,14 +196,19 @@ def test_vision_keeps_configured_disable_without_retry():
 
 def test_observation_hops_record_vision_cost_and_keep_results(entry):
     import droid
+    import vision_llm
     from plugins import browser_events_hook as hook
     sess = _bound_sess(entry, 'hops')
     try:
         class Img:
             shape = (2340, 1080, 3)
             dtype = 'uint8'
-        with patch.dict(sys.modules, {'vision_api': SimpleNamespace(ask_vision=lambda image, prompt, **kw: 'Error: 请求超时 (>60s)')}):
+        droid.set_active_backend(object())
+        droid.reset_vision_fuse()
+        with patch.object(vision_llm, 'ask_with_backend',
+                          lambda backend, image, prompt, **kw: 'Error: 请求超时 (>60s)'):
             assert droid.ask_vision(Img(), '抽屉是否打开') == 'Error: 请求超时 (>60s)'
+        droid.set_active_backend(None)
         evs = [e for e in sess.state['tool_events'] if e.get('action') == 'vision']
         assert len(evs) == 1
         ev = evs[0]

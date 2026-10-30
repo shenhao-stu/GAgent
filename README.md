@@ -69,7 +69,7 @@ the entire APK or Android codebase**. [Core, memory and counting scope →](docs
 | Capability | What you can do |
 | --- | --- |
 | 🧠 **Memory that becomes a tool** | Keep a small index, recall relevant facts and procedures on demand, and reuse verified solutions across sessions. |
-| 👁️ **Local OCR + optional YOLOv8n** | Read text and locate 21 classes of Android UI controls locally; ask an image-capable model when semantic understanding is needed. [Install YOLO](docs/OPTIONAL_YOLO.md). |
+| 👁️ **Local OCR + YOLOv8n** | Read text and locate 21 classes of Android UI controls locally; ask an image-capable model when semantic understanding is needed. Locally built APKs bundle the detector; repository builds install it from the [guide](docs/OPTIONAL_YOLO.md). |
 | 📱 **Self-ADB, without a Shizuku app** | Pair with Android's own wireless debugging to gain authorized shell capabilities. Ordinary GUI use needs accessibility, not ADB; advanced setup stays explicit. |
 | 🪟 **Offscreen apps and web tasks** | Move supported apps to a virtual display, or run a separate background WebView. App virtual displays require self-ADB and device verification. |
 | 🌐 **A browser that keeps your session** | Sign in yourself, then let the task browser reuse the stored cookies. It uses Android WebView, with no separate desktop-browser binary to install. |
@@ -145,7 +145,7 @@ generated code uses your granted capabilities. [Security and data flows](SECURIT
 Project-owned code: [Apache-2.0](LICENSE). Built on **Liang Jiaqing and contributors'
 GenericAgent / GAndroid**; attribution remains in [NOTICE](NOTICE).
 [Third-party libraries, fonts and models](THIRD_PARTY.md) retain their own terms.
-YOLO weights are optional and not bundled. iOS and ESP32 development remain separate.
+YOLO weights are gitignored: locally built APKs bundle them, while repository and CI builds install the detector separately (license notice in the guide). iOS and ESP32 development remain separate.
 
 [Website](https://gaagent.ai/) · [GA Mobile](https://app.gaagent.ai/) · [GenericAgent](https://github.com/lsdefine/GenericAgent) · [AndroidBench](https://androidbench.gaagent.ai/) · [Logo](docs/assets/README.md)
 

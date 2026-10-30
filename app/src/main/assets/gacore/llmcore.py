@@ -43,36 +43,61 @@ def __getattr__(name):  # once guard in PEP 562
     if name == 'mykeys': return reload_mykeys()[0]
     raise AttributeError(f"module 'llmcore' has no attribute {name}")
 
-def compress_history_tags(messages, keep_recent=10, max_len=800, force=False, interval=5):
-    """Compress <thinking>/<tool_use>/<tool_result> tags in older messages to save tokens."""
+def compress_history_tags(messages, keep_recent=4, max_len=600, force=False, interval=5,
+                          recent_max_len=3000):
+    """Compress <thinking>/<tool_use>/<tool_result> tags in older messages to save tokens.
+    默认值经实测对比选择此方案效果更佳: keep_recent=4(只保留最近 4 轮完整脚本/结果)、
+    max_len=600——长任务(30+ 轮)下 in_tok 从 11K 涨到 36K、model_wait 从 3s 涨到 37s,
+    旧轮次的完整代码块与结果对后续决策无增益, 只撑上下文。
+
+    recent_max_len: 最近 keep_recent 条的上限。**原来这几条完全不做限制**, 而真机实测
+    它们平均 4922 字符、占 resend 的 67%(19687/29287)——压缩把旧的压到 600, 却把体量
+    全留给最新的几条, 每轮输入照样膨胀。in_tok 与 model_wait 的相关系数 r=0.574:
+    in_tok 11.2K→6.0s、13.6K→8.7s、14.5K→13.9s。给近期轮次一个宽松但有限的上限,
+    输入体量才真的封得住。"""
     compress_history_tags._cd = getattr(compress_history_tags, '_cd', 0) + 1
     if force: compress_history_tags._cd = 0
     if compress_history_tags._cd % interval != 0: return messages
     _before = sum(len(json.dumps(m, ensure_ascii=False)) for m in messages)
     _pats = {tag: re.compile(rf'(<{tag}>)([\s\S]*?)(</{tag}>)') for tag in ('thinking', 'think', 'tool_use', 'tool_result')}
     _hist_pat = re.compile(r'<(history|key_info|earlier_context)>[\s\S]*?</\1>')
-    def _trunc_str(s): return s[:max_len//2] + '\n...[Truncated]...\n' + s[-max_len//2:] if isinstance(s, str) and len(s) > max_len else s
-    def _trunc(text):
+    _n = len(messages)
+    _MARK = '\n...[Truncated]...\n'
+    def _limit(i): return max_len if i < _n - keep_recent else max(max_len, recent_max_len)
+    def _cut(s, lim):
+        """截到 lim 以内(marker 也算进预算, 否则实际是 lim+19, 上限名不副实)。"""
+        if not isinstance(s, str) or len(s) <= lim: return s
+        budget = max(lim - len(_MARK), 2)
+        return s[:budget // 2] + _MARK + s[-budget // 2:]
+    def _trunc(text, lim):
         text = _hist_pat.sub(lambda m: f'<{m.group(1)}>[...]</{m.group(1)}>', text)
-        for pat in _pats.values(): text = pat.sub(lambda m: m.group(1) + _trunc_str(m.group(2)) + m.group(3), text)
-        return text
+        for pat in _pats.values(): text = pat.sub(lambda m: m.group(1) + _cut(m.group(2), lim) + m.group(3), text)
+        # 标签外的裸长文本也要压: 旧实现只截 tag 内部, 消息里标签外的结果/代码原文
+        # (占大头)原样保留, 压缩率远低于预期——长任务上下文照样膨胀。
+        return _cut(text, lim) if len(text) > lim else text
     for i, msg in enumerate(messages):
-        if i >= len(messages) - keep_recent: break
+        # [0] 是协议载体: _build_protocol_prompt 把 system + 交互协议 + 工具清单 + L1 记忆索引
+        # 一次性拼成首条 prompt, 后续每条只是它的重复。裁它 = 把交互协议从上下文里删掉,
+        # 第 N 轮起模型既看不到 <tool_use> 协议也看不到记忆路由(实测 7827→619 字符, 全丢)。
+        # system 消息同理: 常驻约束, 不属于"旧轮次"。
+        if i == 0 or msg.get('role') == 'system':
+            continue
+        lim = _limit(i)
         c = msg['content']
-        if isinstance(c, str): msg['content'] = _trunc(c)
+        if isinstance(c, str): msg['content'] = _trunc(c, lim)
         elif isinstance(c, list):
             for b in c:
                 if not isinstance(b, dict): continue
                 t = b.get('type')
-                if t == 'text' and isinstance(b.get('text'), str): b['text'] = _trunc(b['text'])
+                if t == 'text' and isinstance(b.get('text'), str): b['text'] = _trunc(b['text'], lim)
                 elif t == 'tool_result':
                     tc = b.get('content')
-                    if isinstance(tc, str): b['content'] = _trunc_str(tc)
+                    if isinstance(tc, str): b['content'] = _cut(tc, lim)
                     elif isinstance(tc, list):
                         for sub in tc:
-                            if isinstance(sub, dict) and sub.get('type') == 'text': sub['text'] = _trunc_str(sub.get('text'))
+                            if isinstance(sub, dict) and sub.get('type') == 'text': sub['text'] = _cut(sub.get('text'), lim)
                 elif t == 'tool_use' and isinstance(b.get('input'), dict):
-                    for k, v in b['input'].items(): b['input'][k] = _trunc_str(v)
+                    for k, v in b['input'].items(): b['input'][k] = _cut(v, lim)
     print(f"[Cut] {_before} -> {sum(len(json.dumps(m, ensure_ascii=False)) for m in messages)}")
     return messages
 
@@ -100,19 +125,79 @@ def safeprint(*argv):
     except OSError: pass
 print = safeprint
 
+def _drop_oldest_turn(history):
+    """丢一条最旧的对话轮次(保留 [0]); 丢完把新的首条 user 消息净化,
+    避免孤立 tool_result 引用。原地修改, 调用方依赖这一点。"""
+    history.pop(1)
+    while len(history) > 1 and history[1].get('role') != 'user': history.pop(1)
+    if len(history) > 1 and history[1].get('role') == 'user':
+        history[1] = _sanitize_leading_user_msg(history[1])
+
+
+IMAGE_PLACEHOLDER = '[earlier screenshot omitted to save context]'
+
+
+def age_image_blocks(history, keep=1):
+    """只留最近 keep 张图, 更早的换成一行占位文字。返回被替换的张数。
+
+    图在历史里是 base64(一张缩略后的截图 ~80KB): 20 条历史就是 1.6MB 的重发体积,
+    足以把上下文窗口和每轮 prefill 一起顶爆。所以"每轮附图"必须配这条老化规则——
+    模型只需要看当前这一屏, 上一屏的像素对下一步没有增益(位置信息走 obs/文字)。"""
+    seen = 0
+    replaced = 0
+    for msg in reversed(history or []):
+        content = msg.get('content')
+        if not isinstance(content, list):
+            continue
+        for i in range(len(content) - 1, -1, -1):
+            block = content[i]
+            if not isinstance(block, dict) or block.get('type') not in ('image', 'image_url'):
+                continue
+            seen += 1
+            if seen <= keep:
+                continue
+            content[i] = {"type": "text", "text": IMAGE_PLACEHOLDER}
+            replaced += 1
+    return replaced
+
+
+def _history_cost(history):
+    """上下文体积估算: 图片按固定 2k 字符计, 不让 base64 长度决定裁剪策略。"""
+    total = 0
+    for m in history or []:
+        content = m.get('content')
+        if isinstance(content, list):
+            for b in content:
+                if isinstance(b, dict) and b.get('type') in ('image', 'image_url'):
+                    total += 2000
+                else:
+                    total += len(json.dumps(b, ensure_ascii=False))
+        else:
+            total += len(json.dumps(content, ensure_ascii=False))
+    return total
+
+
 def trim_messages_history(history, sess):
     cap = sess.context_win * 3
     target = int(cap * getattr(sess, 'trim_keep_rate', 0.6))
-    def cost(): return sum(len(json.dumps(m, ensure_ascii=False)) for m in history)
+    def cost(): return _history_cost(history)
+    age_image_blocks(history, keep=1)      # 先老化图片: 否则一条图就能顶到 cap, 触发无谓的历史裁剪
     compress_history_tags(history, interval=getattr(sess, 'cut_msg_interval', 5))
     print(f'[Debug] Current context: {cost()} chars, {len(history)} messages.')
+    # 条数上限必须排在体积上限前面: 每轮重发全部历史, 条数不封顶时单轮成本随轮数
+    # 线性上涨、总时间平方上涨。真机实证: 19 轮 resend 829→50017 字符(60x),
+    # model_wait 3.1s→32.5s, 用户因太慢把任务取消; 而体积上限 context_win*3 高达
+    # 9 万字符, 那条路根本等不到——压缩只把单条压到 600, 压不掉条数本身。
+    # 20 条 ≈ 10 轮原始上下文; 更早的轮次由 anchor prompt 的 <history>/<key_info>
+    # 工作记忆兜着(设计上旧轮次"对后续决策无增益")。
+    max_msgs = int(getattr(sess, 'max_history_msgs', 20))
+    while len(history) > max_msgs:
+        _drop_oldest_turn(history)
     if cost() <= cap: return
-    compress_history_tags(history, keep_recent=4, force=True)
+    compress_history_tags(history, keep_recent=4, force=True)   # 超限强压: 与默认一致, 旧轮次只留头尾
     if cost() <= target: return
     while len(history) > 9 and cost() > target:
-        history.pop(0)
-        while history and history[0].get('role') != 'user': history.pop(0)
-        if history and history[0].get('role') == 'user': history[0] = _sanitize_leading_user_msg(history[0])
+        _drop_oldest_turn(history)
     print(f'[Debug] Trimmed context, current: {cost()} chars, {len(history)} messages.')
 
 def auto_make_url(base, path):
@@ -178,7 +263,10 @@ def _parse_claude_sse(resp_lines):
             stop_reason = delta.get("stop_reason", stop_reason)
             out_usage = evt.get("usage", {})
             out_tokens = out_usage.get("output_tokens", 0)
-            if out_tokens: print(f"[Output] tokens={out_tokens} stop_reason={stop_reason}")
+            if out_tokens:
+                print(f"[Output] tokens={out_tokens} stop_reason={stop_reason}")
+                # Claude 流式 output_tokens 不经 _record_usage; 只补输出, 输入仍由 message_start 上报
+                _emit_usage(0, out_tokens, 0)
         elif evt_type == "message_stop": got_message_stop = True
         elif evt_type == "error":
             err = evt.get("error", {})
@@ -269,6 +357,7 @@ def _parse_openai_sse(resp_lines, api_mode="chat_completions"):
     else:
         tc_buf = {}  # index -> {id, name, args}
         reasoning_text = ""
+        last_usage = None   # chat_completions 流式: 每个 chunk 都可能带 usage(累计值), 只记最后一次
         for line in resp_lines:
             if not line: continue
             line = line.decode('utf-8', errors='replace') if isinstance(line, bytes) else line
@@ -277,6 +366,13 @@ def _parse_openai_sse(resp_lines, api_mode="chat_completions"):
             if data_str == "[DONE]": break
             try: evt = json.loads(data_str)
             except: continue
+            if not evt.get("choices") and (evt.get("error") or evt.get("message")):
+                _em = evt.get("error") or evt
+                _msg = _em.get("message") if isinstance(_em, dict) else str(_em)
+                if _msg:
+                    content_text += "!!!Error: " + str(_msg)
+                    yield "!!!Error: " + str(_msg)
+                continue
             ch = (evt.get("choices") or [{}])[0]
             delta = ch.get("delta") or {}
             if delta.get("reasoning_content"):
@@ -293,7 +389,8 @@ def _parse_openai_sse(resp_lines, api_mode="chat_completions"):
                 if tc.get("function", {}).get("arguments"): tc_buf[idx]["args"] += tc["function"]["arguments"]
                 if tc.get("id") and not tc_buf[idx]["id"]: tc_buf[idx]["id"] = tc["id"]
             usage = evt.get("usage")
-            if usage: _record_usage(usage, api_mode)
+            if usage: last_usage = usage
+        if last_usage: _record_usage(last_usage, api_mode)   # 一次请求只记一次; 每 chunk 累计上报会放大几百倍
         blocks = []
         if reasoning_text: blocks.append({"type": "thinking", "thinking": reasoning_text})
         if content_text: blocks.append({"type": "text", "text": content_text})
@@ -306,6 +403,25 @@ def _parse_openai_sse(resp_lines, api_mode="chat_completions"):
                 blocks.append({"type": "tool_use", "id": bid, "name": tc["name"], "input": inp})
         return blocks
 
+_USAGE_OBSERVERS = []   # 只观察消费者(如 run_metrics): 每次收到服务商用量即回调; 异常吞掉, 不影响解析
+
+
+def add_usage_observer(fn):
+    """注册用量观察者 fn(in_tok, out_tok, cached_tok)。同一 fn 只注册一次。
+    存在原因: _record_usage 原先只 print, token 无法按 turn 归集(SPEC Part 4.6)。"""
+    if fn not in _USAGE_OBSERVERS:
+        _USAGE_OBSERVERS.append(fn)
+
+
+def _emit_usage(inp, out, cached=0):
+    """把已归一的用量发给观察者; 观察者出错绝不影响协议解析。"""
+    for fn in list(_USAGE_OBSERVERS):
+        try:
+            fn(int(inp or 0), int(out or 0), int(cached or 0))
+        except Exception:
+            pass
+
+
 def _record_usage(usage, api_mode):
     if not usage: return
     if api_mode == 'responses':
@@ -313,14 +429,18 @@ def _record_usage(usage, api_mode):
         inp = usage.get("input_tokens", 0); out = usage.get("output_tokens", 0)
         print(f"[Cache] input={inp} cached={cached}")
         if out: print(f"[Output] tokens={out}")
+        _emit_usage(inp, out, cached)
     elif api_mode == 'chat_completions':
         cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0)
         inp = usage.get("prompt_tokens", 0); out = usage.get("completion_tokens", 0)
         print(f"[Cache] input={inp} cached={cached}")
         if out: print(f"[Output] tokens={out}")
+        _emit_usage(inp, out, cached)
     elif api_mode == 'messages':
         ci, cr, inp = usage.get("cache_creation_input_tokens", 0), usage.get("cache_read_input_tokens", 0), usage.get("input_tokens", 0)
         print(f"[Cache] input={inp} creation={ci} read={cr}")
+        # 计费口径与 kernel_adapter.patch_usage 一致: 缓存创建/读取都计入输入; cached 单列供缓存命中分析
+        _emit_usage(inp + ci + cr, out=usage.get("output_tokens", 0), cached=cr)
     
 def _parse_openai_json(data, api_mode="chat_completions"):
     blocks = []
@@ -365,7 +485,60 @@ def _stamp_oai_cache_markers(messages, model):
             c = list(c); c[-1] = dict(c[-1], cache_control={'type': 'ephemeral'})
             messages[idx] = {**messages[idx], 'content': c}
 
-def _stream_with_retry(sess, url, headers, payload, parse_fn):
+class _RecProxy:
+    """包一层响应对象, 记录原始 SSE 行数/首行/是否见到 [DONE]。
+
+    用途: app 报的 "empty response" 到底是真·空 body, 还是 body 里有 data 但解析器没认出来
+    (例如网关把错误包成 data: {"error": ...} 事件, 或者只回了一个 data: [DONE])。
+    """
+    def __init__(self, resp):
+        self._resp = resp
+        self.n = 0
+        self.first = b''
+        self.done = False
+
+    def iter_lines(self, *a, **k):
+        for ln in self._resp.iter_lines(*a, **k):
+            if ln:
+                self.n += 1
+                if not self.first: self.first = ln[:400]
+                if b'[DONE]' in ln: self.done = True
+            yield ln
+
+    def json(self):
+        return self._resp.json()
+
+
+def _shrink_payload(o):
+    """把请求体缩到可落盘的形状: 长字符串(图片 base64/大提示词)只留长度。"""
+    if isinstance(o, str):
+        return o if len(o) < 400 else f"<str len={len(o)}>"
+    if isinstance(o, list):
+        return [_shrink_payload(x) for x in o]
+    if isinstance(o, dict):
+        return {k: _shrink_payload(v) for k, v in o.items()}
+    return o
+
+
+def _stream_diag(sess, url, payload, resp, proxy, why):
+    """空流出问题时落一份现场到 temp/stream_diag_<ts>.json, 不用再靠猜。"""
+    try:
+        d = {"t": time.time(), "why": why, "url": url, "model": getattr(sess, "model", ""),
+             "status": getattr(resp, "status_code", None),
+             "content_type": (getattr(resp, "headers", {}) or {}).get("Content-Type"),
+             "raw_lines": getattr(proxy, "n", 0), "saw_done": getattr(proxy, "done", False),
+             "first_line": (getattr(proxy, "first", b"") or b"").decode("utf-8", "replace"),
+             "payload": _shrink_payload(payload)}
+        path = pathlib.Path(__file__).parent.joinpath("temp", "stream_diag_%d.json" % int(time.time() * 1000))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if len(list(path.parent.glob("stream_diag_*.json"))) >= 20: return   # 最多留 20 份, 别把设备刷满
+        path.write_text(json.dumps(d, ensure_ascii=False)[:200000], encoding="utf-8")
+        print("[LLM Diag] " + path.name + " lines=" + str(d["raw_lines"]) + " done=" + str(d["saw_done"]))
+    except Exception as e:
+        print("[LLM Diag] dump failed: " + type(e).__name__ + ": " + str(e))
+
+
+def _stream_with_retry(sess, url, headers, payload, parse_fn, json_fn=None):
     _RETRYABLE = {408, 409, 425, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527, 529}
     def _delay(resp, attempt):
         try: ra = float((resp.headers or {}).get("retry-after"))
@@ -385,19 +558,55 @@ def _stream_with_retry(sess, url, headers, payload, parse_fn):
                     except: body = ""
                     err = f"!!!Error: HTTP {r.status_code}" + (f": {body}" if body else "")
                     yield err; return [{"type": "text", "text": err}]
-                gen = parse_fn(r)
+                rec = _RecProxy(r)
+                gen = parse_fn(rec)
                 try:
                     while True: chunk = next(gen); streamed = True; yield chunk
                 except StopIteration as e:
-                    if not e.value and not streamed: raise requests.ConnectionError("empty response")
+                    if not e.value and not streamed:
+                        _stream_diag(sess, url, payload, r, rec, "empty response")
+                        _ct = str((getattr(r, "headers", None) or {}).get("Content-Type"))
+                        raise requests.ConnectionError(
+                            "empty response (http " + str(r.status_code) + ", raw_lines=" + str(rec.n)
+                            + ", saw_done=" + str(rec.done) + ", ct=" + _ct + ")")
                     return e.value or []
         except (requests.Timeout, requests.ConnectionError) as e:
             #pathlib.Path(__file__).parent.joinpath('temp','bad_requests.json').write_text(json.dumps({"url":url,"headers":headers,"payload":payload,"err":str(e),"t":time.time()},ensure_ascii=False),encoding='utf-8')
+            # 空流(HTTP 200 但一个 chunk 都没来)先怀疑"流式被网关吞掉": 同一个请求改成非流式再要一次。
+            # 真机实测(StepFun step_plan, 2026-10-30): 20 条历史任务里 4 条死在这里(约 20%), 且都死在很靠前的回合,
+            # 看起来就是"刚开始执行就报一堆 error"。非流式走的是另一条网关路径, 拿得到完整回复的概率明显更高。
+            if json_fn and not streamed and 'empty response' in str(e) and payload.get('stream'):
+                try:
+                    p2 = dict(payload); p2['stream'] = False; p2.pop('stream_options', None)
+                    with requests.post(url, headers=dict(headers, Accept='application/json'), json=p2,
+                                       timeout=(sess.connect_timeout, sess.read_timeout),
+                                       proxies=sess.proxies, verify=sess.verify) as r2:
+                        if r2.status_code < 400:
+                            # json_fn 与 SSE 解析器同形: 边 yield 文本边用 StopIteration.value 交回内容块。
+                            gen2, blocks, got = json_fn(r2), [], False
+                            try:
+                                while True:
+                                    c2 = next(gen2)
+                                    if c2: got = True; yield c2
+                            except StopIteration as stop2:
+                                blocks = stop2.value or []
+                            if got:
+                                print('[LLM Retry] empty stream -> non-stream fallback ok')
+                                return blocks
+                        else:
+                            print(f'[LLM Retry] non-stream fallback HTTP {r2.status_code}')
+                except Exception as e2:
+                    print(f'[LLM Retry] non-stream fallback failed: {type(e2).__name__}: {e2}')
             err = f"!!!Error: {type(e).__name__}: {e}" if str(e) else f"!!!Error: {type(e).__name__}"
+            if 'empty response' in str(e):
+                err += (f" -- 上游这一回合一个字都没回(空流), 已重试 {attempt + 1} 次。"
+                        "这是网络/供应商侧的问题, 不是任务做错了: 过一会儿重发同一句就能继续, 也可以先换个模型。")
             if attempt < sess.max_retries:
                 d = _delay(None, attempt)
                 print(f"[LLM Retry] {type(e).__name__}, retry in {d:.1f}s ({attempt+1}/{sess.max_retries+1})")
-                yield err; time.sleep(d); continue
+                # 中间重试不再把 !!!Error 塞进正文: 真机一轮空流会连着重试好几次, 用户看到的就是"开机就一堆红字"。
+                # 内部仍然重试(退避见 _delay), 只在全部用尽后往正文里放一条(见下方 yield err)。
+                time.sleep(d); continue
             yield err; return [{"type": "text", "text": err}]
         except Exception as e:
             err = f"\n\n[!!! 流异常中断 {type(e).__name__}: {e} !!!]" if streamed else f"!!!Error: {type(e).__name__}: {e}"
@@ -466,11 +675,13 @@ def _openai_stream(sess, messages):
         if sess.max_tokens: payload["max_completion_tokens" if ml.startswith(("gpt-5", "o1", "o2", "o3", "o4")) else "max_tokens"] = sess.max_tokens
         eff = _clamp_effort(sess.reasoning_effort, model)
         if eff: payload["reasoning_effort"] = eff
+        payload["enable_thinking"] = False   # 2026-10-25: step_plan 端点唯一实测有效的关思考开关（reasoning_effort 被端点忽略，单轮实测 12.2s 仍思考）；需推理质量的复杂任务删此行即可回退
     tools = getattr(sess, 'tools', None)
     if tools: payload["tools"] = _prepare_oai_tools(tools, api_mode)
     if sess.service_tier: payload["service_tier"] = sess.service_tier
     parse_fn = (lambda r: _parse_openai_sse(r.iter_lines(), api_mode)) if sess.stream else (lambda r: _parse_openai_json(r.json(), api_mode))
-    return (yield from _stream_with_retry(sess, url, headers, payload, parse_fn))
+    json_fn = lambda r: _parse_openai_json(r.json(), api_mode)
+    return (yield from _stream_with_retry(sess, url, headers, payload, parse_fn, json_fn))
         
 def _prepare_oai_tools(tools, api_mode="chat_completions"):
     if api_mode == "responses":
@@ -519,6 +730,30 @@ def _to_responses_input(messages):
     return result
 
 
+def _image_block_to_url(b):
+    """把 claude 的 image 块转成 OpenAI 的 image_url 块(已是 image_url 原样返回); 非图片返回 None。"""
+    if not isinstance(b, dict):
+        return None
+    if b.get("type") == "image_url":
+        return b
+    if b.get("type") != "image":
+        return None
+    src = b.get("source") or {}
+    if src.get("type") == "base64" and src.get("data"):
+        return {"type": "image_url",
+                "image_url": {"url": "data:%s;base64,%s" % (src.get("media_type", "image/png"), src.get("data", ""))}}
+    if src.get("type") == "url" and src.get("url"):
+        return {"type": "image_url", "image_url": {"url": src["url"]}}
+    return None
+
+
+def _collect_image_blocks(content):
+    """从(可能是 list 的)工具结果内容里挑出图片块, 供上提到 user 消息。"""
+    if not isinstance(content, list):
+        return []
+    return [u for u in (_image_block_to_url(x) for x in content) if u]
+
+
 def _msgs_claude2oai(messages):
     result = []
     for msg in messages:
@@ -554,6 +789,12 @@ def _msgs_claude2oai(messages):
                     if isinstance(tr, list):
                         tr = "\n".join(x.get("text", "") for x in tr if isinstance(x, dict) and x.get("type") == "text")
                     result.append({"role": "tool", "tool_call_id": b.get("tool_use_id") or '', "content": tr if isinstance(tr, str) else str(tr)})
+                    # tool_result 里夹带的图片块不能留在 tool 角色里(多数 OpenAI 兼容端点对
+                    # tool 消息的 content 只收字符串, 直接 400), 上提到紧随其后的 user 消息;
+                    # 文本仍留在 tool 消息内, 语义不变。以前这里只挑 text 块, 图片被静默丢弃。
+                    _imgs = _collect_image_blocks(b.get("content"))
+                    if _imgs:
+                        result.append({"role": "user", "content": list(_imgs)})
                 elif b.get("type") == "image":
                     src = b.get("source") or {}
                     if src.get("type") == "base64" and src.get("data"):
@@ -566,13 +807,17 @@ def _msgs_claude2oai(messages):
 
 
 class BaseSession:
+    # 会话协议能否携带图片块(类属性, 供工具层判"这一轮能不能附图"):
+    # 基类走 ask(prompt: str) —— 整段消息被拼成一个字符串, 图块无处安放, 只能算 False。
+    # 子类按自己的传输协议覆盖: NativeClaudeSession/NativeOAISession 传的是结构化消息列表。
+    supports_images = False
     def __init__(self, cfg):
         self.api_key = cfg['apikey']
         self.api_base = cfg['apibase'].rstrip('/')
         self.model = cfg.get('model', '')
         default_context_win = 30000
         if 'deepseek' in self.model.lower():
-            default_context_win = 70000; self.cut_msg_interval = 25; self.trim_keep_rate = 0.3
+            default_context_win = 70000; self.cut_msg_interval = 5; self.trim_keep_rate = 0.3
         self.context_win = cfg.get('context_win', default_context_win)
         self.history = []; self.lock = threading.Lock(); self.system = ""
         self.name = cfg.get('name', self.model)
@@ -598,6 +843,15 @@ class BaseSession:
         self.max_tokens = cfg.get('max_tokens')
         self.default_ua = "claude-cli/2.1.152 (external, cli)"
         self.user_agent = cfg.get("user_agent", self.default_ua)
+    def drop_stale_images(self):
+        """任务边界: 把历史里的旧截图全部换成占位文字(keep=0)。返回被换掉的张数。
+
+        为什么放在会话侧: 历史(self.history)属于这里, "图该不该留"的老化规则也在这里
+        (见 age_image_blocks)。上层(agent handler)只需要"请求清掉旧图"这一个动作,
+        不该自己去遍历并改写消息体 —— 那样两处策略会漂移(漏 image_url 块、占位文字不同),
+        而且会绕过 trim_messages_history 的既有约定。"""
+        return age_image_blocks(self.history, keep=0)
+
     def _apply_claude_thinking(self, payload):
         if self.thinking_type:
             thinking = {"type": self.thinking_type}
@@ -659,7 +913,8 @@ class ClaudeSession(BaseSession):
         if self.system: payload["system"] = [{"type": "text", "text": self.system, "cache_control": {"type": "persistent"}}]
         url = auto_make_url(self.api_base, "messages")
         parse_fn = (lambda r: _parse_claude_sse(r.iter_lines())) if self.stream else (lambda r: _parse_claude_json(r.json()))
-        return (yield from _stream_with_retry(self, url, headers, payload, parse_fn))
+        json_fn = lambda r: _parse_claude_json(r.json())
+        return (yield from _stream_with_retry(self, url, headers, payload, parse_fn, json_fn))
     def make_messages(self, raw_list):
         msgs = _drop_unsigned_thinking([{"role": m['role'], "content": list(m['content'])} for m in raw_list])
         user_idxs = [i for i, m in enumerate(msgs) if m['role'] == 'user']
@@ -708,6 +963,8 @@ def _fix_messages(messages):
     return merged
 
 class NativeClaudeSession(BaseSession):
+    # 原生协议: raw_ask 收的是结构化消息列表, image 块原样进 payload —— 可以附图。
+    supports_images = True
     native_ua = "claude-cli/2.1.152 (native, cli)"
     def __init__(self, cfg):
         super().__init__(cfg)
@@ -756,7 +1013,8 @@ class NativeClaudeSession(BaseSession):
             messages[idx]["content"][-1] = dict(messages[idx]["content"][-1], cache_control={"type": "ephemeral"})
         url = auto_make_url(self.api_base, "messages") + '?beta=true'
         parse_fn = (lambda r: _parse_claude_sse(r.iter_lines())) if self.stream else (lambda r: _parse_claude_json(r.json()))
-        return (yield from _stream_with_retry(self, url, headers, payload, parse_fn))
+        json_fn = lambda r: _parse_claude_json(r.json())
+        return (yield from _stream_with_retry(self, url, headers, payload, parse_fn, json_fn))
 
     def ask(self, msg):
         assert type(msg) is dict
@@ -819,7 +1077,20 @@ class MockResponse:
     def __repr__(self):    
         return f"<MockResponse thinking={bool(self.thinking)}, content='{self.content}', tools={bool(self.tool_calls)}>"
 
+def _keep_content_block(c):
+    """图片块没有 text 字段: 用"去空白块"过滤时必须单独放行, 否则附图会被静默删掉。"""
+    if not isinstance(c, dict):
+        return False
+    if c.get("type") in ("image", "image_url"):
+        return True
+    return bool(str(c.get("text", "")).strip())
+
+
 class ToolClient:
+    # 文本协议客户端: chat() 把 messages 压成 _build_protocol_prompt(...) 的一整段字符串再
+    # backend.ask(str) —— 图片块进不来（进来也只是一段 Python repr/base64 文本）。工具层据此
+    # 判"这一轮不要附图"。别再按"类型名白名单"猜: 那个口径已经把 NativeOAISession 判错过。
+    supports_images = False
     def __init__(self, backend, auto_save_tokens=True):
         self.backend = backend
         self.auto_save_tokens = auto_save_tokens
@@ -1070,6 +1341,9 @@ The reply body should first include a minimal one-line (<30 words) physical snap
 """.strip()
 
 class NativeToolClient:
+    # 原生协议客户端: chat() 把 messages 里的结构化块原样合并后交给 backend.ask(dict),
+    # 图片块(_keep_content_block 放行)能一路到达 payload —— 可以附图。
+    supports_images = True
     @staticmethod
     def _thinking_prompt(): return THINKING_PROMPT_EN if os.environ.get('GA_LANG') == 'en' else THINKING_PROMPT_ZH
     def __init__(self, backend):
@@ -1103,7 +1377,7 @@ class NativeToolClient:
             if tid not in tr_id_set: tool_result_blocks.append({"type": "tool_result", "tool_use_id": tid, "content": ""})
         self._pending_tool_ids = []
         # Filter whitespace-only text blocks that cause 400 on strict API proxies
-        filtered_content = [c for c in combined_content if c.get("text", "").strip()]
+        filtered_content = [c for c in combined_content if _keep_content_block(c)]
         final_content = tool_result_blocks + filtered_content
         if not final_content: final_content = [{"type": "text", "text": "."}]
         merged = {"role": "user", "content": final_content}

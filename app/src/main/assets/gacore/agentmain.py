@@ -107,6 +107,44 @@ def get_system_prompt():
 # agent = GenericAgent(); threading.Thread(target=agent.run, daemon=True).start()
 # output1_queue = agent.put_task(prompt1)
 # output2_queue = agent.put_task(prompt2)
+def _apply_session_attr(backend, k, v):
+    """/session.<k>=<v> 的真正落地。返回 (是否生效, 备注)。
+
+    两个真 bug 都是这里出去的:
+    ① 裸 setattr 无保护: 聚合后端(MixinSession)的 model 是只读 @property, 赋它抛
+       AttributeError; /session. 分支没有 try/except, 异常一路逃出 _handle_slash_cmd →
+       GenericAgent.run() 的 while True → **该会话的 run 线程直接死掉, 再也不响应**。
+       (下面 /llm 分支一直有 except AttributeError: pass 并注明原因, 这条分支漏了。)
+    ② 只往壳上写: MixinSession.__setattr__ 只广播 _BROADCAST_ATTRS 那一组, 其余属性走
+       object.__setattr__ 落到壳实例 __dict__, 之后 __getattr__ 永不被查询 → 成员保持旧值。
+       于是 /session.thinking_type=enabled 对主链路和 vision 链路都无声失效
+       (thinking_type 恰不在广播集合里, 而它正是 vision_llm 每次都要临时改的那个)。
+    所以: 能写成员就写成员(并保留壳上的值供读取), 写不了就如实说写不了。"""
+    # 只读派生属性(典型: MixinSession.model 是 @property, 值由当前成员决定)不能写。
+    # 早先 /session.model= 就是踩这里: setattr 抛 AttributeError 且无保护, 一路逃出
+    # run() 的 while True 把会话线程杀死。这里改成如实拒绝——与 /llm 分支对聚合后端的
+    # 处理保持一致("型号由成员链决定, 覆盖无意义"), 而不是偷偷改写整个成员链。
+    prop = getattr(type(backend), k, None)
+    if isinstance(prop, property) and prop.fset is None:
+        return False, '%s 是只读派生属性(由当前成员决定), 不能直接设置; 请用 /llm 切型号' % k
+    target = getattr(backend, '_sessions', None)
+    members = list(target) if isinstance(target, (list, tuple)) and target else [backend]
+    try:
+        for m in members:
+            setattr(m, k, v)
+    except AttributeError as e:
+        return False, '%s 是只读或不存在(%s)' % (k, e)
+    except Exception as e:
+        return False, '%s: %s' % (type(e).__name__, e)
+    # 壳上也留一份: MixinSession.__getattr__ 会把未知属性转发给 _sessions[0],
+    # 不写壳则读取路径看到的是转发值, 与刚写入成员的值可能不一致。
+    try:
+        object.__setattr__(backend, k, v)
+    except Exception:
+        pass
+    note = '' if len(members) == 1 else '（已同步到 %d 个成员）' % len(members)
+    return True, note
+
 class GenericAgent:
     def __init__(self):
         os.makedirs(os.path.join(script_dir, 'temp'), exist_ok=True)
@@ -180,6 +218,7 @@ class GenericAgent:
     # i know it is dangerous, but raw_query is dangerous enough it doesn't enlarge
     def _handle_slash_cmd(self, raw_query, display_queue):
         if not raw_query.startswith('/'): return raw_query
+
         if _sm := re.match(r'/session\.(\w+)=(.*)', raw_query.strip()):
             k, v = _sm.group(1), _sm.group(2)
             vfile = os.path.join(script_dir, 'temp', v)
@@ -187,8 +226,14 @@ class GenericAgent:
             try: v = json.loads(v)  # cover number parsing
             except (json.JSONDecodeError, ValueError): pass
             if k in ('model', 'name') and not isinstance(v, str): v = _sm.group(2)  # 防纯数字model名被转成int
-            setattr(self.llmclient.backend, k, v)
-            display_queue.put({'done': smart_format(f"✅ session.{k} = {repr(v)}", max_str_len=500), 'source': 'system'})
+            applied, note = _apply_session_attr(self.llmclient.backend, k, v)
+            if not applied:
+                # 如实报失败, 不要打 ✅: 曾经这里裸 setattr 后无条件报成功, 而聚合后端(mixin)上
+                # 非广播属性会落到壳上、把 __getattr__ 永久遮蔽, 成员仍是旧值——用户看到
+                # "✅ session.thinking_type = enabled" 而实际毫无效果。
+                display_queue.put({'done': smart_format(f"❌ session.{k} 未能生效: {note}", max_str_len=500), 'source': 'system'})
+                return None
+            display_queue.put({'done': smart_format(f"✅ session.{k} = {repr(v)}{note}", max_str_len=500), 'source': 'system'})
             return None
         if _lm := re.match(r'/llm\s+(.+)', raw_query.strip()):   # 切换服务商session(按名或序号), 复用 next_llm(保留history)
             spec = _lm.group(1).strip(); model = None

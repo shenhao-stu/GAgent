@@ -57,4 +57,7 @@ class WebCallbacks(
     fun onA11y(on: Boolean) = runCatching { web.evaluateJavascript("window.gaOnA11y&&gaOnA11y($on)", null) }
 
     fun onAdb() = runCatching { web.evaluateJavascript("window.gaOnAdb&&gaOnAdb()", null) }
+
+    // Shizuku 授权结果回推: 用户刚在系统对话框里决定, 前端重读 shizukuStatus 刷新设置行/红点。
+    fun onShizuku() = runCatching { web.evaluateJavascript("window.gaOnShizuku&&gaOnShizuku()", null) }
 }

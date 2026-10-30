@@ -16,6 +16,7 @@ terms continue to apply. Exact dependency versions are in `app/build.gradle`,
 | ZXing Android Embedded | Apache-2.0 | [ZXing Embedded](https://github.com/journeyapps/zxing-android-embedded) |
 | Tailscale / tsnet | BSD-3-Clause; transitive Go modules retain their licenses | [Tailscale 1.100.0](https://github.com/tailscale/tailscale/tree/v1.100.0) |
 | PaddleOCR PP-OCR models and dictionary | Apache-2.0 | [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) |
+| YOLOv8n Android UI detector (`ui_detect_yolo.onnx`) | Model card Apache-2.0; ONNX export metadata Ultralytics / AGPL-3.0, conflict unresolved. Gitignored binary, bundled only in local builds | [android_ui_detection_yolov8](https://huggingface.co/yasirfaizahmed/android_ui_detection_yolov8) pinned `f692e68a`; recipe and checksums in [OPTIONAL_YOLO](docs/OPTIONAL_YOLO.md) |
 | marked | MIT | [marked](https://github.com/markedjs/marked) |
 | DOMPurify | Apache-2.0 option | [DOMPurify 3.4.17](https://github.com/cure53/DOMPurify/tree/3.4.17) |
 | highlight.js | BSD-3-Clause | [highlight.js](https://github.com/highlightjs/highlight.js) |

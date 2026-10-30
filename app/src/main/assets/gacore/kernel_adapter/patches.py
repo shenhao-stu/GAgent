@@ -310,10 +310,13 @@ def patch_llm_timing():
     import llmcore
     if getattr(llmcore, '_ga_llmt_patched', None) is _ae: return
     orig = getattr(llmcore, '_ga_llmt_orig', None) or llmcore._stream_with_retry
-    def _stream_with_retry(sess, url, headers, payload, parse_fn):
+    def _stream_with_retry(*args, **kwargs):
+        # payload 是第 4 个位置参数(_stream_with_retry(sess, url, headers, payload, parse_fn, json_fn=None));
+        # 这里只按位置/kw 取自己要看的那一个, 其余原样转发 —— 抄全签名就会在改签名时把每个请求打成 TypeError。
+        payload = args[3] if len(args) > 3 else (kwargs.get('payload') or {})
         try: rec = _llmt_open(payload)
         except Exception: rec = None
-        g = orig(sess, url, headers, payload, parse_fn)
+        g = orig(*args, **kwargs)
         try:
             while True:
                 prev, _tls.llmt = getattr(_tls, 'llmt', None), rec   # 只在推进内层生成器时归属本记录: 弃用的生成器不会吞下后续请求

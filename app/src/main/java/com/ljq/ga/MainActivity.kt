@@ -100,6 +100,9 @@ class MainActivity : Activity() {
     private var pendingQrAfterPerm = false
     @Volatile private var launchSrc = "launcher"             // 本次 Activity 创建的唤起来源(launcher|float|notif_task|notif_keepalive)
     @Volatile private var launchCid = ""                      // per-cid 任务通知目标；冷启动由 launchInfo 交给 JS
+    // amoo(StepOS 语音助手) 派活: 服务只拉起 Activity, 真正的入队等 python boot 完再执行(见 AmooBridge)
+    @Volatile private var amooTask = ""
+    @Volatile private var amooCid = ""
     private var fgSince = 0L                                  // 本次前台会话起点(onResume 置位): onStop 上报 app_bg{fg_s} 会话时长
     // 悬浮窗授权往返意图(SP 持久化, key=overlay_perm_pending/overlay_perm_ts): 用户经引导弹窗去了系统授权页。
     // 存 SP 而非内存: 部分 ROM 授予 overlay 权限时会杀进程重启 app, 内存标记必丢 → 漏斗照样断。
@@ -142,6 +145,7 @@ class MainActivity : Activity() {
         // app_open 由 JS 在页面 boot 时上报, 与 Activity 创建一一对应, 故 onCreate 取一次即可。
         launchSrc = intent?.getStringExtra("ga_src") ?: "launcher"
         launchCid = intent?.getStringExtra("convo_cid").orEmpty()
+        takeAmooTask(intent)
         ensureAllFilesAccess()
         VoiceClient.init(this)
         web = WebView(this).apply {
@@ -260,6 +264,7 @@ class MainActivity : Activity() {
             if (!Python.isStarted()) Python.start(AndroidPlatform(this))
             bootMsg = runCatching { Py.boot(File(filesDir, "ga").absolutePath, packageName) }.getOrElse { "ERR:" + it.toString() }   // I4: Py.boot 异常时加 ERR: 前缀 → ready() 返回值可被 webui boot 门(仅认 ok/nokey)识别为"未就绪", 退避重试而非误当已就绪跑会话恢复(临时失忆根因)
             registerNudgeCallback()   // M1: boot 成功后立即注册 nudge 回调(boot 失败时 Py.ready=false, ensureNudgeRegistered 会在其就绪后补注册)
+            runAmooTaskIfPending()    // amoo 派来的任务: python 就绪后才入队(send2 异步, 秒回)
             // 契约文件: 把原生 cacheDir(应用运行时占用统计/清理用) 告诉 Python 侧, 失败半径小(不阻断启动)。
             runCatching { File(File(filesDir, "ga"), ".cache_path").writeText(cacheDir.absolutePath) }
         }
@@ -410,6 +415,16 @@ class MainActivity : Activity() {
         // 厂商自启动管理页尽力而为(组件名随版本漂移), resolveActivity 预检+runCatching 逐个尝试, 兜底通用页(同 openAdbDevSettings 先例)。
         @JavascriptInterface fun openAppSysSettings(which: String): Boolean = sysBridge.openAppSysSettings(which)
 
+        // ── Shizuku 第二条 shell 通道(stepOS 全屏启动用; 与 self-ADB 等价, 只是来源不同) ──
+        // 状态由前端轮询/首帧读取, 单一真值源全在 Kotlin(实时读 Shizuku binder + 权限), 前端零缓存。
+        @JavascriptInterface fun shizukuStatus(): String = sysBridge.shizukuStatus()
+        // 请求授权(弹系统对话框)。Shizuku 内部要求主线程, 故 runOnUiThread 转入; 结果经回调回推 JS 刷新。
+        @JavascriptInterface fun shizukuRequest() {
+            runOnUiThread { ShizukuShell.requestPermission { webCallbacks.onShizuku() } }
+        }
+        // 跳 Shizuku 管理器(未安装/服务未启动时引导用户去那边操作)。返回是否真的拉起了管理器页面。
+        @JavascriptInterface fun openShizukuManager(): Boolean = sysBridge.openShizukuManager()
+
         // 悬浮窗透明度(0.3~1.0): 存 SharedPreferences, FloatService 显示时读取并设到窗口 alpha。
         @JavascriptInterface fun setFloatOpacity(v: String) {
             val f = (v.toFloatOrNull() ?: 0.9f).coerceIn(0.3f, 1f)
@@ -465,6 +480,27 @@ class MainActivity : Activity() {
         @JavascriptInterface fun keepAwake(on: Boolean) = runOnUiThread {
             if (on) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        // 结束任务后返回桌面: 设置页开关(通用设置 → 悬浮窗常开 下面一行)。
+        //   开→任务结束(done/error)时前端调 GA.goHome() 把设备退回桌面; 关→保持现状(停在任务结束的画面,
+        //   方便用户回看最后一步)。状态持久化到 SharedPreferences("ga").home_after_task, 真值走读桥
+        //   homeAfterTask()(与 floatAlwaysOn 同口径: 不让 kv 镜像和 SP 分叉出"开关开但没生效")。
+        @JavascriptInterface fun setHomeAfterTask(on: Boolean): Boolean {
+            getSharedPreferences("ga", MODE_PRIVATE).edit().putBoolean("home_after_task", on).apply()
+            Analytics.track(if (on) """{"event":"home_after_task","props":{"on":true}}"""
+                            else """{"event":"home_after_task","props":{"on":false}}""")
+            return on
+        }
+        @JavascriptInterface fun homeAfterTask(): Boolean =
+            getSharedPreferences("ga", MODE_PRIVATE).getBoolean("home_after_task", false)
+        // 回桌面: HOME intent 不需要任何权限, 也不受悬浮窗/无障碍授权状态影响。任务结束后一次, 幂等。
+        @JavascriptInterface fun goHome() {
+            runOnUiThread {
+                runCatching {
+                    startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }.onFailure { Diag.log("go_home_failed", it.toString()) }
+            }
         }
         // 前端埋点上报入口: GA.track(JSON.stringify({event,props})); 脱敏在 Analytics 层完成
         @JavascriptInterface fun track(eventJson: String) { Analytics.track(eventJson) }
@@ -1107,10 +1143,45 @@ class MainActivity : Activity() {
         setIntent(intent)
         launchSrc = intent?.getStringExtra("ga_src") ?: launchSrc
         launchCid = intent?.getStringExtra("convo_cid").orEmpty()
+        takeAmooTask(intent)
         // 热态复用 Activity：WebView 已 boot，直接切目标会话；冷启动仍走 launchInfo.cid
         if (launchCid.isNotEmpty() && ::webCallbacks.isInitialized) {
             val jsCid = JSONObject.quote(launchCid)
             webCallbacks.raw("window.gaOpenConvo&&gaOpenConvo($jsCid)")
+        }
+        runAmooTaskIfPending()   // 热态: Py 已就绪, 直接入队
+    }
+
+    // amoo 派活: 取 extra 存起来(boot 未完成时先挂起), 由 runAmooTaskIfPending 在 Py.ready 后入队。
+    // 另外认 ACTION_SEND(text/plain) 分享进来的句子: 那条链路不经过 amoo 能力目录, 完全端侧可控。
+    private fun takeAmooTask(it: android.content.Intent?) {
+        var t = it?.getStringExtra(com.ljq.ga.amoo.AmooBridge.EXTRA_TASK).orEmpty()
+        var cid = it?.getStringExtra(com.ljq.ga.amoo.AmooBridge.EXTRA_CID).orEmpty()
+        if (t.isBlank()) {
+            val shared = com.ljq.ga.amoo.AmooBridge.taskFromShare(it)
+            if (shared.isNotBlank()) { t = shared; cid = "" }
+        }
+        if (t.isEmpty()) return
+        amooTask = t
+        amooCid = cid.ifEmpty { com.ljq.ga.amoo.AmooBridge.newTaskId() }
+    }
+
+    // 把挂起的 amoo 任务交给 python 侧(AmooBridge.dispatch -> send2): 失败只记日志, 不阻断 UI。
+    private fun runAmooTaskIfPending() {
+        val t = amooTask
+        if (t.isEmpty()) return
+        val cid = amooCid.ifEmpty { com.ljq.ga.amoo.AmooBridge.newTaskId() }
+        amooCid = cid
+        exec.execute {
+            if (!Py.ready) return@execute      // boot 还在跑: 由 boot 块收尾时再调一次
+            amooTask = ""
+            val r = com.ljq.ga.amoo.AmooBridge.dispatch(cid, t)
+            runCatching { android.util.Log.i("GaAmoo", "dispatch cid=$cid r=$r") }
+            if (r == "ok") {
+                runOnUiThread { runCatching { webCallbacks.raw("window.gaOpenConvo&&gaOpenConvo(${JSONObject.quote(cid)})") } }
+                // 收尾回推 amoo: 后台盯到 done 就把结论发回 amoo 聊天框(预填, 用户点一下发送)
+                runCatching { com.ljq.ga.amoo.AmooBridge.watchAndReport(this, cid) }
+            }
         }
     }
 

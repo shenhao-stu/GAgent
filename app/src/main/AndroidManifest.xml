@@ -44,6 +44,9 @@
          系统静默关掉(startActivity 不抛异常 → 会误报 opened:true)。Play 政策限制该权限, 本应用自分发, 同 QUERY_ALL_PACKAGES。 -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
     <!-- 让 resolveActivity 在 Android 11+ 能找到相机 App(即便 QUERY_ALL_PACKAGES 被裁剪)(issue#2) -->
+    <!-- Shizuku: 第二条 shell 通道(stepOS 全屏启动用)。API_V23 = 向管理器申请权限;
+         queries = Android 11+ 包可见性, 否则发现/绑定管理器会静默失败。 -->
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23"/>
     <queries>
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE"/>
@@ -54,6 +57,8 @@
             <category android:name="android.intent.category.BROWSABLE"/>
             <data android:scheme="https"/>
         </intent>
+        <package android:name="moe.shizuku.privileged.api"/>
+        <intent><action android:name="rikka.shizuku.intent.action.REQUEST_BINDER"/></intent>
     </queries>
     <application android:name=".App" android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round"
@@ -68,6 +73,12 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- 分享接单: amoo 等任何 App 把一句话分享给 GA, 就当任务跑(不依赖 amoo 云端能力目录) -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/plain"/>
             </intent-filter>
             <!-- 桌面长按图标直达「记一下/停止记录」(A14 无感开录成本最低通道) -->
             <meta-data android:name="android.app.shortcuts"
@@ -94,6 +105,16 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"/>
         </provider>
+        <!-- Shizuku: 接收管理器发来的 Binder。**管理器靠这个 provider 发现本 app**——
+             缺它(或只引 api 不引 provider artifact)时, 管理器「已授权应用」列表里看不到 GA(真机实证)。
+             权限 INTERACT_ACROSS_USERS_FULL 阻止普通应用调用此入口; authorities 必须与 applicationId 绑定。 -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL"/>
         <!-- FloatService 升级为 specialUse 前台服务(来自 main): 悬浮窗 + 无障碍保活, 减少后台被杀 -->
         <service android:name=".FloatService" android:exported="false"
             android:foregroundServiceType="specialUse">
@@ -138,5 +159,18 @@
                 <action android:name="android.service.notification.NotificationListenerService"/>
             </intent-filter>
         </service>
-    </application>
+        <!-- amoo(StepOS 语音助手) 的 AppFunctions 入口: 元数据在 assets/amoo/。
+             标准 android.app.appfunctions 协议, 只需手写 XML, 不需要 KSP/注解处理器。 -->
+        <service
+            android:name=".amoo.GaAppFunctionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_APP_FUNCTION_SERVICE">
+            <property android:name="android.app.appfunctions" android:value="amoo/app_functions.xml" />
+            <property android:name="android.app.appfunctions.v2" android:value="amoo/app_functions_v2.xml" />
+            <property android:name="android.app.appfunctions.schema" android:value="amoo/app_functions_schema.xsd" />
+            <intent-filter>
+                <action android:name="android.app.appfunctions.AppFunctionService" />
+            </intent-filter>
+        </service>
+</application>
 </manifest>

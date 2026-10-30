@@ -59,6 +59,27 @@ def test_merge_does_not_mutate_callers():
     assert result['pclink'] == original['pclink']
 
 
+def test_pc_status_is_quiet_when_ganet_unconfigured(monkeypatch):
+    """欢迎页每次载入都会轮询 /pc status; ganet 未配置时必须返回静默空态,
+    不得抛 ValueError(真机实测会在欢迎页弹原始报错), 也不得触碰 ganet 模块。"""
+    import types
+    import android_entry
+
+    def _must_not_be_called(*args, **kwargs):
+        raise AssertionError('unconfigured ganet must not be touched')
+
+    sentinel = types.ModuleType('ganet')
+    sentinel.list_devices = _must_not_be_called
+    sentinel.current_device = _must_not_be_called
+    monkeypatch.setitem(sys.modules, 'ganet', sentinel)
+
+    payload = json.loads(android_entry._pc_cmd('status'))
+    assert payload['ok'] is True
+    assert payload['not_configured'] is True
+    assert payload['devices'] == []
+    assert payload['current'] is None
+
+
 def test_missing_bus_capability_fails_closed_and_never_leaks_remotely(private_runtime):
     assert bus_auth.headers('https://models.example/v1') == {}
     assert bus_auth.headers('http://127.0.0.1:18766/ping') == {}

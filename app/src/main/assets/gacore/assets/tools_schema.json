@@ -1,181 +1,418 @@
 [
- {
-  "type": "function",
-  "function": {
-   "name": "code_run",
-   "description": "Code executor. Prefer python (in-process exec). Multi-call OK, use script param. Reply code block is executed if no script arg; prefer for single call to avoid escaping. No hardcoding bulk data",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "script": {
-      "type": "string",
-      "description": "[Mutually exclusive] NEVER use this param when use reply code block."
-     },
-     "type": {
-      "type": "string",
-      "enum": [
-       "python",
-       "sh"
-      ],
-      "description": "Code type",
-      "default": "python"
-     },
-     "timeout": {
-      "type": "integer",
-      "description": "in seconds",
-      "default": 60
-     },
-     "cwd": {
-      "type": "string",
-      "description": "Working directory, defaults to cwd"
-     },
-     "inline_eval": {
-      "type": "boolean",
-      "description": "DO NOT USE except explicitly specified."
-     }
+  {
+    "type": "function",
+    "function": {
+      "name": "gui_act",
+      "description": "Phone GUI structured action. PREFERRED for any screen operation — no Python needed. Actions: tap/longpress {point or rel, ms?}; swipe {point1+point2 or rel1+rel2, ms}; text {value, optional point or rel naming the input box}; key {value:ENTER}; launch {value:pkg}; back; home; wait {seconds}. COORDINATE UNITS — for each point pass EXACTLY ONE of two spellings, never both: `point` = PIXELS, the same unit dump()/look()/find() report as x/y and obs reports as x/y, so copy them straight through with no arithmetic; `rel` = 0-1000 normalized (top-left origin, x right y down), for ask_vision answers and for targets that are inherently relative. Never convert one into the other yourself and never guess which unit a number is: a pixel pair read as normalized lands hundreds of pixels off with NO error and no hint — you just see diff 0 and re-tap. Passing both, or neither, is rejected with an error naming both options. Pixels outside the current screen are rejected with an error that states the live screen size — resend them as rel. The result carries `obs` — a compact list of what is on screen now ([{t, cls, x, y, rx, ry}], up to 12 items; x/y are pixels usable directly as point, rx/ry are 0-1000 usable directly as rel) — so you can usually pick the next target straight from it instead of spending a separate code_run turn on dump()/look(). Use the observe/ocr tools when obs is empty or you need text; code_run is for multi-step logic or non-GUI work. One action per call. look/dump are NOT gui_act actions; the dedicated observe tool is the normal observation channel. For any search box/search page: tapping the box already raises the IME; do not tap it again to \"activate\" (a tap on an already-focused box may show diff 0 — not a failure). In sensitive apps (WeChat etc.) text is one atomic step: the clipboard is set, the visible paste menu or the keyboard clipboard suggestion is tapped for you, and the box is read back — hit=true means it really landed. Pass the input box center as point (or rel) for the best odds; without it the last tap position is used as the anchor. A needs_gui_paste result means that automatic tap did not land — follow its hint once, do not repeat paste. A long-press on blank space can dismiss the keyboard/search box.  You may also avoid guessing coordinates: tap/longpress/text accept `target` with visible text/description; code resolves a unique match from the widget tree, observe YOLO/OCR, or OCR. Multiple matches are returned as candidates; choose one with `target_index`. Pass `expect` optionally with short text expected after the action (alternatives with |); gui_act returns expect_verified. A miss is a soft hint, not an action failure; do not retry solely because of it. A diff or a successful tap alone still does not prove task progress. search_app {value: keyword, pkg?}: one atomic step for 'open the app → tap its search entry → type the keyword and read it back', returning a per-step verdict in steps (launch fg equals target package, entry tap landed, paste hit). Prefer it for every WeChat/mini-program search (value = the name to search) instead of hunting the magnifier with see and hand-guessing pixel coordinates — that entry path is fixed. It does not tap the results for you: after fg/entry is confirmed, locate the first result with obs or see(want=point) and tap it. close=dismiss the current layer (dialog/sheet/share panel): finds and taps its own close/cancel control inside the layer and verifies, no coordinates needed; falls back to system back only if nothing is found. exit_miniapp: leave the WHOLE mini-program (not an in-page dialog). The capsule at the top-right of a mini-program holds two keys side by side: left = share/more, right = close (leave the mini-program) — do not tap either unless necessary; tapping the left one only opens the share panel. Canvas pages swallow the system back key, so this is the only way out; for an in-page dialog use close.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "tap",
+              "swipe",
+              "longpress",
+              "text",
+              "key",
+              "launch",
+              "back",
+              "home",
+              "wait",
+              "search_app",
+              "close",
+              "exit_miniapp"
+            ]
+          },
+          "point": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "device pixels — same unit as dump()/look()/obs x/y, copy straight through; do NOT put positions read off the attached screenshot here, use img_point"
+          },
+          "img_point": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "pixels on the screenshot attached to this turn — I convert image->screen for you; use this for anything you measure on that image"
+          },
+          "point1": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "swipe start, device pixels (or use rel1)"
+          },
+          "img_point1": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "swipe start, pixels on the attached screenshot (converted; or use rel1/point1)"
+          },
+          "point2": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "swipe end, device pixels (or use rel2)"
+          },
+          "img_point2": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "swipe end, pixels on the attached screenshot (converted; or use rel2/point2)"
+          },
+          "ms": {
+            "type": "integer",
+            "description": "swipe/longpress duration"
+          },
+          "value": {
+            "type": "string",
+            "description": "content to type (text), package name (launch), or IME key name (key); never a coordinate"
+          },
+          "seconds": {
+            "type": "number"
+          },
+          "rel": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "[x,y] in 0-1000 normalized (top-left origin) — ask_vision answers, relative targets"
+          },
+          "rel1": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "swipe start, 0-1000 normalized"
+          },
+          "rel2": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "swipe end, 0-1000 normalized"
+          },
+          "target": {
+            "type": "string",
+            "description": "Visible text/description (button label, input hint); alternative to point/rel."
+          },
+          "target_index": {
+            "type": "integer",
+            "description": "Candidate index when target matches multiple nodes (the error lists candidates)."
+          },
+          "exact": {
+            "type": "boolean",
+            "description": "Require an exact target match; default is substring."
+          },
+          "expect": {
+            "type": "string",
+            "description": "Optional short text expected after the action (title/button/field), alternatives separated by |. Positive hint only; a miss does not mean the action failed."
+          }
+        },
+        "required": [
+          "action"
+        ]
+      }
     }
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "file_read",
-   "description": "Read file. Read before modify for latest context and line numbers",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "path": {
-      "type": "string",
-      "description": "Relative or absolute"
-     },
-     "start": {
-      "type": "integer",
-      "description": "Start line number (1-based)"
-     },
-     "count": {
-      "type": "integer",
-      "description": "Number of lines to read",
-      "default": 200
-     },
-     "keyword": {
-      "type": "string",
-      "description": "[Optional] If provided, returns first match (case-insensitive) with context"
-     },
-     "show_linenos": {
-      "type": "boolean",
-      "description": "Show line numbers",
-      "default": true
-     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "code_run",
+      "description": "Code executor. Prefer python (in-process exec). ALWAYS pass code in the 'script' arg. The reply code block is only a fallback when script is absent (must be a ```python-tagged block), and this tool call must still be made — replying with code without calling this tool executes nothing (the turn is wasted). No hardcoding bulk data The 'script' is plain Python: do not include </script> or other HTML tags; they cause SyntaxError. To observe the screen call droid.observe() - one screenshot, one classification, and it returns {kind, items, channels, notes, needs_vision}: items carry src ('tree' or 'yolo'), full-screen pixel x/y and 0-1000 rx/ry, so pass them straight through. notes may carry 'detector_unavailable' when the icon model is missing or broken - that is a graceful degrade, NOT a fault, keep going. When obs is empty and needs_vision is true the screen is a game / self-drawn canvas / obfuscated page with no widget tree: do NOT keep calling look()/ocr() to locate anything there (their boxes mislead and burn 0.5-0.9s) - use the see tool to ask the model what is on screen, or droid.ocr(droid.shot()) when you only need to read text.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "script": {
+            "type": "string",
+            "description": "[Mutually exclusive] NEVER use this param when use reply code block."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "python",
+              "sh"
+            ],
+            "description": "Code type",
+            "default": "python"
+          },
+          "timeout": {
+            "type": "integer",
+            "description": "in seconds",
+            "default": 60
+          },
+          "cwd": {
+            "type": "string",
+            "description": "Working directory, defaults to cwd"
+          },
+          "inline_eval": {
+            "type": "boolean",
+            "description": "DO NOT USE except explicitly specified."
+          }
+        }
+      }
     }
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "file_patch",
-   "description": "Replace unique old_content with new_content. Exact match required (whitespace/indentation). On failure, file_read to recheck",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "path": {
-      "type": "string",
-      "description": "File path"
-     },
-     "old_content": {
-      "type": "string",
-      "description": "Original text block to replace (must be unique)"
-     },
-     "new_content": {
-      "type": "string",
-      "description": "New content. Supports {{file:path:startLine:endLine}} to ref file lines, auto-expanded"
-     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "observe",
+      "description": "Local screen observation: one screenshot + widget tree/YOLO, returning compact targets with x/y in pixels and rx/ry 0-1000. Prefer it on ordinary pages; use see only for canvas or visual semantics.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "roi": {
+            "description": "Optional ROI name or 0-1000 box."
+          },
+          "limit": {
+            "type": "integer",
+            "default": 16,
+            "description": ""
+          }
+        }
+      }
     }
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "file_write",
-   "description": "Create/overwrite/append files. HUGE edits ONLY. Supports {{file:path:startLine:endLine}}, auto-expanded",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "path": {
-      "type": "string",
-      "description": "File path"
-     },
-     "content": {
-      "type": "string"
-     },
-     "mode": {
-      "type": "string",
-      "enum": [
-       "overwrite",
-       "append",
-       "prepend"
-      ],
-      "description": "Write mode",
-      "default": "overwrite"
-     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "ocr",
+      "description": "Local OCR: returns text with x/y/rx/ry/conf. Prefer it for exact text; use see only for visual semantics.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "roi": {
+            "description": "Optional ROI name or 0-1000 box."
+          },
+          "limit": {
+            "type": "integer",
+            "default": 24,
+            "description": ""
+          },
+          "min_conf": {
+            "type": "number",
+            "default": 0
+          }
+        }
+      }
     }
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "update_working_checkpoint",
-   "description": "Short-term working notepad, auto-injected each turn to prevent info loss in long tasks. Call during early/mid stages, not at end. When: (1) after reading SOP, store user needs & key constraints (skip for simple 1-2 step tasks); (2) before subtask switch or context flush; (3) after repeated failures, re-read SOP and must store new findings; (4) on new task, update content, clear old progress but keep valid constraints.\n\nDon't call: simple tasks (1-2 steps), task completed (use long-term memory tool)",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "key_info": {
-      "type": "string",
-      "description": "Replaces current notepad (<200 tokens). Incremental update: review existing, keep valid, add/remove/modify. Store: pitfalls, user requirements, key params/findings, file paths, progress, next steps. Don't store: ephemeral info, obvious context, old task info when user switched tasks. Prefer over-updating over losing key info"
-     },
-     "related_sop": {
-      "type": "string",
-      "description": "Related SOP names, tips for further re-read"
-     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "finish_task",
+      "description": "Finish the task and deliver the final user-visible result. After GUI actions call this on success or when blocked; do not end with a plan or tool XML. evidence proves completion.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "done",
+              "blocked",
+              "needs_user"
+            ]
+          },
+          "result": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "result"
+        ]
+      }
     }
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "ask_user",
-   "description": "Interrupt task to ask user when needing decisions, extra info, or facing unresolvable blockers",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "question": {
-      "type": "string",
-      "description": "Question for the user"
-     },
-     "candidates": {
-      "type": "array",
-      "items": {
-       "type": "string"
-      },
-      "description": "Optional quick-select choices for the user"
-     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "file_read",
+      "description": "Read file. Read before modify for latest context and line numbers",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Relative or absolute"
+          },
+          "start": {
+            "type": "integer",
+            "description": "Start line number (1-based)"
+          },
+          "count": {
+            "type": "integer",
+            "description": "Number of lines to read",
+            "default": 200
+          },
+          "keyword": {
+            "type": "string",
+            "description": "[Optional] If provided, returns first match (case-insensitive) with context"
+          },
+          "show_linenos": {
+            "type": "boolean",
+            "description": "Show line numbers",
+            "default": true
+          }
+        }
+      }
     }
-   }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "file_patch",
+      "description": "Replace unique old_content with new_content. Exact match required (whitespace/indentation). On failure, file_read to recheck",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "File path"
+          },
+          "old_content": {
+            "type": "string",
+            "description": "Original text block to replace (must be unique)"
+          },
+          "new_content": {
+            "type": "string",
+            "description": "New content. Supports {{file:path:startLine:endLine}} to ref file lines, auto-expanded"
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "file_write",
+      "description": "Create/overwrite/append files. HUGE edits ONLY. Supports {{file:path:startLine:endLine}}, auto-expanded",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "File path"
+          },
+          "content": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "overwrite",
+              "append",
+              "prepend"
+            ],
+            "description": "Write mode",
+            "default": "overwrite"
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "update_working_checkpoint",
+      "description": "Short-term working notepad, auto-injected each turn to prevent info loss in long tasks. Call during early/mid stages, not at end. When: (1) after reading SOP, store user needs & key constraints (skip for simple 1-2 step tasks); (2) before subtask switch or context flush; (3) after repeated failures, re-read SOP and must store new findings; (4) on new task, update content, clear old progress but keep valid constraints.\n\nDon't call: simple tasks (1-2 steps), task completed (use long-term memory tool)",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "key_info": {
+            "type": "string",
+            "description": "Replaces current notepad (<200 tokens). Incremental update: review existing, keep valid, add/remove/modify. Store: pitfalls, user requirements, key params/findings, file paths, progress, next steps. Don't store: ephemeral info, obvious context, old task info when user switched tasks. Prefer over-updating over losing key info"
+          },
+          "related_sop": {
+            "type": "string",
+            "description": "Related SOP names, tips for further re-read"
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "ask_user",
+      "description": "Interrupt task to ask user when needing decisions, extra info, or facing unresolvable blockers",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "description": "Question for the user"
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional quick-select choices for the user"
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "start_long_term_update",
+      "description": "Start distilling long-term memory. Call when discovering info worth remembering (env facts/user prefs/lessons learned). Skip if memory already updated or in autonomous flow. Must call when a task that took 15+ turns is completed",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "see",
+      "description": "Ask the current model what is on screen (vision). Use it ONLY when the local channels cannot answer: the screen is a game / self-drawn canvas / obfuscated page (no widget tree, so obs carries no usable boxes), or the target is not in obs, or you need to understand what the screen means. For ordinary widget trees, icons, buttons and input boxes are already in obs from the last gui_act - a local 31ms lookup beats a 15-46s vision call, so do NOT call see to find an icon on a normal page. want='point' returns a 0-1000 pair (pass it unchanged to gui_act's rel) using a fixed prompt that rejects percent answers; want='text' returns free text. roi crops before sending ('title'/'status'/'navbar' or a 0-1000 box) and cuts a call from 25-50s to 8-15s. One call per turn is enough. Never retry after a failure: switch to obs / droid.ocr() or ask_user. When the current turn already includes the screenshot, want='text' is rejected and points you to read the image or use ocr; repeated same-screen questions hit a cache. Each see call is capped at 20s; after timeout switch to local observe/ocr.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "description": "What you want to know about the screen. For want='point', name the target plainly (e.g. 'the magnifier icon in the title row')."
+          },
+          "want": {
+            "type": "string",
+            "enum": [
+              "text",
+              "point"
+            ],
+            "description": "'point' = locate a target and return rx,ry (0-1000); 'text' = free-form answer. Default 'text'."
+          },
+          "roi": {
+            "description": "Crop before sending: 'title'|'status'|'navbar'|'top'|'upper'|'middle'|'lower'|'bottom', or a 0-1000 [x1,y1,x2,y2]. Use it whenever you know roughly where the target is."
+          },
+          "max_pixels": {
+            "type": "integer",
+            "description": "Optional hard cap on encoded pixels. Omit unless the image is huge."
+          },
+          "force": {
+            "type": "boolean",
+            "description": "Only when the current turn already has the image but a separate visual semantic check is truly needed; default false."
+          }
+        },
+        "required": [
+          "question"
+        ]
+      }
+    }
   }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "start_long_term_update",
-   "description": "Start distilling long-term memory. Call when discovering info worth remembering (env facts/user prefs/lessons learned). Skip if memory already updated or in autonomous flow. Must call when a task that took 15+ turns is completed",
-   "parameters": {
-    "type": "object",
-    "properties": {}
-   }
-  }
- }
 ]

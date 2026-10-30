@@ -25,7 +25,12 @@ import kotlin.random.Random
 
 /** 无障碍服务: 被 BusHttpd 调用。移植自旧 GenericAgentAndroid/AgentA11yService。 */
 class BusA11yService : AccessibilityService() {
-    companion object { var instance: BusA11yService? = null }
+    companion object {
+        var instance: BusA11yService? = null
+
+        /** AOSP WindowConfiguration.WINDOWING_MODE_FULLSCREEN; 公开 SDK 无此常量, 本地字面量声明(同 VdHelper 做法)。 */
+        private const val WINDOWING_MODE_FULLSCREEN = 1
+    }
 
     override fun onServiceConnected() {
         instance = this
@@ -64,6 +69,51 @@ class BusA11yService : AccessibilityService() {
     }
     private fun visualOnly() = foregroundPkg().let { it.isEmpty() || it == "com.tencent.mm" }
     override fun onInterrupt() {}
+
+    /**
+     * stepOS 专用: 经 self-ADB shell 通道以 fullscreen 窗口模式启动 app。
+     *
+     * 为什么需要(真机实证, PZ261A / stepOS / Android 16):
+     *  stepOS 的 `StepOSMiniWindowControllerImpl` 在 `ActivityStarter.computeLaunchParams` 阶段按**调用者 uid**
+     *  决策: 第三方 App(uid≠shell) 拉起的 task 被主动改写为 OEM 私有的 `stepos-mini-window`(小窗),
+     *  于是「GA 退后台、被测 App 却以小窗/PiP 形态出现」而非全屏。logcat 实证:
+     *    WindowMode:mini: onCalculateWindowingMode ... fullscreen -> stepos-mini-window
+     *    ActivityTaskManager: START ... from uid 10226 callingPackage io.github.shenhaostu.gagent.debug
+     *  同一条 launch intent 由 shell(uid 2000, callingPackage com.android.shell) 发起则保持 fullscreen。
+     *
+     * 为何不能走 App 内 API(逐一排除, 均有实证):
+     *  - `ActivityOptions.setLaunchWindowingMode` 是 @hide 且被 hidden API 策略拦截
+     *    (logcat: `api=blocked ... using reflection: denied`);
+     *  - 手工构造 `android.activity.windowingMode` Bundle 也会被 OEM 控制器在 computeLaunchParams 阶段覆盖;
+     *  - 与悬浮窗无关(停 FloatService / 走 nofloat 分支仍复现), 也不是 task 残留偏好(删 `_op_*` 键仍复现)。
+     * 唯一已验证的出口即 shell uid: `am start-activity --windowingMode 1` 可把 mini-window 打回 fullscreen。
+     *
+     * 返回 true = 已由 shell 成功启动(**调用方不得再调 startActivity** —— app uid 的第二次 launch
+     * 会被 OEM 再次改写回小窗); false = 调用方回退原有 a11y 启动, 主流程不丢。
+     *
+     * 通道二选一(等价, 只是来源不同): self-ADB([AdbController], 需无线调试+配对) 或 Shizuku([ShizukuShell],
+     * 需装管理器+授权)。用户不必为了全屏启动先去开发者选项开无线调试。任一可用即走, 都不依赖时保持降级。
+     */
+    private fun launchFullscreenViaShell(intent: android.content.Intent): Boolean {
+        val component = intent.component?.flattenToShortString() ?: return false
+        val cmd = "am start-activity --windowingMode $WINDOWING_MODE_FULLSCREEN " +
+            "-a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n $component"
+        // self-ADB 优先(已在用时零额外开销), 不可用再试 Shizuku; 两者都拿不到输出即降级
+        val out = when {
+            AdbController.connected ->
+                runCatching { AdbController.shell(this, cmd, timeoutMs = 20_000) }.getOrNull()
+            ShizukuShell.ready() -> ShizukuShell.exec(cmd)
+            else -> null
+        } ?: return false
+        // 成败判定只用 shell 输出(真机实测过的两种成功形态), 不轮询前台:
+        //   成功: "Starting: Intent {...}"(冷启/新 task) 或 "Warning: Activity not started..."(task 已在前台, 被带到前台, 窗口模式同样已应用)
+        //   失败: "Error:" / "Exception" —— 与成功必须可区分, 不把失败当成功, 也不把成功当失败。
+        // 为何不轮询前台做回退条件: 前台事件上报慢时若回退去调 a11y startActivity, OEM 会把已 fullscreen 的 task
+        // **二次改写回小窗**(比不修更糟); 且每次 launch 白等 ~2.5s。启动成功即视为完成。
+        if (out.contains("Error:", ignoreCase = true) || out.contains("Exception", ignoreCase = true)) return false
+        return out.contains("Starting:", ignoreCase = true) ||
+            out.contains("Activity not started", ignoreCase = true)
+    }
 
     // --- dump ---
     fun dump(full: Boolean): String {
@@ -339,7 +389,23 @@ class BusA11yService : AccessibilityService() {
                     val fsi = android.content.Intent(this, FloatService::class.java).putExtra("trigger", "auto")
                     if (android.os.Build.VERSION.SDK_INT >= 26) startForegroundService(fsi) else startService(fsi)
                 }
-                startActivity(intent)
+                // stepOS 按调用者 uid 把第三方 App 拉起的 task 改写成小窗; 已由 shell 成功启动并确认到前台时,
+                // 绝不再走 app uid 的 startActivity(那会被 OEM 二次改写回小窗)。未连 self-ADB / 未确认到前台则回退原路径。
+                val fullscreen = launchFullscreenViaShell(intent)
+                if (!fullscreen) startActivity(intent)
+                // 降级必须显式告知而非静默: 两条 shell 通道都不可用时, App 侧启动只能落进 stepos-mini-window
+                // (小窗), 与用户预期「被测 App 全屏」不符。把通道真值和可操作下一步一并回给 agent,
+                // 让它能照原话告诉用户怎么修, 而不是报一个假的 {"ok":1}。
+                if (fullscreen) return JSONObject().put("ok", 1).put("fullscreen", true).toString()
+                return JSONObject()
+                    .put("ok", 1)
+                    .put("fullscreen", false)
+                    .put("shell", "self_adb=${AdbController.connected},shizuku=${ShizukuShell.ready()}")
+                    .put("hint", "StepOS 上本次以小窗(stepos-mini-window)启动: 该 ROM 按调用者 uid 决定窗口模式, "
+                        + "App 侧无法覆盖。要全屏需任一条 shell 通道: ① 设置里连接 self-ADB(开发者选项>无线调试, "
+                        + "已授 WRITE_SECURE_SETTINGS 时 app 会自动开启); ② 安装并授权 Shizuku。"
+                        + "两者都不可用时不要反复重试 launch, 照原话告知用户。")
+                    .toString()
             }
             "back" -> performGlobalAction(GLOBAL_ACTION_BACK)
             "home" -> performGlobalAction(GLOBAL_ACTION_HOME)

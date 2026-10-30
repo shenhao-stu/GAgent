@@ -135,6 +135,7 @@ let userAv=LS.get('userAvatar','person'), soundOn=LS.get('soundDone',true);   //
 let keepAwake=LS.get('keepAwake',true);   // 模型运行时阻止系统息屏(默认开): setRunning 据此调 GA.keepAwake, 仅运行中且开关开才保持亮屏
 let showThinking=LS.get('showThinking',true);window.GA_THINKING_ON=showThinking;   // F1.3: 思考过程折叠块显示开关(默认开, KV 持久化); render.js 的 thinking 挂点按此渲染/跳过
 let floatAlwaysOn=LS.get('floatAlwaysOn',false);   // 悬浮窗常开(默认关): 开启后悬浮球常驻不随回前台收起, 由 GA.setFloatAlwaysOn 落原生 SharedPreferences + 前台服务保活
+let homeAfterTask=LS.get('homeAfterTask',false);   // 结束任务后返回桌面(默认关): 任务真正结束(done/error)时调 GA.goHome 退回桌面; 真值=原生 SP(home_after_task), LS 仅镜像
 let theme=LS.get('theme','system'), floatOpacity=LS.get('floatOpacity',0.9);   // 颜色模式(system/light/dark) + 悬浮窗透明度(0.3~1)
 let sendReady=false;   // 发送按钮启用态单一真值: boot/ready/input/附件/模型切换/停止键均经 applySendEnabled 收口，避免 WebView 初始 disabled 灰住
 let mkMixins=[];   // /config.items 中 type==='mixin' 的项(按 mykey.py 原始顺序), 供模型列表渲染
@@ -202,6 +203,8 @@ function fmtTime(ts){if(!ts)return nowHM();const d=new Date(ts),p=n=>(n<10?'0':'
 const GERUNDS=["Pondering","Reticulating","Sleuthing","Hatching","Brewing","Sharpening","Untangling","Compiling","Unraveling","Distilling","Calibrating","Conjuring","Synthesizing","Threading","Resolving","Tuning"];
 function gerund(sec){return GERUNDS[Math.floor(sec/6)%GERUNDS.length]}   // 思考动词轮播: 默认英文(不随 UI 语言切换), 仅作"还在干活"的轻量提示
 function fmtElapsed(ms){const s=Math.floor(ms/1000);if(s<60)return s+'s';const m=Math.floor(s/60),r=s%60;return m+':'+(r<10?'0':'')+r}
+function taskElapsedMs(t,endMs){const t0=(t&&(t._backendStartedAt||t.t0))||runStats.t0||0;const t1=(t&&t._backendEndedAt)||endMs||Date.now();return t0?Math.max(0,t1-t0):null}   // 计时锚: 后端 run 起点优先; 后端结束点优先于本地结束时刻
+function taskElapsedSecs(t){const ms=taskElapsedMs(t,Date.now());return ms==null?-1:Math.round(ms/1000)}
 function humanTok(n){n=Math.round(n||0);return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1000?(n/1000).toFixed(1)+'k':String(n)}
 function estTok(txt){if(!txt)return 0;const cjk=(txt.match(/[一-鿿　-ヿ＀-￯]/g)||[]).length;return Math.round(cjk*0.6+(txt.length-cjk)/4)}
 const TIPS={en:["Tap the model chip up top to switch model or provider.","Every reply has copy · regenerate · read-aloud — no long-press needed.","No VPN needed by default — GA connects directly; only set a proxy in Settings ▸ Network if your network requires one.","Swipe in from the left edge to open past chats; pin the ones that matter.","GA runs the real GenericAgent engine — it executes tasks step by step."],
@@ -234,8 +237,7 @@ function liveTick(){if(!runStats.live||(task&&task.done))return;   // done 守�
   try{_twLiveTick()}catch(e){}   // v3.2-C: 钉底条+步内 .twdu 耗时复用本 500ms tick, 不另起定时器(#009 必修 3)
   if(task&&task.state&&!task.done)task.state.classList.add('run');   // 消息头仅脉冲点
   const m=task&&task.meta;if(!m)return;
-  const t0=(task&&task.t0)||runStats.t0||Date.now();   // 总计时锚 task.t0(newTask 出生点); runStats.t0 仅兜底 → 切走再切回不从 0 重来
-  const ms=Date.now()-t0;
+  const ms=taskElapsedMs(task,Date.now())||0;   // 总计时锚: 后端 run 起点优先(task.t0 在接续时已是后端起点)
   _ensureRunMeta(m);   // R7 去噪: token 不再每拍上屏(runStats 照常累计, finish 冻结落库不受影响)
   if(m._ger)m._ger.textContent=gerund(ms/1000);
   if(m._el)m._el.textContent=fmtElapsed(ms)}
@@ -283,6 +285,7 @@ window.addEventListener('resize',_vvMark);
    仅在原本贴底(stick)或任务运行中(看 agent 跑)才回底 → 用户主动上滑看历史时不打扰。 */
 window.gaOnResume=function(){
   try{if(window.PCLINK)PCLINK.resume()}catch(e){}   // 原生前台通知也恢复 PC 互联，不能只靠 WebView 可见性事件
+  try{refreshShizuku()}catch(e){}   // 从 Shizuku 管理器授权后返回: 重读 binder/权限, 更新状态行与红点
   try{_vvQ=false;_vvMark()}catch(e){}   // 防 ROM 差异(未复现): 理论上挂起期 pending rAF 会补发, 此行仅幂等重算一帧, 不得视为必然逻辑(R4)
   try{const k=kvGet('convoStore');if(Array.isArray(k)&&k.length){   // 后台 call_once/notif 可能已写 kv: 回前台合并进抽屉
     const have=new Set(convos.map(c=>c.id));let ch=false;
@@ -621,9 +624,10 @@ function userBubble(text,atts,ts,msgRef){
   ed.onclick=()=>editMsg(msgRef);   // 编辑: 截断该轮(含回复)+ 回滚 LLM 上下文 → 编辑后重发(issue#1)
   return b;   // 顺序: 复制 · 重试 · 编辑(issue#1)
 }
-function newTask(prompt,modelName,ts,stats){
+function newTask(prompt,modelName,ts,stats,startedAt){
   dropEmpty();
-  task={box:el('div','task'),steps:[],done:false,prompt:prompt||'',t0:Date.now()};   // t0: task_aborted 埋点算"跑了多久才被按停"
+  const _anchor=+startedAt>0?+startedAt:Date.now();   // 后台接续: 用后端 run 起点; 新任务: 现在
+  task={box:el('div','task'),steps:[],done:false,prompt:prompt||'',t0:_anchor};   // t0: 总计时锚(abort 埋点/完成冻结); 不能是"UI 挂接时刻"
   if(curConvo&&curConvo.id){task.box._cid=curConvo.id;task._cid=curConvo.id}   // P3c: per-run box 归属, render 串台守卫用
   const mdl=modelName||modelLabel();
   const h=el('div','assistHead',task.box);
@@ -1201,7 +1205,7 @@ function finish(){task.done=true;if(!replaying)_flIdx=null;   // 实时轮产物
   const c=task.steps[task.steps.length-1];if(c){c.classList.add('open');renderBody(c)}
   if(!replaying){                                             // 实时完成: 冻结用时+token, 落库供回放
     stopLive();
-    const _t0=(task&&task.t0)||runStats.t0;const elMs=_t0?(Date.now()-_t0):null;   // 与 liveTick 同锚: task.t0 优先(startLive 不再重置 runStats.t0)
+    const elMs=taskElapsedMs(task,Date.now());   // 与 liveTick 同锚: 后端起点/结束点优先, 后台重挂接不再从 0 计
     const ti=runStats.tokIn, to=runStats.tokOut>1?runStats.tokOut:estTok(task.steps.map(s=>s._text||'').join('\n'));
     const cr=runStats.cacheRead||0, cw=runStats.cacheWrite||0;   // #4: 冻结本轮缓存读取/创建 token 落库, 供统计/热力图聚合
     renderTaskStats({el:elMs,ti:ti,to:to,cr:cr,cw:cw});   // R7: 详情含缓存(cr/cw 本就落库, 只是此前不显示)
@@ -1898,6 +1902,9 @@ function notifyAway(level,c){if(!document.hidden)return;
 function onTaskDone(show,c,end){playDone();const err=end==='error';   // show=false: 正在预览别会话, doneNote 不画进当前视图(T6); 提示音/通知照常; end=后端结束原因, 出错不写成「任务完成」
   if(show!==false){const n=el('div','doneNote'+(err?' err':''));n.innerHTML=(err?ICO_X:ICO_CK)+'<span></span>';n.querySelector('span').textContent=t(err?'t_taskErr':'t_taskDone');scroll();
     if(pinned){_snDown.classList.add('done');_snDown.hidden=false;_snav.classList.add('on')}}   // C2C4(监察 F2): 顶置阅读态不抢滚, 改点亮回底钮; 点击/贴底自然清除
+  // 结束任务后返回桌面(默认关): 只在**真结束**(done/error)触发; ask_user 这种"要你回话"的停点走 onNeedInput,
+  //   那是还要继续的任务, 退回桌面反而把用户从上下文里推出去。GA.goHome 用 HOME intent, 无权限、幂等。
+  if(homeAfterTask&&show!==false){try{GA.goHome()}catch(e){}}   // show!==false: 只有"这个"会话在屏幕上时才退回桌面 —— 后台任务跑完把正在用手机的用户弹回桌面是打扰(多会话下 onTaskDone 也会为别的会话触发)
   notifyAway(err?'error':'done',c)}                     // 完成/出错: 轻提示音 + 普通通知(署名任务归属会话)
 function onNeedInput(c){playAsk();notifyAway('ask',c)}  // 需要回答 ask_user: 醒目提示音 + 高优先级通知
 let _askKey=null;
@@ -2186,7 +2193,7 @@ function render(j){
     else{curConvo=c;runConvo=c;startNew=false;
     const ms=c.msgs||(c.msgs=[]);
     if(!(ms.length&&ms[ms.length-1].role==='user'&&ms[ms.length-1].text===j.prompt)&&j.prompt){const um={role:'user',text:j.prompt,ts:Date.now()};ms.push(um);if(curConvo===c)userBubble(j.prompt,null,um.ts,um)}
-    newTask(j.prompt);task.snap=_filesSnap();(j.steps||[]).forEach(setStep);setRunning(true, c&&c.id);setStatus(j.status||'',true);renderDrawer();setHeaderTitle();pinReplyTop(task.box)}}
+    newTask(j.prompt,null,null,null,j.started_at?j.started_at*1000:0);task.snap=_filesSnap();(j.steps||[]).forEach(setStep);setRunning(true, c&&c.id);setStatus(j.status||'',true);renderDrawer();setHeaderTitle();pinReplyTop(task.box)}}
   const ownRun=!(running&&runConvo&&j.active_convo&&j.active_convo!==runConvo.id);
   if(ownRun&&!replaying&&j.running&&task&&task.done&&!task._fail&&(!j.cid||!task._cid||String(j.cid)===String(task._cid))){   // 自愈: 后端明说本会话在跑而 task 被误标 done(过期/错位拍误 finish)→ 复活, 否则 startLive 的 done 守卫把 spin/计时永久杀死而步骤照常渲染
     task.done=false;if(task.state){task.state.innerHTML='';task.state.classList.add('run')}
@@ -2200,13 +2207,15 @@ function render(j){
   if(task&&ownRun)(j.steps||[]).forEach(setStep);
   if(ownRun&&isAuto()&&j.route){applyRoute(j.route);                                                  // 助手头显示实际路由的服务商模型(品牌 logo + 型号)
     if(running)setStatus(autoLabel()+' · '+(dispModel(j.route.model)||j.route.name||''),true)}         // 顶栏副标题实时显示"当前路由到哪"
+  if(ownRun&&task&&j.started_at)task._backendStartedAt=j.started_at*1000;   // 后端真实起点: 计时锚, 后台重挂接不从 0 开始
+  if(ownRun&&task&&j.ended_at)task._backendEndedAt=j.ended_at*1000;         // 后端真实终点: 完成冻结优先于本地轮询时刻
   if(ownRun&&typeof j.tok_in==='number'&&j.tok_in)runStats.tokIn=j.tok_in;     // 后端真实输入 token
   if(ownRun&&typeof j.tok_out==='number'&&j.tok_out)runStats.tokOut=j.tok_out; // 输出 token(claude 流式为 0 → liveTick 按文本估算补足)
   if(ownRun&&typeof j.cache_read==='number')runStats.cacheRead=j.cache_read;   // #4: 本轮缓存读取/创建 token(可为 0, 不加非零守卫)
   if(ownRun&&typeof j.cache_write==='number')runStats.cacheWrite=j.cache_write;
   if(ownRun&&j.cmd_error){bubble('sys',j.cmd_error);stopRunClean()}  // 切模型失败: 提示 + 干净中止复位(stopRunClean 单一真相源; 否则按钮卡停止态、"切个模型啥都没反应")
   if(!j.running&&running&&(!j.cid||!(task&&task._cid)||String(j.cid)===String(task._cid))){const wasLive=curConvo===runConvo,rc=runConvo;   // 收尾前先记归属(setRunning 会清 runConvo): 预览态下瞬时 DOM 只进运行会话视图(T6); cid 归属守卫: 别会话的 running:false 拍(legacy 后台通知/闹钟切走后端焦点)不得误 finish 本任务
-    if(task&&!task.done){if(ownRun&&j.end==='error'){task._fail=1;task._err=1}if(ownRun&&!task.steps.length&&j.final){setStep({n:1,summary:(j.final||'').slice(0,80),text:j.final});task._fail=1;GAT.emit('task_error',{cat:GAT.errCat(j.final),msg:GAT.errMsg(j.final),hasKey:GAT.hasKey()})}finish();GAT.emit('task_done',{ok:task.steps.length>0,steps:task.steps.length,secs:task.t0?Math.round((Date.now()-task.t0)/1000):-1})}  // 无步骤但有 final(常是报错): 显示出来, 不再"回复为空"; secs=任务时长(webui 口径, 与 agent_task_end.secs 互证)
+    if(task&&!task.done){if(ownRun&&j.end==='error'){task._fail=1;task._err=1}if(ownRun&&!task.steps.length&&j.final){setStep({n:1,summary:(j.final||'').slice(0,80),text:j.final});task._fail=1;GAT.emit('task_error',{cat:GAT.errCat(j.final),msg:GAT.errMsg(j.final),hasKey:GAT.hasKey()})}finish();GAT.emit('task_done',{ok:task.steps.length>0,steps:task.steps.length,secs:taskElapsedSecs(task)})}  // 无步骤但有 final(常是报错): 显示出来, 不再"回复为空"; secs=任务时长(webui 口径, 与 agent_task_end.secs 互证)
     setRunning(false, rc&&rc.id);setStatus(modelLabel(),false);
     if(ownRun&&j.ask&&(j.ask.question||(j.ask.candidates&&j.ask.candidates.length))){if(wasLive)renderAskPicker(j.ask);else pendingAsk={cid:rc&&rc.id,ask:j.ask};if(!replaying&&!window._gaAnswering)onNeedInput(rc)}   // ask_user 退出 → 选择框(预览中不画进别会话, 存 pendingAsk 兜底——后端 ask 会被后续 /convo 切换清掉) + "需操作"提醒(issue#5)
     else if(!replaying)onTaskDone(wasLive,rc,j.end)}                                                                                    // 真完成 → 完成提示音 + 普通通知(issue#5)
@@ -2342,7 +2351,7 @@ function startTask(text,override){   // override!=null: 隐藏 payload(气泡/�
   pinReplyTop((_ub&&_ub.parentNode)||task.box);return true}
 function submit(){if(window.GAVoice)GAVoice.stop();   // 发送/中止前先关麦克风: 录音态点发送不该让语音继续开着
   const v=inp.value.trim();if(multi?focusRunning():running){try{const _st=(task&&task.steps)?task.steps.length:0;   // 中止上下文
-    GAT.emit('task_aborted',{steps:_st,elapsed_s:task&&task.t0?Math.round((Date.now()-task.t0)/1000):-1,had_output:_st>0||!!(task&&task.msg&&task.msg.final)})}catch(e){};stopRunClean();toast(t('t_stopped'));return}   // multi: 只停焦点; legacy: 全停
+    GAT.emit('task_aborted',{steps:_st,elapsed_s:taskElapsedSecs(task),had_output:_st>0||!!(task&&task.msg&&task.msg.final)})}catch(e){};stopRunClean();toast(t('t_stopped'));return}   // multi: 只停焦点; legacy: 全停
   if(!v&&!pendingAtts.length)return;inp.value='';inp.style.height='auto';startTask(v)}   // /lang 命令在 startTask 唯一咽喉处拦截
 btn.onclick=submit;
 inp.addEventListener('input',()=>{inp.style.height='auto';inp.style.height=Math.max(26,Math.min(inp.scrollHeight,140))+'px';applySendEnabled()});
@@ -2821,6 +2830,8 @@ function refreshHome(){
   const swTh=$('swShowThinking');if(swTh){swTh.classList.toggle('on',showThinking);swTh.setAttribute('aria-checked',showThinking?'true':'false')}   // F1.3 开关同步
   try{if(window.GA&&GA.floatAlwaysOn){const nv=!!GA.floatAlwaysOn();if(nv!==floatAlwaysOn){floatAlwaysOn=nv;LS.set('floatAlwaysOn',nv)}}}catch(e){}   // 常开真值=原生 SP∧权限(读桥, 仿 a11yOn); kv 镜像可分叉(授权往返时 WebView 未载/登录切命名空间), 旧壳无桥保持镜像
   const swFA=$('swFloatAlways');if(swFA){swFA.classList.toggle('on',floatAlwaysOn);swFA.setAttribute('aria-checked',floatAlwaysOn?'true':'false')}
+  try{if(window.GA&&GA.homeAfterTask){const hv=!!GA.homeAfterTask();if(hv!==homeAfterTask){homeAfterTask=hv;LS.set('homeAfterTask',hv)}}}catch(e){}   // 同上: 读桥为真值, kv 镜像可分叉
+  const swHA=$('swHomeAfterTask');if(swHA){swHA.classList.toggle('on',homeAfterTask);swHA.setAttribute('aria-checked',homeAfterTask?'true':'false')}
   try{refreshA11y()}catch(e){}   // 无障碍行值含持久化态(设置首页打开/切语言时重读原生真值)
   refreshAvatarRow();refreshProxyVal();refreshAppVersion();_reflectUpdateBadge();refreshThemeVal();refreshEvoBadge();
   const pc=$('provCountVal');if(pc)pc.textContent=providers.length?(providers.length+t('count')):t('addProvider');
@@ -3205,6 +3216,13 @@ function toggleFloatAlways(e){   // 悬浮窗常开: 开→请求悬浮窗权限
   floatAlwaysOn=ok;LS.set('floatAlwaysOn',floatAlwaysOn);
   try{setTimeout(refreshFloat,300)}catch(e){}                                     // 服务起停是异步的, 略等再读 running(立即读必读到旧值)
 }
+function toggleHomeAfterTask(e){   // 结束任务后返回桌面: 原生 setHomeAfterTask 落 SharedPreferences 并回真值(无权限门, 不需要悬浮窗/无障碍)
+  const want=e.classList.toggle('on');e.setAttribute('aria-checked',want?'true':'false');
+  let ok=want;
+  try{ const r=GA.setHomeAfterTask(want); if(r===false||r==='false')ok=false; }catch(err){ ok=want; }   // 桥缺失(旧包/浏览器 demo)→乐观保留 UI 态
+  if(ok!==want){ e.classList.toggle('on',ok);e.setAttribute('aria-checked',ok?'true':'false'); }
+  homeAfterTask=ok;LS.set('homeAfterTask',ok);
+}
 let _swipeOpen=null;
 function closeSwipe(row){if(!row)return;const inner=row.querySelector('.provRowInner'),del=row.querySelector('.provDel');
   if(inner)inner.style.transform='';if(del){del.style.transform='';del.style.opacity=''}row.classList.remove('swiped');if(_swipeOpen===row)_swipeOpen=null}
@@ -3253,17 +3271,18 @@ function editProvider(id){GAT.emit('view_enter',{view:'provider_edit',edit:!!id}
   $('pvModel').value=editing.model||(editing.models&&editing.models[0])||'';
   $('pvMaxRetries').value=p&&p.max_retries!=null?p.max_retries:'';$('pvReadTimeout').value=p&&p.read_timeout!=null?p.read_timeout:'';
   $('pvConnTimeout').value=p&&p.timeout!=null?p.timeout:'';$('pvUA').value=p?uaToVer(p.user_agent):'';   // 高级设置回显(需求#1)
-  $('pvEnable').classList.toggle('on',p?p.enabled!==false:true);$('pvEnable').setAttribute('aria-checked',(p?p.enabled!==false:true));
-  $('pvResp').classList.toggle('on',!!(p&&p.api_mode==='responses'));$('pvFakeCC').classList.toggle('on',p?!!p.fake_cc:false);   // 新建默认开启透传CC(命中 getoken GA 指纹; 仅 claude 生效)
-  updateModelCount();updateUARow();
+  updateModelCount();updateUARow();syncEndpointSeg();
   $('setv').classList.add('on');$('setv').setAttribute('aria-hidden','false')}
 function uaToVer(ua){const m=/claude-cli\/([0-9][0-9.]*)/.exec(ua||'');return m?m[1]:''}                 // 'claude-cli/2.1.85 (external, cli)' → '2.1.85'
 function verToUA(v){v=(v||'').trim();return v?('claude-cli/'+v+' (external, cli)'):''}                    // 版本号 → 透传 CC 的完整 UA(llmcore native_ua 同款格式)
-function updateUARow(){const r=$('rowUA');if(r)r.style.display=(provType==='claude'&&$('pvFakeCC').classList.contains('on'))?'block':'none'}   // UA 高级项仅在 claude + 透传CC 开启时出现(需求#1)
+function updateUARow(){const r=$('rowUA');if(r)r.style.display=provType==='claude'?'block':'none'}   // UA 高级项仅 Anthropic 型服务商可见
 function setProvType(t){provType=t;document.querySelectorAll('#pvSeg button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   if($('setvBrand').style.display!=='none')$('setvBrand').innerHTML=provGlyph({type:t,name:$('pvName').value.trim(),model:(editing&&editing.model)||''});
-  const oai=t==='oai';$('rowResp').style.display=oai?'flex':'none';$('rowFakeCC').style.display=oai?'none':'flex';
-  $('pvName').placeholder=oai?'gpt-native':'claude-native';$('pvBase').placeholder=oai?'https://api.openai.com/v1':'https://api.anthropic.com';updateUARow()}
+  $('pvName').placeholder=t==='oai'?'gpt-native':'claude-native';$('pvBase').placeholder=t==='oai'?'https://api.openai.com/v1':'https://api.anthropic.com';updateUARow()}
+const STEP_ENDPOINTS=['https://api.stepfun.com/step_plan/v1','https://api.stepfun.com/v1'];   // StepFun 官方 OpenAI 兼容双端点: Plan 推理专属路径 + 标准路径; 只填表单, 不内置/不上传任何 key
+function pickStepEndpoint(i){if(runLocked())return;$('pvBase').value=STEP_ENDPOINTS[i];if(!$('pvName').value.trim())$('pvName').value='StepFun';setProvType('oai');syncEndpointSeg();updateModelCount()}
+function syncEndpointSeg(){const b=$('pvBase').value.trim();document.querySelectorAll('#pvEpSeg button').forEach((el,i)=>el.classList.toggle('on',b===STEP_ENDPOINTS[i]))}   // 高亮=Base URL 命中的端点; 自定义 URL 则全不亮
+function addProviderPreset(){editProvider(null);pickStepEndpoint(0)}   // 欢迎页快速开始: 开空白编辑器并选 StepFun Plan 端点, 用户只差粘 key
 function toggleSw(e){const on=e.classList.toggle('on');e.setAttribute('aria-checked',on?'true':'false')}
 function toggleEye(){const i=$('pvKey'),on=i.type==='password';i.type=on?'text':'password';$('pvEye').style.color=on?'var(--acc)':''}
 function saveProvider(){if(runLocked())return;const v=id=>$(id).value.trim();
@@ -3277,7 +3296,7 @@ function saveProvider(){if(runLocked())return;const v=id=>$(id).value.trim();
   if(providers.some(p=>p.name===backendName&&p.id!==editingId)){toast(t('t_nameExists'));return}
   const mtRaw=v('pvMaxTok');if(mtRaw&&!/^\d+$/.test(mtRaw)){toast(t('t_maxTokNum'));return}
   for(const _id of ['pvMaxRetries','pvReadTimeout','pvConnTimeout']){const _x=v(_id);if(_x&&!/^\d+$/.test(_x)){toast(t('t_maxTokNum'));return}}   // 高级数值项仅允许数字(需求#1)
-  const _uav=v('pvUA');if(provType==='claude'&&$('pvFakeCC').classList.contains('on')&&_uav&&!/^[0-9]+(\.[0-9]+)*$/.test(_uav)){toast(t('uaVerBad'));return}   // UA 仅接受版本号(如 2.1.85)
+  const _uav=v('pvUA');if(provType==='claude'&&_uav&&!/^[0-9]+(\.[0-9]+)*$/.test(_uav)){toast(t('uaVerBad'));return}   // UA 仅接受版本号(如 2.1.85)
   let models=(editing&&editing.models)||[];      // 模型来自子页管理(非逗号输入)
   let commitStrip=null;                          // favs/active 的持久化迁移延迟到后端保存成功后(失败路径不落 LS, 防状态分叉)
   if(provType!=='claude'&&models.some(is1m)){    // [1m] 语义仅属 Anthropic 型: 切到 OAI 保存时剥后缀(否则字面 'x[1m]' 直发上游 400 且无入口摘除)
@@ -3290,11 +3309,11 @@ function saveProvider(){if(runLocked())return;const v=id=>$(id).value.trim();
   const p={id:editingId||(editing&&editing.id)||uid(),type:provType,name:backendName,label:disp,fromMk:isMk||undefined,   // 类型一律取当前分段值(fromMk 只 pin name 不 pin 类型); 后端按 type 迁移块 var 名(协议类⟺var名)
     apikey,apibase,proxy:v('pvProxy')||undefined,
     model:(editing&&editing.model)||models[0],models,
-    enabled:$('pvEnable').classList.contains('on'),api_mode:(provType==='oai'&&$('pvResp').classList.contains('on'))?'responses':undefined,
-    fake_cc:provType==='claude'&&$('pvFakeCC').classList.contains('on'),max_tokens:mtRaw?+mtRaw:undefined};
+    enabled:editing?editing.enabled!==false:true,api_mode:(provType==='oai'&&editing&&editing.api_mode==='responses')?'responses':undefined,   // 「管理」模块已移除: 启用/API 模式/透传CC 无开关可拨, 一律沿用该服务商既有值(新建默认启用)
+    fake_cc:provType==='claude'&&!!(editing&&editing.fake_cc),max_tokens:mtRaw?+mtRaw:undefined};
   const _num=id=>{const x=v(id);return x?+x:undefined};                                  // 高级设置(需求#1): 重试次数 / 读取·连接超时 / 透传 UA 版本
   p.max_retries=_num('pvMaxRetries');p.read_timeout=_num('pvReadTimeout');p.timeout=_num('pvConnTimeout');
-  if(provType==='claude'&&$('pvFakeCC').classList.contains('on')){const _ua=verToUA(v('pvUA'));if(_ua)p.user_agent=_ua}
+  if(provType==='claude'){const _ua=verToUA(v('pvUA'));if(_ua)p.user_agent=_ua}   // UA 仅 Anthropic 型服务商可见(管理卡片已移除: fake_cc/enable/api_mode 无开关可拨, 一律沿用该服务商既有值)
   // Persist the draft first; a rejected write must not change selected/usable providers.
   const r=saveProvToMk(p,p.model);
   if(r&&/error|错误|失败|invalid/i.test(r)){toast(t('t_fetchFail')+r);GAT.emit('provider_save_failed',{cat:GAT.errCat(r),msg:GAT.errMsg(r),type:provType});return}
@@ -3438,7 +3457,8 @@ function delModel(id){if(runLocked())return;
   const fi=favs.indexOf(editing.id+'::'+id);if(fi>=0){favs.splice(fi,1);LS.set('favs',favs)}
   persistEditing();renderModelList()}
 function setDefaultModel(id){if(runLocked())return;editing.model=id;
-  if(editingId&&active&&active.pid===editing.id){active={pid:editing.id,model:id};LS.set('active',active)}
+  if(editingId&&active&&active.pid===editing.id){active={pid:editing.id,model:id};LS.set('active',active);
+    sendLlmSwitch(editing.name,id,{noAbort:true});}   // 只写持久层不够: 不发 /llm 则当前会话 backend 不切, 主对话与 vision 都留旧型号直到下次冷启
   persistEditing();renderModelList();toast(t('t_defaultModel')+id)}
 /* 1M 上下文 = model id 尾缀 [1m](桌面同约定, llmcore 发送时剥后缀+context-1m beta 头)。唯一写入点=此开关; 展示一律 dispModel+徽章。 */
 function is1m(id){return /\[1m\]$/i.test(id||'')}
@@ -3677,6 +3697,35 @@ window.gaFloatAnswer=function(ans,cid){      // Float ask panel answer bridge；
   startTask(ans);
 };
 window.gaOnAdb=function(){try{refreshAdb()}catch(e){}};                            // 原生 onResume 回推; 无参, JS 侧自己重读 adbSelfStatus, 单一真值源
+/* ════════════ Shizuku 第二条 shell 通道(stepOS 全屏启动用; 与无线调试自连等价, 只是来源不同) ════════════
+   状态来源: GA.shizukuStatus()(原生实时读 Shizuku binder + API_V23 权限), 前端零缓存零镜像。
+   授权结果经原生 gaOnShizuku() 回推刷新; 引导面板区分「未装管理器/装了未授权/已就绪」三态,
+   每态至多一个主 CTA(结构仿 a11yPersistPage 的英雄卡, 但轻量——只是一个面板不成页)。*/
+function szStatus(){try{return JSON.parse(GA.shizukuStatus())}catch(e){return null}}
+function szOn(){const s=szStatus();return !!(s&&s.ready)}                        // 桥缺失/解析异常时视为已就绪, 不误报红点
+function refreshShizuku(){
+  const on=szOn();
+  const dot=$('szDot');if(dot)dot.hidden=on;
+  refreshGearDot();
+  const v=$('szVal');if(v){v.textContent=t(on?'szOn':'szOff');v.className=on?'a11yValOn':'a11yValOff'}
+}
+window.gaOnShizuku=function(){try{refreshShizuku()}catch(e){}};                  // 原生授权结果回推; 无参, JS 侧重读 shizukuStatus
+window.openShizukuPanel=function(){
+  // ⚠ gaModal 只收选项对象 {title,msg|html,okText,cancelText,onOk,onCancel,noCancel}(定义见 gaModal):
+  //   曾误按位置字符串调用 → o.title/o.html 均 undefined → 空 h4 + 空 body + 默认「取消/确定」按钮(真机实证空弹窗)。
+  //   按钮一律用 gaModal 自带的 okText/cancelText 两槽, 不自定义 HTML 按钮 —— 也就不依赖 renderA11yPersistPage 里的局部 btn()。
+  const st=szStatus();
+  if(!st){toast(t('szBridgeMissing'));return}
+  if(st.ready){                                    // 已就绪: 纯告知, 无可动作项, 单按钮
+    gaModal({title:t('szTitle'),msg:t('szReadyHint'),noCancel:true,okText:t('ok')});
+  }else if(!st.installed){                         // 未装管理器: 告知 + 安装指引, 单按钮
+    gaModal({title:t('szTitle'),msg:t('szNotInstalledHint'),noCancel:true,okText:t('ok')});
+  }else{                                           // 装了未授权: 主 CTA=授权(弹系统对话框), 次 CTA=打开管理器
+    gaModal({title:t('szTitle'),msg:t('szNotGrantedHint'),
+      okText:t('szGrant'),onOk:()=>{try{GA.shizukuRequest()}catch(e){toast(t('szBridgeMissing'))}},
+      cancelText:t('szOpenMgr'),onCancel:()=>{if(!GA.openShizukuManager())toast(t('szMgrNotFound'))}});
+  }
+};
 /* 点设置行「无线调试自连」→ 不再弹模态/深链系统页(旧版=开屏打扰), 而是回对话页开一个干净新会话,
    把引导 prompt 预填进输入框(复用编辑重发的填充范式), 用户选模型后自行发送 → GA 走 adb_self_setup SOP
    (droid.adb_pair/adb_connect)协助完成。守单会话不变量: 在飞任务不打断, 仅提示。 */
@@ -3838,7 +3887,7 @@ window.apOpenSys=function(which){let ok=false;try{ok=GA.openAppSysSettings(which
     const coldRun=j.running||(multi&&liveC&&ensureRun(liveC.id)&&ensureRun(liveC.id).running);
     if(coldRun&&liveC){curConvo=liveC;ensureConvo(j.prompt||'');const ms=curConvo.msgs,lm=ms[ms.length-1];   // 跨重启接续
       if(!(lm&&lm.role==='user'&&lm.text===(j.prompt||''))&&j.prompt){const um={role:'user',text:j.prompt,ts:Date.now()};ms.push(um);userBubble(j.prompt,null,um.ts,um)}
-      newTask(j.prompt||'');task.snap=_filesSnap();(j.steps||[]).forEach(setStep);setRunning(true, liveC.id);setStatus(j.status,true);pinReplyTop(task.box);
+      newTask(j.prompt||'',null,null,null,j.started_at?j.started_at*1000:0);task.snap=_filesSnap();(j.steps||[]).forEach(setStep);setRunning(true, liveC.id);setStatus(j.status,true);pinReplyTop(task.box);
       if(multi){const rr=ensureRun(liveC.id);rr.task=task;rr.running=true;if(task.box)task.box._cid=liveC.id;task._cid=liveC.id}}
     if(j.cmd_error)bubble('sys',j.cmd_error);
     if(!j.running&&j.ask&&(j.ask.question||(j.ask.candidates&&j.ask.candidates.length))){
@@ -3850,5 +3899,6 @@ window.apOpenSys=function(which){let ok=false;try{ok=GA.openAppSysSettings(which
   refreshModelUI();
   try{refreshA11y()}catch(e){}                      // 无障碍: 首帧刷新横幅/红点/状态
   try{refreshAdb()}catch(e){}                       // 无线调试自连: 首帧刷新设置行状态
+  try{refreshShizuku()}catch(e){}                   // Shizuku 第二条 shell 通道: 首帧刷新设置行状态
   try{setTimeout(maybeAutoCheck,3000)}catch(e){}   // 启动后台检查更新(节流 6h): 有非跳过新版才弹窗
 })();

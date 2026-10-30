@@ -9,7 +9,7 @@
 ## 用法(屏上识别)
 ```python
 import droid, time
-from vision_api import ask_vision
+# ask_vision 已由 code_run 预导入（droid.ask_vision，默认复用任务页当前模型）
 def center(b): return ((b[0]+b[2])//2, (b[1]+b[3])//2)
 img = droid.shot()                       # picker 已在前台、缩略图网格已出现
 target = '用户要的那张'                    # 运行时换成真实描述，别发占位符

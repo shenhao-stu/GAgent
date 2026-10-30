@@ -31,6 +31,7 @@ local.properties
 .pytest_cache/
 .venv/
 app/libs/*.aar
+app/libs/*.jar
 dist/
 *.apk
 *.aab
@@ -41,3 +42,7 @@ app/src/main/assets/gacore/temp/
 
 # Legacy build-injected relay defaults; never commit or package relay credentials.
 app/src/main/assets/gacore/pclink_defaults.json
+
+# Local scratch: log pulls, probe scripts, screenshots, session plans (never commit).
+/temp/
+/.stepcode/
