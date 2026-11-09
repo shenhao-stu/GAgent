@@ -62,7 +62,7 @@ which live under `app/src/main/java/com/ljq/ga/`.
 | droid.py / ScreenGeometry.kt | Device observations and gesture geometry | Coordinates are valid for the observed display; reject stale or out-of-bounds gestures |
 | bus_auth.py / LocalBusAuth.kt | Local capability transport | The random capability goes only to the exact authenticated loopback origin |
 | PermissionCoordinator.kt / OverlayPolicy.kt / FloatService.kt | Permission, lifecycle and overlay placement | Respect the user's always-on preference and keep the handle within display bounds |
-| VoiceClient.kt | Streaming voice transport | TLS validation remains enabled; stale connection generations cannot publish results |
+| OfflineAsr.kt / VoiceModel.kt | Local recognition / verified model download | Recording sessions own results; fixed HTTPS assets require size and SHA-256 checks |
 | pclink.py / ganet.py | Pairing and remote-device clients | Explicit endpoints and peer identity, without bundled server authority |
 
 ## Variables and invariants / 变量与不变量

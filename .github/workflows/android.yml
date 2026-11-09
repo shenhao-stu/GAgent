@@ -15,6 +15,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  native:
+    uses: ./.github/workflows/native-wheels.yml
+
   verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -25,7 +28,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
-          python-version: '3.10'
+          python-version: '3.13'
       - run: python -m pip install -r requirements-test.txt
       - name: Use the runner browser for UI tests
         timeout-minutes: 5
@@ -52,6 +55,7 @@ jobs:
         run: find app/src/main/assets/ga_runtime/webui -name '*.js' -print0 | xargs -0 -n1 node --check
 
   build:
+    needs: native
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -64,7 +68,7 @@ jobs:
           java-version: '17.0.21'
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
-          python-version: '3.10'
+          python-version: '3.13'
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
         with:
           packages: platform-tools
@@ -83,6 +87,11 @@ jobs:
         run: bash tools/build_tsbridge.sh
       - name: Build patched portable HTTP wheels
         run: python tools/build_pure_wheels.py
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: android-native-*
+          path: build/python-wheels
+          merge-multiple: true
       - name: Configure optional release signing
         if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         env:
@@ -96,11 +105,12 @@ jobs:
       - name: Test and build both Android variants
         env:
           GAGENT_STORE_PASSWORD: ${{ (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) && secrets.GAGENT_STORE_PASSWORD || '' }}
-        run: gradle :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease --no-daemon --stacktrace
+        run: gradle :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease --no-daemon --stacktrace
       - name: Audit APK contents and write checksums
         run: |
           mkdir -p dist
           cp app/build/outputs/apk/debug/app-debug.apk dist/GAgent-debug.apk
+          cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk dist/GAgent-native-tests.apk
           if [ -f app/build/outputs/apk/release/app-release.apk ]; then
             cp app/build/outputs/apk/release/app-release.apk dist/GAgent-release.apk
           else
@@ -108,7 +118,9 @@ jobs:
           fi
           for apk in dist/*.apk; do
             python tools/audit_source.py --apk "$apk"
-            python tools/apk_inventory.py --verify-runtime "$apk" > "$apk.inventory.json"
+            if [[ "$apk" != *-native-tests.apk ]]; then
+              python tools/apk_inventory.py --verify-runtime "$apk" > "$apk.inventory.json"
+            fi
             if [[ "$apk" != *-unsigned.apk ]]; then
               "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$apk" >> dist/SIGNATURES.txt
             fi

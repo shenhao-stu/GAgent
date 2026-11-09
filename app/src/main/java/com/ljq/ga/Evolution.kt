@@ -76,15 +76,16 @@ object Evolution {
         return n
     }
 
-    // 覆盖后: baseline ← 本次官方版(工作区里已解压的跟踪文件), 供下次更新做 base。
+    // Baseline is the packaged version, never a preserved user edit.
     fun refreshBaseline(ctx: Context, gaDir: File) {
         val base = baselineDir(gaDir)
         base.deleteRecursively(); base.mkdirs()
         val rels = LinkedHashSet<String>()
         listAssetTracked(ctx, "ga_runtime", "", rels)
         for (rel in rels) {
-            val src = File(gaDir, rel); if (!src.isFile) continue
-            val dst = File(base, rel); dst.parentFile?.mkdirs(); src.copyTo(dst, overwrite = true)
+            val dst = File(base, rel)
+            dst.parentFile?.mkdirs()
+            ctx.assets.open("ga_runtime/$rel").use { src -> dst.outputStream().use { src.copyTo(it) } }
         }
     }
 

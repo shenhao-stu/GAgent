@@ -1,3 +1,6 @@
+Source: https://files.pythonhosted.org/packages/95/b0/c7453d0b6e2073c3264468b106ee1563750cecc910965e67357e3698c83e/numpy-2.5.4.tar.gz
+Path: numpy-2.5.4/numpy/_core/include/numpy/libdivide/LICENSE.txt
+
   zlib License
   ------------
 

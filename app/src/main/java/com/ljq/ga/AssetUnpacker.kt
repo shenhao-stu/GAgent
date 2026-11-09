@@ -49,6 +49,11 @@ class AssetUnpacker(private val ctx: Context) {
         if (items.isEmpty()) {
             dst.parentFile?.mkdirs()
             val blob = ctx.assets.open(path).use { it.readBytes() }
+            if (path.startsWith("ga_runtime/memory/")) {
+                val rel = path.removePrefix("ga_runtime/")
+                val baseline = File(ctx.filesDir, "ga/.evolution/baseline/$rel")
+                return AssetCopyStat(plain = if (MemoryDefaults.install(dst, baseline, blob)) 1 else 0)
+            }
             dst.writeBytes(blob)
             return AssetCopyStat(plain = 1)
         }

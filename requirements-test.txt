@@ -1,11 +1,11 @@
 pytest==9.0.3
 requests==2.34.2
-numpy==1.26.2
-opencv-python-headless==4.11.0.86
+numpy==2.5.4
+opencv-python-headless==5.0.0.93
 playwright==1.64.0
 cryptography==50.0.2
 websocket-client==1.9.2
 websockets==16.1.1
 
-certifi==2026.10.19
-onnxruntime==1.20.1
+certifi==2026.10.23
+onnxruntime==1.31.1

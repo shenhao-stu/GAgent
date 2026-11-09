@@ -1,26 +1,5 @@
 [
   {
-    "name": "paramiko",
-    "version": "2.12.0",
-    "source": "https://files.pythonhosted.org/packages/71/6d/95777fd66507106d2f8f81d005255c237187951644f85a5bd0baeec8a88f/paramiko-2.12.0-py2.py3-none-any.whl",
-    "sha256": "b2df1a6325f6996ef55a8789d0462f5b502ea83b3c990cbb5bbe57345c6812c4",
-    "license_files": 1
-  },
-  {
-    "name": "cryptography",
-    "version": "42.0.8",
-    "source": "https://files.pythonhosted.org/packages/93/a7/1498799a2ea06148463a9a2c10ab2f6a921a74fb19e231b27dc412a748e2/cryptography-42.0.8.tar.gz",
-    "sha256": "8d09d05439ce7baa8e9e95b07ec5b6c886f548deb7e0f69ef25f64b3bce842f2",
-    "license_files": 3
-  },
-  {
-    "name": "numpy",
-    "version": "1.26.2",
-    "source": "https://files.pythonhosted.org/packages/dd/2b/205ddff2314d4eea852e31d53b8e55eb3f32b292efc3dd86bd827ab9019d/numpy-1.26.2.tar.gz",
-    "sha256": "f65738447676ab5777f11e6bbbdb8ce11b785e105f690bc45966574816b6d3ea",
-    "license_files": 28
-  },
-  {
     "name": "beautifulsoup4",
     "version": "4.15.0",
     "source": "https://files.pythonhosted.org/packages/88/c6/92fcd42f1ba33e1184263f25bfabf3d27c383410470f169e4b8163bf9c17/beautifulsoup4-4.15.0-py3-none-any.whl",
@@ -63,42 +42,11 @@
     "license_files": 2
   },
   {
-    "name": "cffi",
-    "version": "1.17.1",
-    "source": "https://files.pythonhosted.org/packages/fc/97/c783634659c2920c3fc70419e3af40972dbaf758daa229a7d6ea6135c90d/cffi-1.17.1.tar.gz",
-    "sha256": "1c39c6016c32bc48dd54561950ebd6836e1670f2ae46128f67cf49e789c52824",
-    "license_files": 1
-  },
-  {
-    "name": "bcrypt",
-    "version": "3.1.7",
-    "source": "https://files.pythonhosted.org/packages/fa/aa/025a3ab62469b5167bc397837c9ffc486c42a97ef12ceaa6699d8f5a5416/bcrypt-3.1.7.tar.gz",
-    "sha256": "0b0069c752ec14172c5f78208f1863d7ad6755a6fae6fe76ec2c80d13be41e42",
-    "license_files": 1
-  },
-  {
-    "name": "PyNaCl",
-    "version": "1.5.0",
-    "source": "https://files.pythonhosted.org/packages/a7/22/27582568be639dfe22ddb3902225f91f2f17ceff88ce80e4db396c8986da/PyNaCl-1.5.0.tar.gz",
-    "sha256": "8ac7448f09ab85811607bdd21ec2464495ac8b7c66d146bf545b0f08fb9220ba",
-    "license_files": 2
-  },
-  {
     "name": "charset-normalizer",
     "version": "2.1.1",
     "source": "https://files.pythonhosted.org/packages/db/51/a507c856293ab05cdc1db77ff4bc1268ddd39f29e7dc4919aa497f0adbec/charset_normalizer-2.1.1-py3-none-any.whl",
     "sha256": "83e9a75d1911279afd89352c68b45348559d1fc0506b054b346651b5e7fee29f",
     "license_files": 1
-  },
-  {
-    "name": "ONNX-Runtime",
-    "source": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.18.0/LICENSE",
-    "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"
-  },
-  {
-    "name": "ONNX-third-party",
-    "source": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.18.0/ThirdPartyNotices.txt",
-    "sha256": "10fc98a2f4d478e981813d594e23d7e31b0430e66501a658c1ecab2a226a4b52"
   },
   {
     "name": "Conscrypt",
@@ -116,16 +64,6 @@
     "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
   },
   {
-    "name": "OpenCV",
-    "source": "https://raw.githubusercontent.com/opencv/opencv/4.5.1/LICENSE",
-    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
-  },
-  {
-    "name": "CPython",
-    "source": "https://raw.githubusercontent.com/python/cpython/v3.10.22/LICENSE",
-    "sha256": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf"
-  },
-  {
     "name": "Kotlin",
     "source": "https://raw.githubusercontent.com/JetBrains/kotlin/v1.9.22/license/LICENSE.txt",
     "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
@@ -136,13 +74,92 @@
     "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
   },
   {
-    "name": "Chaquopy",
-    "source": "https://raw.githubusercontent.com/chaquo/chaquopy/17.1.0/LICENSE.txt",
-    "sha256": "345a9fdfeed355d37b18569ef277ba56eb0ab7c0b17a08a90163ce8d33d2b862"
-  },
-  {
     "name": "OpenSSL",
     "source": "https://raw.githubusercontent.com/openssl/openssl/openssl-3.5.9/LICENSE.txt",
     "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a"
+  },
+  {
+    "name": "cffi",
+    "version": "2.1.1",
+    "source": "https://files.pythonhosted.org/packages/9e/ef/008a1939e372c06329a3fce4279c02f328488f3526744906eeec3da7ad5f/cffi-2.1.1.tar.gz",
+    "sha256": "dd31f52ea1086513bb9df30f8fcee9b8918323ae067a3d5b78bc826a000712be",
+    "license_files": 1
+  },
+  {
+    "name": "bcrypt",
+    "version": "5.0.0",
+    "source": "https://files.pythonhosted.org/packages/d4/36/3329e2518d70ad8e2e5817d5a4cac6bba05a47767ec416c7d020a965f408/bcrypt-5.0.0.tar.gz",
+    "sha256": "f748f7c2d6fd375cc93d3fba7ef4a9e3a092421b8dbf34d8d4dc06be9492dfdd",
+    "license_files": 1
+  },
+  {
+    "name": "pynacl",
+    "version": "1.6.2",
+    "source": "https://files.pythonhosted.org/packages/d9/9a/4019b524b03a13438637b11538c82781a5eda427394380381af8f04f467a/pynacl-1.6.2.tar.gz",
+    "sha256": "018494d6d696ae03c7e656e5e74cdfd8ea1326962cc401bcf018f1ed8436811c",
+    "license_files": 3
+  },
+  {
+    "name": "cryptography",
+    "version": "50.0.2",
+    "source": "https://files.pythonhosted.org/packages/9d/af/182eb91b0df3fe75c4d9f26fe70684569566745f6ba7e5c9c73a862c5252/cryptography-50.0.2.tar.gz",
+    "sha256": "7b46165bb56eb4704e2eaaf86f3c940d19154535d9b0ca7d6d590b04060e00d5",
+    "license_files": 3
+  },
+  {
+    "name": "numpy",
+    "version": "2.5.4",
+    "source": "https://files.pythonhosted.org/packages/95/b0/c7453d0b6e2073c3264468b106ee1563750cecc910965e67357e3698c83e/numpy-2.5.4.tar.gz",
+    "sha256": "9a94cf751c9ad8ebaa835bcd3d40dacf8534ad086b88c38029b65123c7999d2a",
+    "license_files": 24
+  },
+  {
+    "name": "paramiko",
+    "version": "5.1.0",
+    "source": "https://files.pythonhosted.org/packages/13/45/fa0e8d70cb25d2dae06bc238e580a84834f6ca53a4e2408cccc19a78db7b/paramiko-5.1.0-py3-none-any.whl",
+    "sha256": "d9fe6d67a9d0bbf3eb85b051d26ab850b678c02d060f32915b944e5ca6d0d9e1",
+    "license_files": 1
+  },
+  {
+    "name": "certifi",
+    "version": "2026.10.23",
+    "source": "https://files.pythonhosted.org/packages/32/d1/a3652fe2c19134d0d15922177821d863cbd7e842d53a21bbe7e8e3a1b5ac/certifi-2026.10.23-py3-none-any.whl",
+    "sha256": "e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1",
+    "license_files": 1
+  },
+  {
+    "name": "sherpa-onnx",
+    "source": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v2.0.1/LICENSE",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  {
+    "name": "ONNX-Runtime",
+    "source": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.31.1/LICENSE",
+    "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"
+  },
+  {
+    "name": "ONNX-third-party",
+    "source": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.31.1/ThirdPartyNotices.txt",
+    "sha256": "143764b952fdb1a7c69ce653bfba74a7744d6a8a573bfb73e235fba356c83de3"
+  },
+  {
+    "name": "CPython",
+    "source": "https://raw.githubusercontent.com/python/cpython/v3.13.16/LICENSE",
+    "sha256": "78b12c3a81360b357002334f0e70ea0e92eebf7a9b358805c03c48484945f3bb"
+  },
+  {
+    "name": "Chaquopy",
+    "source": "https://raw.githubusercontent.com/chaquo/chaquopy/17.2.0/LICENSE.txt",
+    "sha256": "345a9fdfeed355d37b18569ef277ba56eb0ab7c0b17a08a90163ce8d33d2b862"
+  },
+  {
+    "name": "OpenCV",
+    "source": "https://raw.githubusercontent.com/opencv/opencv/5.0.0/LICENSE",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  {
+    "name": "libffi",
+    "source": "https://raw.githubusercontent.com/libffi/libffi/v3.8.0/LICENSE",
+    "sha256": "17b64dc60f3b6897a60f971e288b973f655c2edcdf08b25f3c3dd5549857881c"
   }
 ]

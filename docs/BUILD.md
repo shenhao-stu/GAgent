@@ -16,10 +16,10 @@ include a Gradle wrapper. Run commands below from the repository root.
 | Build host in CI | Ubuntu 24.04 | Android workflow |
 | JDK | Liberica 17.0.21 in CI; Java 17 target | Workflow, app/build.gradle |
 | Gradle / Android Gradle Plugin | 8.2 / 8.1.4 | Workflow, build.gradle |
-| Kotlin / Chaquopy | 1.9.22 / 17.1.0 | build.gradle |
+| Kotlin / Chaquopy | 1.9.22 / 17.2.0 | build.gradle |
 | Android SDK / build tools | 34 / 34.0.0 | Workflow, app/build.gradle |
 | Android NDK | 25.1.8937393 | Workflow, app/build.gradle |
-| Build Python / embedded Python | 3.10 / Chaquopy 3.10 line | Workflow, app/build.gradle |
+| Build Python / embedded Python | 3.13 / Chaquopy 3.13 line | Workflow, app/build.gradle |
 | Node.js for JavaScript checks | Runner-provided in CI; version not pinned by the workflow | Android workflow |
 | Go | 1.27.3 | Workflow, tsbridge/go.mod |
 | gomobile / mesh dependencies | Pinned module revisions | tsbridge/go.mod, tsbridge/go.sum |
@@ -41,7 +41,7 @@ Set `ANDROID_HOME` to the Android SDK directory, then install the SDK components
 ~~~sh
 sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.1.8937393"
 export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/25.1.8937393"
-python3.10 -m venv .venv
+python3.13 -m venv .venv
 . .venv/bin/activate
 python -m pip install -r requirements-test.txt
 ~~~
@@ -54,8 +54,8 @@ installed browser or install Playwright Chromium:
 python -m playwright install chromium
 ~~~
 
-If Chaquopy cannot locate Python 3.10, set `CHAQUOPY_PYTHON` to its executable, or
-pass `-Pchaquopy.python=/absolute/path/to/python3.10` to Gradle.
+If Chaquopy cannot locate Python 3.13, set `CHAQUOPY_PYTHON` to its executable, or
+pass `-Pchaquopy.python=/absolute/path/to/python3.13` to Gradle.
 A full build downloads public Android, Maven, Go and Python dependencies.
 No model API key, hosted-service account or source-encryption secret is needed.
 
@@ -67,13 +67,19 @@ No model API key, hosted-service account or source-encryption secret is needed.
 ~~~sh
 python tools/audit_source.py
 bash tools/build_tsbridge.sh
+python -m pip install cibuildwheel==4.3.5
+rustup target add aarch64-linux-android
+for package in cffi bcrypt pynacl cryptography numpy opencv-python; do
+  python tools/build_android_wheels.py "$package"
+done
 python tools/build_pure_wheels.py
 gradle :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease --no-daemon --stacktrace
 ~~~
 
 Order matters: the mesh script produces `app/libs/tsbridge.aar` and Go notices;
-the wheel script produces the portable HTTP dependencies under
-`build/python-wheels/`. Gradle consumes both. Android wheels are not the desktop
+the native builder verifies source archives, compiles arm64/Android API 24 wheels
+using cibuildwheel (NDK r27), then the portable wheel script adds HTTP dependencies under
+`build/python-wheels/`. Gradle consumes both and downloads the hash-pinned sherpa JNI AAR. Android wheels are not the desktop
 wheels installed for tests.
 
 | Output / 产物 | Meaning / 含义 |
@@ -123,3 +129,13 @@ Maintainer signing uses Actions secrets `GAGENT_RELEASE_KEYSTORE` (base64 PKCS12
 and `GAGENT_STORE_PASSWORD`. Fork PRs do not need these secrets. The workflow
 removes its temporary keystore and does not publish a GitHub release or change
 repository visibility. Follow [Releasing](RELEASING.md) for those separate steps.
+
+## Device-only native checks
+
+Build `:app:assembleDebugAndroidTest`, install the debug APK and its separate test
+APK on an explicitly assigned device, then run `com.ljq.ga.NativeAcceptance` with
+phase `native`, `download`, `voice` (requires a local `wav` path), or `microphone`.
+These checks never require a provider key. The OCR phase uses the app's local bus;
+only one GAgent variant may own that device port during the check. Restore the
+previous app/permission state afterward. Instrumentation is not included in the
+release APK.

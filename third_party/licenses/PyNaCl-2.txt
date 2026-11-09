@@ -1,7 +1,10 @@
+Source: https://files.pythonhosted.org/packages/d9/9a/4019b524b03a13438637b11538c82781a5eda427394380381af8f04f467a/pynacl-1.6.2.tar.gz
+Path: pynacl-1.6.2/licenses/LICENSE.libsodium.txt
+
 /*
  * ISC License
  *
- * Copyright (c) 2013-2021
+ * Copyright (c) 2013-2026
  * Frank Denis <j at pureftpd dot org>
  *
  * Permission to use, copy, modify, and/or distribute this software for any

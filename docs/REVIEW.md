@@ -17,7 +17,7 @@ transferred to clients. The old AGPL-derived YOLO weights are excluded.
 
 Review follows cohesive modules, local reasoning, pure transformations and explicit
 invariants. Provider transformations and service validation are separate modules.
-Local bus authorization, strict voice TLS, external navigation restrictions and
+Local bus authorization, verified offline voice models, external navigation restrictions and
 atomic configuration writes close concrete exposure paths found during extraction.
 
 Verification is recorded by each CI run: source and archive audit, full-history

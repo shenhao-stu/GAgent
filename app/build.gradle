@@ -9,7 +9,8 @@ android {
     ndkVersion "25.1.8937393"   // AGP 8.1 默认 NDK; CI(setup-android) 缺则 AGP 经 sdkmanager 自动拉取
     defaultConfig {
         applicationId "io.github.shenhaostu.gagent"
-        minSdk 24; targetSdk 34; versionCode 142; versionName "2.33.9"
+        minSdk 24; targetSdk 34; versionCode 143; versionName "2.34.0"
+        testInstrumentationRunner "com.ljq.ga.NativeAcceptance"
         ndk { abiFilters "arm64-v8a" }
         buildConfigField "String", "CHANNEL", '"opensource"'
     }
@@ -42,28 +43,29 @@ android {
 }
 chaquopy {
     defaultConfig {
-        version "3.10"
+        version "3.13"
         def bp = (project.findProperty("chaquopy.python") ?: System.getenv("CHAQUOPY_PYTHON"))?.toString()?.trim()
         if (bp) { buildPython bp }
-        // buildPython 默认不写死: Chaquopy 自动探测 PATH 上的 python3.10 (CI/作者Mac/本机一致)。
+        // buildPython 默认不写死: Chaquopy 自动探测 PATH 上的 python3.13 (CI/作者Mac/本机一致)。
         // 本地可指定: -Pchaquopy.python=... 或环境变量 CHAQUOPY_PYTHON=...。
-        // opencv钉4.5.1.48: chaquo仓库无cp311 opencv轮子,只有cp310; 不钉版本pip会抓PyPI sdist必败
+        // Native wheels are built from hash-pinned sources before Gradle runs.
         // Private mesh relay and pinned PC SSH both require these Chaquopy-compatible dependencies.
         pip {
             options '--find-links', rootProject.file('build/python-wheels').absolutePath
-            install "requests==2.34.2"; install "certifi==2026.10.19"; install "charset-normalizer==2.1.1"; install "beautifulsoup4==4.15.0"; install "numpy==1.26.2"; install "opencv-python==4.5.1.48"; install "websocket-client==1.9.2"; install "PyYAML==6.0.3"; install "websockets==16.1.1"; install "cryptography==42.0.8"; install "aiohttp==3.14.5"; install "multidict==7.1.0"; install "yarl==1.25.1"; install "frozenlist==1.8.0"; install "propcache==0.5.4"; install "paramiko==2.12.0"; install "bcrypt==3.1.7"; install "pynacl==1.5.0"; install "cffi==1.17.1" }
+            install "requests==2.34.2"; install "certifi==2026.10.23"; install "charset-normalizer==2.1.1"; install "beautifulsoup4==4.15.0"; install "numpy==2.5.4"; install "opencv-python==5.0.0.93"; install "websocket-client==1.9.2"; install "PyYAML==6.0.3"; install "websockets==16.1.1"; install "cryptography==50.0.2"; install "aiohttp==3.14.5"; install "multidict==7.1.0"; install "yarl==1.25.1"; install "frozenlist==1.8.0"; install "propcache==0.5.4"; install "paramiko==5.1.0"; install "bcrypt==5.0.0"; install "pynacl==1.6.2"; install "cffi==2.1.1" }
     }
 }
 dependencies {
     testImplementation "junit:junit:4.13.2"
     // tsbridge.aar = tsnet(用户态 tailscale) gomobile 产物, 由 tools/build_tsbridge.sh 生成(CI 里在 gradle 前跑)
     implementation files('libs/tsbridge.aar')
+    implementation files('libs/sherpa-onnx-2.0.1-static-arm64.aar')
     implementation 'androidx.webkit:webkit:1.8.0'
     implementation 'androidx.core:core:1.13.1'           // FileProvider(拍照输出, issue#1)
     implementation 'org.nanohttpd:nanohttpd:2.3.1'
     implementation 'androidx.work:work-runtime-ktx:2.9.1'       // 定时闹钟后台调度(Doze 友好, 跨重启持久化)
-    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.18.0'
-    implementation 'com.squareup.okhttp3:okhttp:4.12.0'         // VoiceClient WS(原生TLS指纹)
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.31.1'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'  // APK updater
     // app 内自连无线 ADB(类 LADB 但纯 Kotlin, 无打包 adb 二进制): SPAKE2 配对 + ADB-over-TLS 线协议。
     //  sun-security-android = libadb 依赖的 X509 证书生成(轻量, 不引 BouncyCastle)。Conscrypt 供 TLSv1.3(minSdk24 满足)。
     implementation 'com.github.MuntashirAkon:libadb-android:3.1.1'
@@ -116,3 +118,12 @@ afterEvaluate {
     tasks.matching { it.name ==~ /merge.*Assets/ || it.name.toLowerCase(Locale.ROOT).contains('lint') }
         .configureEach { dependsOn stageRuntimeAssets, 'prepareThirdPartyNotices' }
 }
+
+
+tasks.register('prepareOfflineVoice', Exec) {
+    workingDir rootProject.projectDir
+    commandLine System.getenv('CHAQUOPY_PYTHON') ?: 'python3', 'tools/prepare_voice.py'
+    inputs.file rootProject.file('tools/prepare_voice.py')
+    outputs.file file('libs/sherpa-onnx-2.0.1-static-arm64.aar')
+}
+tasks.named('preBuild').configure { dependsOn 'prepareOfflineVoice' }

@@ -1,6 +1,6 @@
 # Android synchronization — 2026-11-09 / Android 同步记录
 
-This update adapts the GAndroid main snapshot `eae6e54` into GAgent's own main
+This update adapts the GAndroid main snapshot `1559286` into GAgent's own main
 history. Private Git history, hosted credentials, billing services, telemetry and
 account data are not imported. The open-source application keeps its own package
 identity and optional service configuration.
@@ -31,8 +31,11 @@ identity and optional service configuration.
 - GA Plan, billing/account commerce UI, managed-plan synchronization and prompt
   contribution toggles are removed. Generic provider access remains. Retired bridge
   commands fail locally instead of becoming model requests.
-- Streaming voice remains the explicitly configured open-source service adapter;
-  the hosted offline-ASR package is not included in this synchronization.
+- Voice input now reuses the native offline recognizer and hold/cancel interaction.
+  The independent streaming configuration and transport are removed. Public model
+  downloads are HTTPS-only and hash-pinned; recognition audio stays on the phone.
+- Default memory is reduced to a short index and task references. Upgrades replace
+  untouched defaults and preserve user edits; baselines come from packaged assets.
 
 ## Public repository controls / 公网仓库防护
 
@@ -43,7 +46,8 @@ and APK audit covers nested runtime build directories and rejects linked content
 full Git history is scanned with redacted results. These checks cannot prove that
 arbitrary data contains no secrets.
 
-Service HTTP requests and voice WebSockets reject redirects. PC Link has no
+Credential-bearing service HTTP requests reject redirects. Offline model downloads
+carry no credentials, remain on HTTPS and verify pinned hashes. PC Link has no
 embedded signing authority and unconfigured services do not make requests.
 This client does not implement server-side quota or billing enforcement.
 

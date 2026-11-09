@@ -1,4 +1,7 @@
-Copyright (c) 2005-2023, NumPy Developers.
+Source: https://files.pythonhosted.org/packages/95/b0/c7453d0b6e2073c3264468b106ee1563750cecc910965e67357e3698c83e/numpy-2.5.4.tar.gz
+Path: numpy-2.5.4/LICENSE.txt
+
+Copyright (c) 2005-2025, NumPy Developers.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without

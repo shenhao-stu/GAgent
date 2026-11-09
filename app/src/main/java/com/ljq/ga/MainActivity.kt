@@ -100,6 +100,7 @@ class MainActivity : Activity() {
     private var pendingQrAfterPerm = false
     @Volatile private var launchSrc = "launcher"             // 本次 Activity 创建的唤起来源(launcher|float|notif_task|notif_keepalive)
     @Volatile private var launchCid = ""                      // per-cid 任务通知目标；冷启动由 launchInfo 交给 JS
+    @Volatile private var voiceSession = 0
     private var fgSince = 0L                                  // 本次前台会话起点(onResume 置位): onStop 上报 app_bg{fg_s} 会话时长
     // 悬浮窗授权往返意图(SP 持久化, key=overlay_perm_pending/overlay_perm_ts): 用户经引导弹窗去了系统授权页。
     // 存 SP 而非内存: 部分 ROM 授予 overlay 权限时会杀进程重启 app, 内存标记必丢 → 漏斗照样断。
@@ -143,7 +144,6 @@ class MainActivity : Activity() {
         launchSrc = intent?.getStringExtra("ga_src") ?: "launcher"
         launchCid = intent?.getStringExtra("convo_cid").orEmpty()
         ensureAllFilesAccess()
-        VoiceClient.init(this)
         web = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.allowFileAccess = true
@@ -492,12 +492,26 @@ class MainActivity : Activity() {
             val safe = name.replace(Regex("[^A-Za-z0-9._-]"), "_").takeLast(48).ifEmpty { "file" }
             File(dir, "${System.currentTimeMillis()}_$safe").apply { writeBytes(bytes) }.absolutePath
         }.getOrElse { "ERROR: $it" }
-        // 流式语音: OkHttp WS 直连中继(原生TLS指纹, 无 Python 依赖). JS推PCM+轮询取增量文本。
-        @JavascriptInterface fun sttStart(): String = mediaBridge.sttStart()
-        @JavascriptInterface fun sttSend(b64: String): String = mediaBridge.sttSend(b64)
-        @JavascriptInterface fun sttStop(): String = mediaBridge.sttStop()
-        @JavascriptInterface fun sttPoll(): String = mediaBridge.sttPoll()
-        @JavascriptInterface fun sttCancel(): String = mediaBridge.sttCancel()
+        // On-device voice: session IDs reject late results and stale lifecycle callbacks.
+        @JavascriptInterface fun offAsrStatus(): String = OfflineAsr.status(this@MainActivity)
+        @JavascriptInterface fun offAsrDownload(): String = OfflineAsr.download(this@MainActivity)
+        @JavascriptInterface fun offAsrStart(): String {
+            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                runOnUiThread {
+                    if (!micPermissionInFlight) {
+                        micPermissionInFlight = true
+                        requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), MIC_REQ)
+                    }
+                }
+                return """{"ok":false,"error":"no_mic_permission"}"""
+            }
+            val result = OfflineAsr.start(this@MainActivity)
+            JSONObject(result).takeIf { it.optBoolean("ok") }?.let { voiceSession = it.getInt("id") }
+            return result
+        }
+        @JavascriptInterface fun offAsrPoll(id: Int): String = OfflineAsr.poll(id)
+        @JavascriptInterface fun offAsrStop(id: Int): String = OfflineAsr.stop(id)
+        @JavascriptInterface fun offAsrCancel(id: Int): String = OfflineAsr.cancel(id)
         // 拍照: 由 JS 直接调用, 必起 ACTION_IMAGE_CAPTURE(不再依赖 WebView 的 <input capture>/isCaptureEnabled——
         // 后者在部分设备/WebView 不触发→只弹相册)。结果在 onActivityResult 落盘并经 window.gaCameraResult 回推。(issue#2)
         @JavascriptInterface fun openCamera(): String {
@@ -1130,6 +1144,7 @@ class MainActivity : Activity() {
 
     // 退出/切后台时尽量把埋点队列发出(用户随后可能杀进程,失败则保留至下次启动补发)
     override fun onStop() {
+        if (voiceSession > 0) OfflineAsr.cancel(voiceSession)
         super.onStop()
         isForeground = false
         if (!isChangingConfigurations && !exec.isShutdown) {

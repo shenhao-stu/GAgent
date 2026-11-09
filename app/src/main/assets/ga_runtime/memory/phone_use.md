@@ -1,6 +1,6 @@
 # phone_use
 
-相关: droid.py docstring(接口真相源) | app_cards.md(各App速查) | 遇到再读: app_scenarios_sop.md vision_sop.md offscreen_sop.md
+相关: droid.py docstring(接口真相源) | app_cards.md(各App速查) | 遇到再读: vision_sop.md offscreen_sop.md
 
 ## 0. 节奏
 首次进入尚未观察的界面，先观察再决定。
