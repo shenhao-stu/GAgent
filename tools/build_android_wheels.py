@@ -56,6 +56,10 @@ def prepare(package):
         run(['make', 'install'], root, env)
     elif package == 'cryptography':
         root = source('openssl')
+        # OpenSSL discovers the NDK's unprefixed clang through PATH.
+        compiler = Path(env['CC'])
+        env['ANDROID_NDK_ROOT'] = str(compiler.parents[5])
+        env['PATH'] = str(compiler.parent) + os.pathsep + env['PATH']
         run(['perl', 'Configure', 'android-arm64', 'no-shared', 'no-tests',
              '--prefix=' + str(prefix), '--libdir=lib', '-D__ANDROID_API__=24'], root, env)
         run(['make', '-j2', 'build_sw'], root, env)
@@ -68,10 +72,12 @@ def build(package):
     output.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ, CIBW_PLATFORM='android', CIBW_BUILD='cp313-android_arm64_v8a',
                CIBW_ARCHS_ANDROID='arm64_v8a', CIBW_BUILD_FRONTEND='build',
-               CIBW_TEST_SKIP='*', CIBW_BUILD_VERBOSITY='1')
+               CIBW_TEST_SKIP='*', CIBW_BUILD_VERBOSITY='1',
+               CIBW_BEFORE_BUILD='', CIBW_REPAIR_WHEEL_COMMAND='')
     prefix = BUILD / ('native-' + package)
     values = {'ANDROID_API_LEVEL': '24', 'CMAKE_BUILD_PARALLEL_LEVEL': '2',
-              'PIP_EXTRA_INDEX_URL': 'https://chaquo.com/pypi-13.1'}
+              'PIP_EXTRA_INDEX_URL': 'https://chaquo.com/pypi-13.1',
+              'PIP_FIND_LINKS': str(output)}
     if package in ('cffi', 'cryptography'):
         env['CIBW_BEFORE_BUILD'] = shlex.join([sys.executable, str(Path(__file__).resolve()),
                                              '--prepare', package])
@@ -92,11 +98,16 @@ def build(package):
             check = 'subprocess.check_call(\n            [make_command, "check"] + make_args, cwd=build_temp\n        )'
             if text.count(check) != 1:
                 raise ValueError('PyNaCl native test layout changed')
-            setup.write_text(text.replace(check, '# Native self-tests require an Android target.'))
+            text = text.replace(check, '# Native self-tests require an Android target.')
+            # Let setuptools derive the shared linker from the active cross CC.
+            text = text.replace('"CCSHARED", "LDSHARED"', '"CCSHARED"')
+            setup.write_text(text)
         values['LIBSODIUM_MAKE_ARGS'] = '-j2'
     elif package == 'numpy':
         env['CIBW_CONFIG_SETTINGS'] = 'setup-args=-Dblas=none setup-args=-Dlapack=none'
     elif package == 'opencv-python':
+        project = root / 'pyproject.toml'
+        project.write_text(project.read_text().replace('numpy==2.1.3', 'numpy==2.5.4'))
         values.update(ENABLE_HEADLESS='1', CMAKE_ARGS=' '.join([
             '-DBUILD_LIST=core,imgproc,imgcodecs,python3', '-DBUILD_TESTS=OFF',
             '-DBUILD_PERF_TESTS=OFF', '-DBUILD_JAVA=OFF', '-DWITH_FFMPEG=OFF',
