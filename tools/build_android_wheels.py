@@ -64,6 +64,12 @@ def prepare(package):
              '--prefix=' + str(prefix), '--libdir=lib', '-D__ANDROID_API__=24'], root, env)
         run(['make', '-j2', 'build_sw'], root, env)
         run(['make', 'install_sw'], root, env)
+    elif package == 'numpy':
+        # Meson's configure probes also need the target Python library search path.
+        flags = ['-L' + env['PYO3_CROSS_LIB_DIR'], '-lpython3.13']
+        (BUILD / 'android-arm64.ini').write_text(
+            "[properties]\nlongdouble_format = 'IEEE_QUAD_LE'\n"
+            f"[built-in options]\nc_link_args = {flags!r}\ncpp_link_args = {flags!r}\n")
 
 
 def build(package):
@@ -78,7 +84,7 @@ def build(package):
     values = {'ANDROID_API_LEVEL': '24', 'CMAKE_BUILD_PARALLEL_LEVEL': '2',
               'PIP_EXTRA_INDEX_URL': 'https://chaquo.com/pypi-13.1',
               'PIP_FIND_LINKS': str(output)}
-    if package in ('cffi', 'cryptography'):
+    if package in ('cffi', 'cryptography', 'numpy'):
         env['CIBW_BEFORE_BUILD'] = shlex.join([sys.executable, str(Path(__file__).resolve()),
                                              '--prepare', package])
     if package == 'cffi':
@@ -115,7 +121,6 @@ def build(package):
         cross = BUILD / 'android-arm64.ini'
         cross.write_text("[properties]\nlongdouble_format = 'IEEE_QUAD_LE'\n")
         env['CIBW_CONFIG_SETTINGS'] = ('setup-args=-Dblas=none setup-args=-Dlapack=none '
-            'setup-args=-Dc_link_args=-lpython3.13 setup-args=-Dcpp_link_args=-lpython3.13 '
             'setup-args=--cross-file=' + str(cross) + ' compile-args=-j2')
     elif package == 'opencv-python':
         project = root / 'pyproject.toml'
@@ -132,7 +137,7 @@ def build(package):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('package', nargs='?', choices=list(SOURCES))
-    parser.add_argument('--prepare', choices=['cffi', 'cryptography'])
+    parser.add_argument('--prepare', choices=['cffi', 'cryptography', 'numpy'])
     args = parser.parse_args()
     if args.prepare:
         prepare(args.prepare)
