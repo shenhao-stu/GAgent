@@ -2,7 +2,7 @@ name: Android
 
 on:
   push:
-    branches: [main, 'codex/**']
+    branches: [main]  # feature branches are verified once through their PR
     tags: ['v*']
   pull_request:
   workflow_dispatch:
