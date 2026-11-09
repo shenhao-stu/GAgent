@@ -86,6 +86,14 @@ def build(package):
         values['PKG_CONFIG_PATH'] = str(prefix / 'lib/pkgconfig')
     elif package == 'cryptography':
         values.update(OPENSSL_DIR=str(prefix), OPENSSL_STATIC='1')
+        # cibuildwheel uses <prefix>/lib, whereas this release assumes lib/pythonX.Y.
+        build_rs = root / 'src/rust/cryptography-cffi/build.rs'
+        text = build_rs.read_text()
+        start = text.index('        let py_ver = lib')
+        end = text.index('        prefix\n', start)
+        text = text[:start] + ('        let py_ver = "python3.13";\n'
+                '        let prefix = lib.parent().expect("missing Python prefix");\n') + text[end:]
+        build_rs.write_text(text)
     elif package == 'pynacl':
         # Autoconf must not try to execute target binaries on the build host.
         setup = root / 'setup.py'
@@ -104,7 +112,10 @@ def build(package):
             setup.write_text(text)
         values['LIBSODIUM_MAKE_ARGS'] = '-j2'
     elif package == 'numpy':
-        env['CIBW_CONFIG_SETTINGS'] = 'setup-args=-Dblas=none setup-args=-Dlapack=none'
+        cross = BUILD / 'android-arm64.ini'
+        cross.write_text("[properties]\nlongdouble_format = 'IEEE_QUAD_LE'\n")
+        env['CIBW_CONFIG_SETTINGS'] = ('setup-args=-Dblas=none setup-args=-Dlapack=none '
+            'setup-args=--cross-file=' + str(cross) + ' compile-args=-j2')
     elif package == 'opencv-python':
         project = root / 'pyproject.toml'
         project.write_text(project.read_text().replace('numpy==2.1.3', 'numpy==2.5.4'))
