@@ -95,11 +95,14 @@ def build(package):
         # cibuildwheel uses <prefix>/lib, whereas this release assumes lib/pythonX.Y.
         build_rs = root / 'src/rust/cryptography-cffi/build.rs'
         text = build_rs.read_text()
-        start = text.index('        let py_ver = lib')
-        end = text.index('        prefix\n', start)
-        text = text[:start] + ('        let py_ver = "python3.13";\n'
-                '        let prefix = lib.parent().expect("missing Python prefix");\n') + text[end:]
-        build_rs.write_text(text)
+        if '        let py_ver = lib' in text:
+            start = text.index('        let py_ver = lib')
+            end = text.index('        prefix\n', start)
+            text = text[:start] + ('        let py_ver = "python3.13";\n'
+                    '        let prefix = lib.parent().expect("missing Python prefix");\n') + text[end:]
+            build_rs.write_text(text)
+        elif 'missing Python prefix' not in text:
+            raise ValueError('cryptography include layout changed')
     elif package == 'pynacl':
         # Autoconf must not try to execute target binaries on the build host.
         setup = root / 'setup.py'
@@ -127,6 +130,9 @@ def build(package):
         project.write_text(project.read_text().replace('numpy==2.1.3', 'numpy==2.5.4'))
         values.update(ENABLE_HEADLESS='1', CMAKE_ARGS=' '.join([
             '-DBUILD_LIST=core,imgproc,imgcodecs,python3', '-DBUILD_TESTS=OFF',
+            '-DBUILD_EXAMPLES=OFF', '-DBUILD_ANDROID_EXAMPLES=OFF',
+            '-DBUILD_ANDROID_PROJECTS=OFF', '-DINSTALL_ANDROID_EXAMPLES=OFF',
+            '-DWITH_UNIFONT=OFF', '-DWITH_AVIF=OFF', '-DWITH_OPENJPEG=OFF',
             '-DBUILD_PERF_TESTS=OFF', '-DBUILD_JAVA=OFF', '-DWITH_FFMPEG=OFF',
             '-DWITH_OPENEXR=OFF', '-DWITH_JASPER=OFF', '-DWITH_TIFF=OFF',
             '-DWITH_WEBP=OFF', '-DWITH_OPENCL=OFF']))
