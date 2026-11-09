@@ -48,6 +48,8 @@ jobs:
         run: python tools/build_android_wheels.py "${{ matrix.package }}"
       - if: matrix.package == 'numpy' && steps.wheels.outputs.cache-hit != 'true'
         run: python tools/build_android_wheels.py opencv-python
+      - name: Verify target architecture and Python linkage
+        run: python tools/verify_android_wheels.py build/python-wheels
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: android-native-${{ matrix.package }}

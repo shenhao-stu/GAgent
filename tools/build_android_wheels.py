@@ -135,6 +135,12 @@ def build(package):
         values['PKG_CONFIG_PATH'] = str(prefix / 'lib/pkgconfig')
     elif package == 'cryptography':
         values.update(OPENSSL_DIR=str(prefix), OPENSSL_STATIC='1')
+        # Android embeds Python through JNI; abi3 modules cannot rely on a
+        # globally loaded interpreter as desktop extension modules can.
+        patch(root / 'src/rust/build.rs', 'fn main() {',
+              'fn main() {\n'
+              '    println!("cargo:rustc-link-search=native={}", env::var("PYO3_CROSS_LIB_DIR").expect("target Python library"));\n'
+              '    println!("cargo:rustc-link-lib=dylib=python3.13");')
         # cibuildwheel uses <prefix>/lib, whereas this release assumes lib/pythonX.Y.
         build_rs = root / 'src/rust/cryptography-cffi/build.rs'
         text = build_rs.read_text()
