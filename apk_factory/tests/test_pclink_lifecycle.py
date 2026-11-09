@@ -46,7 +46,7 @@ def test_pair_excludes_automatic_reconnect(link, monkeypatch):
             return sock
 
         saved = AsyncMock(return_value=sock)
-        monkeypatch.setitem(sys.modules, 'p2p_ws_client', types.SimpleNamespace(load_room=lambda *a, **k: json.loads(rooms.read_text())['pc'], 
+        monkeypatch.setitem(sys.modules, 'p2p_ws_client', types.SimpleNamespace(load_room=lambda *a, **k: json.loads(rooms.read_text())['pc'],
             connect_code=pair, connect_saved=saved))
         pairing = asyncio.create_task(mod._pair('123456789'))
         await asyncio.wait_for(started.wait(), 1)
@@ -121,7 +121,7 @@ def test_new_pair_waits_for_old_reconnect_cleanup(link, monkeypatch):
             assert cancelled.is_set(), 'new handshake overlaps the old socket'
             return new
 
-        monkeypatch.setitem(sys.modules, 'p2p_ws_client', types.SimpleNamespace(load_room=lambda *a, **k: json.loads(rooms.read_text())['pc'], 
+        monkeypatch.setitem(sys.modules, 'p2p_ws_client', types.SimpleNamespace(load_room=lambda *a, **k: json.loads(rooms.read_text())['pc'],
             connect_saved=saved, connect_code=pair))
         keeper = asyncio.create_task(mod._keeper())
         try:
@@ -266,7 +266,7 @@ def test_new_connection_waits_for_receiver_cleanup(link, monkeypatch, mode):
             connected.set()
             return new
 
-        monkeypatch.setitem(sys.modules, 'p2p_ws_client', types.SimpleNamespace(load_room=lambda *a, **k: json.loads(rooms.read_text())['pc'], 
+        monkeypatch.setitem(sys.modules, 'p2p_ws_client', types.SimpleNamespace(load_room=lambda *a, **k: json.loads(rooms.read_text())['pc'],
             connect_saved=connect, connect_code=connect))
         dropping = asyncio.create_task(mod._drop(old))
         await closing.wait()
