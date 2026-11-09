@@ -357,6 +357,18 @@ debug installations is not counted as another fresh-download test.
 中文：构建通过后仍在真机发现了加密库链接错误，修复并实测后才记为通过。语音测试保留
 首次收音失败；第二次逐字匹配，音量已恢复。测试仅使用公开音频和合成数据，不调用收费模型。
 
+### Latest upstream follow-up / 最新上游补充
+
+Before merging, upstream main advanced to `db40dc6`. The follow-up adapts its
+portrait PC scanner and failed-launch cleanup, ambiguous/offline PC routing guards,
+room-disconnect ordering and pointer-owned cancellation. The first focused run
+reproduced six failures; all 57 focused checks passed after adaptation. A separate
+lost-pointer-capture ownership regression was then added and fixed. The native
+test entry also starts a fresh Activity task so the single-instance launcher cannot
+leave `startActivitySync` waiting for a nonexistent new Activity. Final CI and
+signed-main device evidence must include these later changes; the APK digest above
+identifies only the earlier native-dependency candidate.
+
 ### Scope and remaining limits / 范围与剩余限制
 
 - This is author verification, not an independent security audit. Secret scans,

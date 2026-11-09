@@ -884,6 +884,7 @@ class MainActivity : Activity() {
             pendingQrAfterPerm = false
             IntentIntegrator(this).apply {
                 setRequestCode(QR_REQ)
+                setCaptureActivity(GanetQrCaptureActivity::class.java)
                 setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
                 setPrompt("Scan PC QR · 扫描电脑二维码")
                 setBeepEnabled(false)

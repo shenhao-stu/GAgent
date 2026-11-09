@@ -137,3 +137,28 @@ def test_legacy_receiver_cannot_complete_requests_on_replacement_socket():
                 receiver.cancel()
             await asyncio.gather(*receivers, return_exceptions=True)
     asyncio.run(scenario())
+
+
+def test_ambiguous_destination_requires_selection_even_during_reconnect():
+    async def scenario():
+        union = p2p.HubUnion()
+        union.hubs.update(a=Socket(), b=Socket())
+        sent = []
+        async def record(*args):
+            sent.append(args)
+            return 200, b'{"name":"new"}'
+        union._one = record
+        for reconnecting in (False, True):
+            if reconnecting:
+                del union.hubs['b']
+                union.lost['b'] = p2p.time.monotonic()
+            for path in ('/api/sessions', '/api/phone-1/put'):
+                status, _ = await union.request('POST', path, b'{}')
+                assert status == 409
+        assert not sent
+        union.lost.clear()
+        status, body = await union.request('POST', '/api/sessions', b'{}')
+        assert status == 200
+        assert json.loads(body)['name'] == 'new@a'
+        assert len(sent) == 1
+    asyncio.run(scenario())

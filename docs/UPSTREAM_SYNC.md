@@ -1,6 +1,6 @@
 # Android synchronization — 2026-11-09 / Android 同步记录
 
-This update adapts the GAndroid main snapshot `1559286` into GAgent's own main
+This update adapts the GAndroid main snapshot `db40dc6` into GAgent's own main
 history. Private Git history, hosted credentials, billing services, telemetry and
 account data are not imported. The open-source application keeps its own package
 identity and optional service configuration.
@@ -27,10 +27,13 @@ they do not prove every feature works on every device or network.
 
 ## Scope / 范围
 
-- PC Link: multi-hub discovery, encoded session routing, hub selection, reconnect
+- PC Link: portrait scanner with explicit close, launch-failure callback cleanup,
+  multi-hub discovery, encoded session routing, hub selection, reconnect
   grace, foreground recovery and serialized pair/unpair cleanup. An explicitly
   selected offline hub fails without sending to another computer. Responses stay
-  bound to the current socket, including the legacy one-to-one path.
+  bound to the current socket, including the legacy one-to-one path. A named group
+  destination cannot fall back to a legacy computer; ambiguous multiple-computer
+  requests require explicit selection, including during reconnection.
 - Optional PC Link configuration still requires an explicit WSS endpoint and
   credential. Group membership tracks credential changes and unpairing. Signed
   short-code and WebSocket requests reject redirects; errors omit signed URLs.

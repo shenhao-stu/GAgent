@@ -87,3 +87,33 @@ if(SUCCESS)assert.equal(notices[0],'pcUnpair');
 else assert(notices[0].startsWith('pcUnpairFail'));
 '''.replace('RESPONSE', json.dumps(response)).replace('SUCCESS', json.dumps(success))
     _run({'onRowTap': ''}, script)
+
+
+@pytest.mark.parametrize('result', ['no-camera', 'err:camera unavailable'])
+def test_failed_scanner_launch_reports_error_and_removes_callback(result):
+    script = r'''
+const assert=require('assert');
+const notices=[],window={},t=k=>k,toast=s=>notices.push(s);
+const GA={scanQr:()=>RESULT};
+startScan();
+assert.equal(window.gaQrResult,undefined);
+assert.equal(notices.length,1);
+assert.equal(notices[0],RESULT==='no-camera'?'pcScanNoCam':'pcPairFail'+RESULT);
+'''.replace('RESULT', json.dumps(result))
+    _run({'startScan': ''}, script)
+
+
+@pytest.mark.parametrize('result', ['ok', 'need-perm'])
+def test_scanner_waits_for_native_result_and_pairs_only_once(result):
+    script = r'''
+const assert=require('assert');
+const notices=[],pairs=[],window={},t=k=>k,toast=s=>notices.push(s);
+const GA={scanQr:()=>RESULT},doPair=(code,via)=>pairs.push([code,via]);
+startScan();
+assert.equal(typeof window.gaQrResult,'function');
+assert.equal(pairs.length,0);
+window.gaQrResult('ga-pclink:v1:123456789');
+assert.deepEqual(pairs,[['123456789','qr']]);
+assert.equal(window.gaQrResult,undefined);
+'''.replace('RESULT', json.dumps(result))
+    _run({'parsePairPayload': 'raw', 'startScan': ''}, script)

@@ -30,6 +30,7 @@ import tempfile
 import threading
 import time
 import uuid
+from urllib.parse import urlsplit, unquote
 from concurrent.futures import TimeoutError as FutureTimeoutError
 
 import service_config
@@ -247,6 +248,11 @@ async def _api(method, target, body, timeout=22, *, count_timeout=True):
         status, data = await asyncio.wait_for(
             _group[2].request(method, target, (body or '').encode('utf-8')), timeout)
         return {'ok': 1, 'status': status, 'body': data.decode('utf-8', 'replace')}
+    route = urlsplit(target).path.split('/')
+    if ((len(route) > 3 and route[1] == 'api' and '@' in unquote(route[2]))
+            or (route == ['', 'api', 'sessions']
+                and body and json.loads(body).get('hub'))):
+        return {'ok': 0, 'status': 503, 'body': '{"error":"selected hub offline"}'}
     s = _sock
     if s is None:
         raise RuntimeError('not connected')
@@ -358,10 +364,10 @@ async def _pair(code):
 
 async def _unpair():
     await _change_connection(_forget_room)
-    await _sync_group(None)
 
 
 async def _forget_room():
+    await _sync_group(None)
     try:
         with open(ROOMS, 'r', encoding='utf-8') as f:
             d = json.load(f)

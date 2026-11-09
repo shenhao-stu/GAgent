@@ -127,8 +127,8 @@
       if(press&&press.id===event.pointerId){press.cancel=press.y-event.clientY>60;paintHint();}
     });
     button.addEventListener('pointerup',up);
-    button.addEventListener('pointercancel',()=>{if(owner===o)reset();});
-    button.addEventListener('lostpointercapture',()=>{if(press&&owner===o)reset();});
+    button.addEventListener('pointercancel',event=>{if(owner===o&&press&&press.id===event.pointerId)reset();});
+    button.addEventListener('lostpointercapture',event=>{if(owner===o&&press&&press.id===event.pointerId)reset();});
     button.addEventListener('click',event=>{event.preventDefault();if(event.detail===0)toggle(o);});
     return o;
   }

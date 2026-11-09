@@ -111,3 +111,14 @@ def test_permission_denial_keeps_draft_and_allows_retry(page):
     release(page)
     page.evaluate("result={done:true,text:'Retry worked'}")
     expect(page.locator('#in')).to_have_value('Untouched Retry worked')
+
+
+@pytest.mark.parametrize('event', ['pointercancel', 'lostpointercapture'])
+def test_unrelated_pointer_cancel_does_not_cancel_the_active_recording(page, event):
+    hold(page)
+    page.locator('#voiceBtn').dispatch_event(event, {'pointerId': 99})
+    assert page.evaluate('GAVoice.active()')
+    assert not page.evaluate('calls.some(c=>c[0]==="cancel")')
+    page.locator('#voiceBtn').dispatch_event(event, {'pointerId': 1})
+    assert not page.evaluate('GAVoice.active()')
+    assert page.evaluate('calls.some(c=>c[0]==="cancel"&&c[1]===1)')

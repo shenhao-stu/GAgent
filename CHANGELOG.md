@@ -9,6 +9,10 @@ publicly released. Exact artifacts and acceptance belong to their release record
 
 ## 2.34.0 / 143 — 2026-11-09 (source candidate / 源码候选)
 
+- Sync upstream `db40dc6`: portrait PC scanner, clear failed scan callbacks, reject
+  ambiguous or offline selected-PC routing, close group connections before forgetting
+  a room, and keep cancellation bound to the initiating pointer.
+  同步竖屏扫码及失败提示，阻止任务误发到其他电脑；取消动作绑定原手势。
 - Replace standalone streaming voice settings with on-device Chinese/English
   hold-to-talk. Download a hash-verified model once, release to append to the draft,
   slide up or leave the foreground to cancel; never send automatically.
