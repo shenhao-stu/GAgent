@@ -90,6 +90,9 @@ vision and gestures. Do not enable a node-tree helper to bypass that boundary.
 <a id="modules"></a>
 ## 3. Optional services / 可选服务
 
+Voice input uses a local model: [setup and privacy](OFFLINE_VOICE.md). No separate
+voice URL, token or account is needed. / 语音使用离线模型，无需独立地址、令牌或账号。
+
 Open **Settings → Optional modules / 设置 → 可选组件**. Obtain the addresses and
 credentials from a compatible service you operate or are authorized to use.
 The Android repository contains clients, not a one-command deployment of these servers.
@@ -98,7 +101,6 @@ The Android repository contains clients, not a one-command deployment of these s
 | --- | --- | --- |
 | PC Link | `url`, `token` | WSS signaling endpoint, individual credential compatible with request signing, paired computer / WSS、逐用户兼容凭据与配对电脑 |
 | Mesh / GAnet | `url`, `token`, `owner_id` | HTTPS API, user token and numeric identity issued by that server / HTTPS、用户令牌及服务签发的数字身份 |
-| Streaming ASR | `url`, `token`, `model` | Compatible WSS relay; default `step-asr-1.1-stream`, PCM16/16 kHz mono; microphone permission / 兼容中继、模型与麦克风授权 |
 | APK build service | `url`, `token` | HTTPS builder and own token; [project-to-APK workflow](../app/src/main/assets/ga_runtime/memory/apk_factory_sop.md); workers/signing stay server-side / 构建工作节点与签名在服务端 |
 | Model provider | Use Providers & Models instead / 使用服务商与模型页 | Provider-issued endpoint, user key and model / 服务商签发的接口、用户密钥与模型 |
 

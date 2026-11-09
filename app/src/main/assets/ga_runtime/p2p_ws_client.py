@@ -1347,7 +1347,9 @@ class HubUnion:
             with suppress(ValueError, AttributeError):
                 hub = json.loads(body).get("hub")
         if hub is None:
-            hub = min(self.hubs, default=None)
+            if len(self.live()) > 1:
+                return 409, b'{"error":"select a hub","code":409}'
+            hub = next(iter(self.hubs), None)
         if hub not in self.hubs:  # 指名的 hub 正在重连: 回 503, 不改投别台
             return 503, b'{"error":"no hub online","code":503}'
         status, data = await self._one(hub, method, target, body)

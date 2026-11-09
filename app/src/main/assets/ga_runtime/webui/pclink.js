@@ -239,7 +239,9 @@ function startScan(){
     doPair(code,'qr')};
   let r='err';try{r=GA.scanQr()}catch(e){r='err'}
   if(r==='need-perm')toast(t('pcScanNeedPerm'));
-  else if(r&&String(r).indexOf('err')===0)toast(t('pcPairFail')+r)}
+  else if(r==='no-camera'||(r&&String(r).indexOf('err')===0)){
+    delete window.gaQrResult;
+    toast(r==='no-camera'?t('pcScanNoCam'):t('pcPairFail')+r)}}
 function openManualPair(){
   gaModal({title:t('pcManual'),msg:t('pcPairSteps'),input:t('pcPairHint'),value:'',onOk:v=>{
     const code=parsePairPayload(v);

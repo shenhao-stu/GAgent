@@ -27,11 +27,12 @@ class AssetUnpacker(private val ctx: Context) {
                 .onFailure { Analytics.track("{\"event\":\"evo_backup_fail\",\"props\":{\"msg\":${JSONObject.quote(it.message ?: it.javaClass.simpleName)}}}") }
             // UI 资源允许整目录刷新；避免旧 filesDir/webui 中 index.html 等残留导致 APK 内新版未生效。
             File(gaDir, "webui").deleteRecursively()
-            val stat = copyAssetDir("ga_runtime", gaDir)
+            val memoryHashes = Evolution.memoryHashes(ctx, gaDir)
+            val stat = copyAssetDir("ga_runtime", gaDir, memoryHashes)
             // 官方删除传播: APK 已移除的文件(如 v2.16 删 weixin_native)从存量设备同步清掉。
             // 必须先 prune 再 refreshBaseline: prune 以旧 baseline 为"曾是官方文件"的证据。
             var pruned = 0
-            runCatching { pruned = Evolution.pruneRemoved(ctx, gaDir) }
+            runCatching { pruned = Evolution.pruneRemoved(ctx, gaDir, memoryHashes) }
                 .onFailure { Analytics.track("{\"event\":\"evo_prune_fail\",\"props\":{\"msg\":${JSONObject.quote(it.message ?: it.javaClass.simpleName)}}}") }
             stamp.writeText(ver)
             runCatching { Evolution.refreshBaseline(ctx, gaDir) }   // baseline ← 本次官方版(供下次更新做 base)
@@ -44,16 +45,20 @@ class AssetUnpacker(private val ctx: Context) {
         }
     }
 
-    private fun copyAssetDir(path: String, dst: File): AssetCopyStat {
+    private fun copyAssetDir(path: String, dst: File, memoryHashes: Map<String, String>): AssetCopyStat {
         val items = ctx.assets.list(path) ?: return AssetCopyStat()
         if (items.isEmpty()) {
             dst.parentFile?.mkdirs()
             val blob = ctx.assets.open(path).use { it.readBytes() }
+            if (path.startsWith("ga_runtime/memory/")) {
+                val rel = path.removePrefix("ga_runtime/")
+                return AssetCopyStat(plain = if (MemoryDefaults.install(dst, memoryHashes[rel], blob)) 1 else 0)
+            }
             dst.writeBytes(blob)
             return AssetCopyStat(plain = 1)
         }
         var stat = AssetCopyStat()
-        items.forEach { stat += copyAssetDir("$path/$it", File(dst, it)) }
+        items.forEach { stat += copyAssetDir("$path/$it", File(dst, it), memoryHashes) }
         return stat
     }
 

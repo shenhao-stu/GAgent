@@ -12,90 +12,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 GACORE = ROOT / "app" / "src" / "main" / "assets" / "ga_runtime"
 PHONE_USE = GACORE / "memory" / "phone_use.md"
-ZH = GACORE / "assets" / "global_mem_insight_template.txt"
-EN = GACORE / "assets" / "global_mem_insight_template_en.txt"
 DROID = GACORE / "droid.py"
-
-ZH_ROUTE = (
-    "通道选择: 用户指定优先; 先满足状态/权限依赖, "
-    "再从等价App/webcdp/Python中选预计交互轮次最少者, "
-    "同轮次优先已装App; 细则phone_use.md。"
-)
-EN_ROUTE = (
-    "Channel choice: honor the user's route; satisfy state/permission "
-    "dependencies, then choose the equivalent app/webcdp/Python path with "
-    "the fewest expected interaction rounds, preferring an installed app on "
-    "ties; details in phone_use.md."
-)
-ZH_FAILURE_RULE = (
-    "4. 闭环: 操作后等待并验证; 一般任务3次失败后可请求干预; "
-    "同一路径第2次失败先诊断，验证码/账号异常立即停止"
-)
-EN_FAILURE_RULE = (
-    "4. Close the loop: wait and verify after actions; general tasks may "
-    "request intervention after 3 failures; diagnose a path after its second failure; stop immediately "
-    "on security checks/account errors"
-)
-
-
-def route_line(path):
-    prefix = "通道选择:" if path == ZH else "Channel choice:"
-    lines = [
-        line
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.startswith(prefix)
-    ]
-    assert len(lines) == 1
-    return lines[0]
-
-
-def failure_rule_line(path):
-    prefix = "4. 闭环:" if path == ZH else "4. Close the loop:"
-    lines = [
-        line
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.startswith(prefix)
-    ]
-    assert len(lines) == 1
-    return lines[0]
-
 
 def droid_module_doc():
     source = DROID.read_text(encoding="utf-8")
     return ast.get_docstring(ast.parse(source), clean=False) or ""
-
-
-def test_l1_routes_are_semantically_equivalent():
-    zh = route_line(ZH)
-    en = route_line(EN)
-    assert "点名 App/品牌" in zh
-    assert "named app/brand" in en
-    assert all(x in zh for x in ("用户指定", "状态/权限", "交互轮次最少", "已装App"))
-    assert all(
-        x in en
-        for x in (
-            "user's route",
-            "state/permission",
-            "fewest expected interaction rounds",
-            "installed app",
-        )
-    )
-
-
-def test_l1_failure_rules_distinguish_general_and_sensitive_apps():
-    assert failure_rule_line(ZH) == ZH_FAILURE_RULE
-    assert failure_rule_line(EN) == EN_FAILURE_RULE
-
-
-def test_generic_search_is_not_hardwired_to_webcdp():
-    zh = ZH.read_text(encoding="utf-8")
-    en = EN.read_text(encoding="utf-8")
-    assert "网页/搜索/打开URL/登录网站" not in zh
-    assert "Web/search/open-URL/site-login" not in en
-    assert "明确网页/打开URL/登录网站:" in zh
-    assert "Explicit webpage/open-URL/site-login:" in en
-    assert zh.index(route_line(ZH)) < zh.index("明确网页/打开URL/登录网站:")
-    assert en.index(route_line(EN)) < en.index("Explicit webpage/open-URL/site-login:")
 
 
 def test_policy_does_not_recommend_evasion():

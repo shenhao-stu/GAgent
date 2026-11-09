@@ -89,7 +89,7 @@ results**. Configure prerequisites and verify the output before relying on them.
 | --- | --- | --- |
 | Local files / 本地文件 | “Create a three-day study plan in Markdown in my chosen folder; show the saved path and read it back.” / “在我选定的目录创建三天学习计划，返回路径并读回内容。” | File access; verify a real file exists, without overwriting an existing one / 文件权限；核验真实文件，避免覆盖 |
 | Reusable procedure / 复用方法 | “Save the verified steps for this task as a reusable procedure; keep device coordinates and personal data out.” / “将已验证步骤整理为可复用规程，不保留屏幕绝对坐标和个人数据。” | Review the saved text and try it on fresh observations / 检查内容并重新观察后复用 |
-| Voice input / 语音 | Dictate a short note, check the transcript, then decide whether to send / 口述短便签，核对转写后再决定发送 | Configured compatible voice relay + microphone / 兼容语音服务和麦克风 |
+| Voice input / 语音 | Dictate a short note, check the transcript, then decide whether to send / 口述短便签，核对转写后再决定发送 | Downloaded offline model + microphone / 离线模型与麦克风 |
 | Scheduled task / 定时 | “In ten minutes, prepare a local checklist. Show me the schedule and how to cancel it.” / “十分钟后生成本地清单，列出任务及取消方法。” | Verify stored rule, cancellation and actual delivery; background restrictions apply / 核验规则、取消与到达，受后台限制 |
 | Computer handoff / 电脑协作 | “On my paired computer, read this test folder and summarize the filenames; do not modify files.” / “在已配对电脑读取测试目录并总结文件名，不修改文件。” | Compatible PC Link/GAnet service, own peer, read-only test directory / 兼容服务、自有设备、只读测试目录 |
 

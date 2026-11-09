@@ -315,3 +315,17 @@ def test_bridge_timeout_cancels_background_operation(link, monkeypatch):
         loop.call_soon_threadsafe(loop.stop)
         thread.join(1)
         loop.close()
+
+
+def test_group_target_never_falls_back_to_legacy_socket(link):
+    mod, _ = link
+    class OtherComputer:
+        async def send(self, data):
+            pytest.fail('explicit hub must not fall back to a legacy computer')
+    async def scenario():
+        mod._sock = OtherComputer()
+        for path, body in [('/api/d.new%40A/put', '{}'),
+                           ('/api/d.new@A/messages', ''),
+                           ('/api/sessions', '{"hub":"A"}')]:
+            assert (await mod._api('POST', path, body))['status'] == 503
+    asyncio.run(scenario())

@@ -242,7 +242,7 @@ function liveTick(){if(!runStats.live||(task&&task.done))return;   // done 守�
   if(m._el)m._el.textContent=fmtElapsed(ms)}
 /* ════════════ 渲染核心(经验证, 不动) ════════════ */
 marked.setOptions({gfm:true,breaks:true});
-function sanitize(h){return window.DOMPurify?DOMPurify.sanitize(h,{ADD_ATTR:['target','rel']}):h}
+function sanitize(h){if(!window.DOMPurify)throw Error('sanitizer_unavailable');return DOMPurify.sanitize(h,{ADD_ATTR:['target','rel']})}
 function md(t){try{return sanitize(marked.parse(t||''))}catch(e){const d=document.createElement('div');d.textContent=t||'';return d.innerHTML}}
 function wrapTables(sb){sb.querySelectorAll('table').forEach(tb=>{const p=tb.parentNode;if(!p||(p.classList&&p.classList.contains('tw')))return;   // marked 产出裸<table>: 包一层可横滑容器, 窄表撑满/宽表横滑不撑破卡片
   const w=document.createElement('div');w.className='tw';p.insertBefore(w,tb);w.appendChild(tb)})}
@@ -898,7 +898,7 @@ const FP_RENDER={   // channel→渲染器: 对任意 kind 是总函数(I1), 未
     +'" onerror="fpMediaFail(this,\''+_enc(rel)+'\')"></video></div>',   // poster 压掉 WebView 灰色默认占位; 播放入口=原生 controls。解码失败(如 mp4v)→整卡降级提示+系统打开
   audio:rel=>'<div class="fpPad"><audio class="fpAudio" controls preload="metadata" src="'+_fileUrl(rel)
     +'" onerror="fpMediaFail(this,\''+_enc(rel)+'\')"></audio></div>',
-  html:rel=>'<iframe class="fpFrame" sandbox src="'+_fileUrl(rel)+'"></iframe>',   // 仅旧壳回退: 全 sandbox 禁脚本(主 WebView 的 GA 桥注入所有 frame, 绝不给产物脚本执行面); 新壳走 openHtmlPreview 无桥 Activity
+  html:rel=>_infoHtml(rel,{}),   // HTML executes only in the separate bridge-free preview.
   md:(rel,r)=>'<div class="fpMd md">'+((!window.GA_RENDER_LEGACY&&window.renderRich)?'':md(r.text||''))+'</div>',   // F1.1: 新管线时留空壳, showFilePreview 尾部经 renderRich 回填(同一出口)
   pdf:()=>'<div class="fpLoad">'+t('pdfRendering')+'</div>',
   sheet:(rel,r)=>_sheetHtml(r),
@@ -948,7 +948,7 @@ let _pdfPoll=0;
 function openHtmlPreview(rel){
   if(window.GA&&GA.previewHtml){let r='err';try{r=GA.previewHtml(rel)}catch(e){}
     if(r!=='ok')toast(t('fileOpenFail'));return}
-  showFilePreview(rel,{ok:true,kind:'html',path:rel})}   // 旧壳(无 previewHtml 桥): 禁脚本 iframe 静态渲染兜底
+  showFilePreview(rel,{ok:true,kind:'html',path:rel})}   // Older shells show file information and an external-open action.
 function openPdfPreview(rel){
   if(!(window.GA&&GA.pdfRender))return showFilePreview(rel,{ok:true,kind:'other',path:rel});   // 旧壳无 PDF 桥→信息卡+系统打开
   showFilePreview(rel,{ok:true,kind:'pdf',path:rel});                                          // 先开占位(渲染中), 后台转页图

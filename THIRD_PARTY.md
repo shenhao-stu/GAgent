@@ -10,6 +10,8 @@ terms continue to apply. Exact dependency versions are in `app/build.gradle`,
 | OpenSSL 3.5.9 | Apache-2.0 | [OpenSSL](https://github.com/openssl/openssl/tree/openssl-3.5.9); supplied by the Chaquopy CPython runtime |
 | Kotlin / AndroidX / OkHttp / Conscrypt | Apache-2.0 | [Kotlin](https://github.com/JetBrains/kotlin), [AndroidX](https://android.googlesource.com/platform/frameworks/support/), [OkHttp](https://github.com/square/okhttp), [Conscrypt](https://github.com/google/conscrypt) |
 | NanoHTTPD | BSD-3-Clause | [NanoHTTPD](https://github.com/NanoHttpd/nanohttpd) |
+| sherpa-onnx | Apache-2.0; static dependencies retain their notices; model terms separate | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), [voice model provenance](docs/OFFLINE_VOICE.md) |
+| libffi / OpenSSL | MIT / Apache-2.0 | Fixed sources in `tools/native-sources.json`; linked into cffi / cryptography |
 | ONNX Runtime | MIT | [ONNX Runtime](https://github.com/microsoft/onnxruntime) |
 | LibADB Android | Apache-2.0 option; auxiliary BSD/MIT notices retained | [LibADB 3.1.1](https://github.com/MuntashirAkon/libadb-android/tree/3.1.1) |
 | sun-security-android | GPL-2.0 with Classpath exception; unmodified library | [Exact 1.1 source](https://github.com/MuntashirAkon/sun-security-android/tree/c933659431310bf19a6f5e3166bf7a271d280d3a) |
@@ -22,7 +24,8 @@ terms continue to apply. Exact dependency versions are in `app/build.gradle`,
 | KaTeX and mhchem | MIT; included fonts retain upstream notices | [KaTeX](https://github.com/KaTeX/KaTeX) |
 | requests / beautifulsoup4 / PyYAML | Apache-2.0 / MIT / MIT | PyPI packages of the same name |
 | NumPy / OpenCV | BSD-3-Clause / Apache-2.0; Android-native build dependencies retain separate notices | [NumPy](https://github.com/numpy/numpy), [OpenCV](https://github.com/opencv/opencv), [Chaquopy recipes](https://github.com/chaquo/chaquopy/tree/master/server/pypi/packages) |
-| cryptography / cffi / bcrypt / PyNaCl | Apache-2.0 or BSD / MIT / Apache-2.0 / Apache-2.0 | Respective PyPI distributions; native wheels from Chaquopy |
+| OpenCV libpng / zlib overrides | PNG Reference Library License / zlib; unmodified upstream C sources with OpenCV's CMake adapters | Fixed archives and hashes in `tools/native-sources.json`; separate license texts in `third_party/licenses/` |
+| cryptography / cffi / bcrypt / PyNaCl | Apache-2.0 or BSD / MIT / Apache-2.0 / Apache-2.0 | Hash-pinned source distributions; Android wheels built with cibuildwheel |
 | Paramiko | LGPL-2.1 | [Paramiko](https://github.com/paramiko/paramiko); unmodified Python source wheel in `third_party/`, also embedded in the APK |
 | aiohttp / multidict / yarl / frozenlist / propcache | Apache-2.0 | [aio-libs](https://github.com/aio-libs); portable source builds |
 | websocket-client / websockets | Apache-2.0 / BSD-3-Clause | Respective PyPI distributions |
@@ -37,7 +40,7 @@ The build embeds these notices and source archive in APK assets under
 The sun-security source archive is included separately for corresponding-source
 availability; the Classpath exception applies only as stated in the upstream file
 headers. Do not remove upstream notices when rebuilding dependencies.
-The Paramiko source wheel contains all 46 Python source modules. To replace that
+The Paramiko source wheel contains its unmodified Python modules. To replace that
 library, change the dependency in `app/build.gradle`, rebuild and sign with your
 own key; the framework imposes no restriction on modifying or replacing it.
 

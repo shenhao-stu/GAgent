@@ -4,10 +4,9 @@
 const MODULES={   // field order = service_config.SERVICES; scheme only drives the placeholder, validation stays server-side
   pclink:{fields:['url','token'],scheme:'wss',zh:['电脑互联 PC Link','连接你电脑上的 GA 中继服务'],en:['PC Link','Relay to GA running on your computer']},
   ganet:{fields:['url','token','owner_id'],scheme:'https',zh:['设备组网 Mesh / GAnet','自建 Headscale 等组网与配对服务'],en:['Mesh / GAnet','Your self-hosted mesh and pairing service']},
-  voice:{fields:['url','token','model'],scheme:'wss',zh:['流式语音识别','语音输入使用的流式 ASR 服务（如 Step Voice）'],en:['Streaming ASR','Streaming speech recognition for voice input (e.g. Step Voice)']},
   apk:{fields:['url','token'],scheme:'https',zh:['APK 构建服务','APK 工厂使用的云端构建服务'],en:['APK build service','Cloud build service used by the APK factory']},
 };
-const FIELD={url:['服务地址','Endpoint URL'],token:['访问令牌','Access token'],owner_id:['账户 ID（数字）','Owner ID (numeric)'],model:['模型','Model']};
+const FIELD={url:['服务地址','Endpoint URL'],token:['访问令牌','Access token'],owner_id:['账户 ID（数字）','Owner ID (numeric)']};
 /* GenericAgent's public PC Link relay. Its access value is the default already published in the open-source
    GenericAgent desktop client (frontends/p2p_ws_client.py), where it filters scans and is not a secret.
    Filled into the form only after the user confirms; nothing is saved until Save. */
@@ -20,11 +19,12 @@ const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className
 /* Pure: validate an imported profile against the known module/field shape; returns values per module. */
 function parseProfile(profile,inputs){
   if(profile.schema!==1||!profile.integrations||typeof profile.integrations!=='object')throw Error('Invalid profile schema');
-  for(const [name,values] of Object.entries(profile.integrations)){
+  const active=Object.fromEntries(Object.entries(profile.integrations).filter(([name])=>name!=='voice'));
+  for(const [name,values] of Object.entries(active)){
     if(!inputs[name]||!values||typeof values!=='object')throw Error('Unknown module');
     for(const [field,value] of Object.entries(values))if(!inputs[name][field]||typeof value!=='string')throw Error('Invalid field');
   }
-  return profile.integrations;
+  return active;
 }
 
 function openIntegrations(focus){   // focus=module name: scroll its card into view (e.g. PC Link asks for its relay)

@@ -28,6 +28,17 @@ object Evolution {
     }
 
     private fun baselineDir(gaDir: File) = File(gaDir, ".evolution/baseline")
+    private fun baselineSource(gaDir: File) = File(gaDir, ".evolution/baseline-source")
+
+    fun memoryHashes(ctx: Context, gaDir: File): Map<String, String> {
+        val legacy = ctx.assets.open("memory_legacy_sha256.json").use {
+            JSONObject(it.readBytes().toString(Charsets.UTF_8)).getJSONObject("files")
+        }
+        val source = baselineSource(gaDir)
+        return MemoryDefaults.knownHashes(baselineDir(gaDir),
+            legacy.keys().asSequence().associateWith { legacy.getString(it) },
+            source.isFile && source.readText() == "assets-v1")
+    }
 
     // 覆盖前: ours(工作区) 与 base(baseline) 不同的跟踪文件 → 连同 {base,ours} 打包 zip。返回备份文件数。
     fun backupDivergent(ctx: Context, gaDir: File, oldVer: String, newVer: String): Int {
@@ -61,7 +72,7 @@ object Evolution {
     // 官方删除传播(须在 refreshBaseline 前调): baseline 有(上次官方版) ∧ 新 assets 无(本次官方已删)
     //   ∧ ours==baseline(未被本地自演化) → 删工作区文件。删除域 ⊆ baseline: 运行时生成物
     //   (channels/mykey/memory用户数据/temp)不在 baseline 永不误删; 本地改过的官方弃件保留(backupDivergent 已兜底)。
-    fun pruneRemoved(ctx: Context, gaDir: File): Int {
+    fun pruneRemoved(ctx: Context, gaDir: File, memoryHashes: Map<String, String>): Int {
         val base = baselineDir(gaDir)
         if (!base.isDirectory) return 0                       // 首装无基线: 无历史官方文件可清
         val theirs = LinkedHashSet<String>()
@@ -71,21 +82,28 @@ object Evolution {
             val rel = bf.relativeTo(base).path.replace('\\', '/')
             if (rel in theirs) continue
             val ours = File(gaDir, rel)
-            if (ours.isFile && ours.readBytes().contentEquals(bf.readBytes()) && ours.delete()) n++
+            val removed = if (rel.startsWith("memory/")) MemoryDefaults.remove(ours, memoryHashes[rel])
+                else ours.isFile && ours.readBytes().contentEquals(bf.readBytes()) && ours.delete()
+            if (removed) n++
         }
         return n
     }
 
-    // 覆盖后: baseline ← 本次官方版(工作区里已解压的跟踪文件), 供下次更新做 base。
+    // Baseline is the packaged version, never a preserved user edit.
     fun refreshBaseline(ctx: Context, gaDir: File) {
         val base = baselineDir(gaDir)
-        base.deleteRecursively(); base.mkdirs()
+        val source = baselineSource(gaDir)
+        check(!source.exists() || source.delete()) { "Cannot invalidate baseline source" }
+        check(base.deleteRecursively()) { "Cannot clear baseline" }
+        check(base.mkdirs()) { "Cannot create baseline" }
         val rels = LinkedHashSet<String>()
         listAssetTracked(ctx, "ga_runtime", "", rels)
         for (rel in rels) {
-            val src = File(gaDir, rel); if (!src.isFile) continue
-            val dst = File(base, rel); dst.parentFile?.mkdirs(); src.copyTo(dst, overwrite = true)
+            val dst = File(base, rel)
+            dst.parentFile?.mkdirs()
+            ctx.assets.open("ga_runtime/$rel").use { src -> dst.outputStream().use { src.copyTo(it) } }
         }
+        source.writeText("assets-v1")
     }
 
     private fun put(zos: ZipOutputStream, name: String, bytes: ByteArray) {

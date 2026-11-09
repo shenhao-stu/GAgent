@@ -1,6 +1,6 @@
 {
   "upstream": "GAndroid",
-  "revision": "eae6e54d36491256c8b6c69c1394a52c5abdf151",
+  "revision": "db40dc6d45c8db2d34d23ae8ebe97c6ce2b36768",
   "files": {
     "gacore/agent_loop.py": "bd322f7064d037ed737d6ce0d5ccb53a95baec66112e9a972d4fcff3370eb439",
     "gacore/agentmain.py": "327d5b27012356df39e8c12f444ba61d2eba87cad9aa87a1ed72958c0516ab7f",

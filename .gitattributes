@@ -1,3 +1,6 @@
 
 # Preserve byte-for-byte upstream core; style changes belong upstream.
 app/src/main/assets/ga_runtime/gacore/** -whitespace
+
+# Keep upstream license text intact, including its original whitespace.
+third_party/licenses/** -whitespace

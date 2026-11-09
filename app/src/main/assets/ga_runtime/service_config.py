@@ -6,11 +6,10 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
 import threading
 
-_WRITE_LOCK = threading.Lock()
+_WRITE_LOCK = threading.RLock()
 
 SERVICES = {
     'ganet': ('https', ('token', 'owner_id')),
-    'voice': ('wss', ('token', 'model')),
     'apk': ('https', ('token',)),
     'pclink': ('wss', ('token',)),
 }
@@ -55,7 +54,7 @@ def merge_config(current, updates):
     """Blank token retains it only for the same endpoint; endpoint changes clear it."""
     if not isinstance(updates, dict) or set(updates) - SERVICES.keys():
         raise ValueError('Unknown integration')
-    result = {name: dict(value) for name, value in current.items()}
+    result = {name: dict(value) for name, value in current.items() if name != 'voice'}
     for name, incoming in updates.items():
         if not isinstance(incoming, dict):
             raise ValueError('Integration must be an object')
@@ -73,11 +72,18 @@ def merge_config(current, updates):
 
 
 def load_config():
-    path = config_path()
-    if not path.exists():
-        return {}
-    value = json.loads(path.read_text(encoding='utf-8'))
-    return merge_config({}, value)
+    with _WRITE_LOCK:
+        path = config_path()
+        if not path.exists():
+            return {}
+        value = json.loads(path.read_text(encoding='utf-8'))
+        if not isinstance(value, dict):
+            raise ValueError('Integration configuration must be an object')
+        active = {name: config for name, config in value.items() if name != 'voice'}
+        normalized = merge_config({}, active)
+        if 'voice' in value:
+            _write_config(active)
+        return normalized
 
 
 def get_service(name):
@@ -99,7 +105,10 @@ def save_config(updates):
 
 
 def _save_config(updates):
-    value = merge_config(load_config(), updates)
+    _write_config(merge_config(load_config(), updates))
+
+
+def _write_config(value):
     path = config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(dir=path.parent, prefix='.integrations-')

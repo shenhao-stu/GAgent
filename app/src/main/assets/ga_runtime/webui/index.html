@@ -2,8 +2,8 @@
 <html lang="zh"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<!-- 只管图片: 模型回复里的远程图片不自动加载(被注入的回复可借图片 URL 外带对话内容); 本地文件/data/blob 照常, 引用 favicon 增强开关(默认关)单独放行 -->
-<meta http-equiv="Content-Security-Policy" content="img-src 'self' data: blob: file: content: https://www.google.com/s2/favicons">
+<!-- Chat owns the native bridge. Untrusted HTML uses the separate bridge-free preview. -->
+<meta http-equiv="Content-Security-Policy" content="frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'self' data: blob: file: content: https://www.google.com/s2/favicons">
 <meta name="theme-color" content="#ffffff">
 <title>GenericAgent</title>
 <script>/* 预置主题, 避免首帧闪白(深色用户): 读 LS 选择 + GA.isDark()(权威系统夜间). applyTheme() 随后再确认 */

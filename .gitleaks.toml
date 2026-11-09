@@ -1,0 +1,10 @@
+[extend]
+useDefault = true
+
+# SHA-256 of the public template at ab0d7f0, not a credential.
+[[allowlists]]
+description = "Known legacy memory template digest"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^app/src/main/assets/memory_legacy_sha256\.json$''']
+regexes = ['''^dce7ce743ec63e2f5aadfb04182585d5e1e3d03d5e065a5e8a5474872e2495a6$''']

@@ -17,7 +17,6 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.webkit.JavascriptInterface
-import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -91,7 +90,6 @@ class MainActivity : Activity() {
     private var camForBridge = false                         // true=经 GA.openCamera 直连(回推 WebUI); false=经 onShowFileChooser(回填 fileCb)(issue#2)
     private val FILE_REQ = 4011
     private val MIC_REQ = 8
-    private var pendingMicRequest: PermissionRequest? = null
     private var micPermissionInFlight = false
     private val SENSE_REQ = 9                                 // sense 采集类权限的按需申请(见 requestSensePerms)
     @Volatile private var senseLatch: CountDownLatch? = null   // 桥线程等、UI 线程放: 让"申请→用户点完"能在一次调用内闭环
@@ -100,6 +98,9 @@ class MainActivity : Activity() {
     private var pendingQrAfterPerm = false
     @Volatile private var launchSrc = "launcher"             // 本次 Activity 创建的唤起来源(launcher|float|notif_task|notif_keepalive)
     @Volatile private var launchCid = ""                      // per-cid 任务通知目标；冷启动由 launchInfo 交给 JS
+    private val voiceLock = Any()
+    private var voiceForeground = false
+    private var voiceSession = 0
     private var fgSince = 0L                                  // 本次前台会话起点(onResume 置位): onStop 上报 app_bg{fg_s} 会话时长
     // 悬浮窗授权往返意图(SP 持久化, key=overlay_perm_pending/overlay_perm_ts): 用户经引导弹窗去了系统授权页。
     // 存 SP 而非内存: 部分 ROM 授予 overlay 权限时会杀进程重启 app, 内存标记必丢 → 漏斗照样断。
@@ -143,7 +144,6 @@ class MainActivity : Activity() {
         launchSrc = intent?.getStringExtra("ga_src") ?: "launcher"
         launchCid = intent?.getStringExtra("convo_cid").orEmpty()
         ensureAllFilesAccess()
-        VoiceClient.init(this)
         web = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.allowFileAccess = true
@@ -171,31 +171,8 @@ class MainActivity : Activity() {
             // 旧 onPageFinished 按系统夜间强制 data-theme → 每次加载覆盖用户选择(浅色/跟随系统失效根因), 已移除。
             // 跟随系统由 JS 经 GA.isDark()(读系统 uiMode, 权威)解析, index.html 头部内联脚本预置避免闪白。
             webChromeClient = object : WebChromeClient() {
-                // 仅在网页请求录音时申请麦克风；启动与文字输入不需要该权限。
-                override fun onPermissionRequest(request: PermissionRequest?) {
-                    request ?: return
-                    runOnUiThread {
-                        val audio = request.resources.filter { it == PermissionRequest.RESOURCE_AUDIO_CAPTURE }
-                        when {
-                            audio.isEmpty() || isFinishing || isDestroyed -> request.deny()
-                            checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED ->
-                                request.grant(audio.toTypedArray())
-                            micPermissionInFlight -> request.deny()
-                            else -> {
-                                pendingMicRequest = request
-                                micPermissionInFlight = true
-                                runCatching { requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), MIC_REQ) }
-                                    .onFailure { micPermissionInFlight = false; resolveMicRequest(false) }
-                            }
-                        }
-                    }
-                }
-                override fun onPermissionRequestCanceled(request: PermissionRequest?) {
-                    runOnUiThread {
-                        if (pendingMicRequest === request) pendingMicRequest = null
-                        // 系统弹框仍在途；旧结果返回前不能接管另一个网页请求。
-                    }
-                }
+                // Web media permissions remain denied by default. Offline voice
+                // requests Android microphone permission through its native bridge.
                 override fun onShowFileChooser(
                     wv: WebView?, cb: ValueCallback<Array<Uri>>?, params: FileChooserParams?
                 ): Boolean {
@@ -492,12 +469,29 @@ class MainActivity : Activity() {
             val safe = name.replace(Regex("[^A-Za-z0-9._-]"), "_").takeLast(48).ifEmpty { "file" }
             File(dir, "${System.currentTimeMillis()}_$safe").apply { writeBytes(bytes) }.absolutePath
         }.getOrElse { "ERROR: $it" }
-        // 流式语音: OkHttp WS 直连中继(原生TLS指纹, 无 Python 依赖). JS推PCM+轮询取增量文本。
-        @JavascriptInterface fun sttStart(): String = mediaBridge.sttStart()
-        @JavascriptInterface fun sttSend(b64: String): String = mediaBridge.sttSend(b64)
-        @JavascriptInterface fun sttStop(): String = mediaBridge.sttStop()
-        @JavascriptInterface fun sttPoll(): String = mediaBridge.sttPoll()
-        @JavascriptInterface fun sttCancel(): String = mediaBridge.sttCancel()
+        // On-device voice: session IDs reject late results and stale lifecycle callbacks.
+        @JavascriptInterface fun offAsrStatus(): String = OfflineAsr.status(this@MainActivity)
+        @JavascriptInterface fun offAsrDownload(): String = OfflineAsr.download(this@MainActivity)
+        @JavascriptInterface fun offAsrStart(): String = synchronized(voiceLock) {
+            if (!voiceForeground) return@synchronized """{"ok":false,"error":"not_foreground"}"""
+            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                runOnUiThread {
+                    synchronized(voiceLock) {
+                        if (voiceForeground && !micPermissionInFlight) {
+                            micPermissionInFlight = true
+                            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), MIC_REQ)
+                        }
+                    }
+                }
+                return@synchronized """{"ok":false,"error":"no_mic_permission"}"""
+            }
+            val result = OfflineAsr.start(this@MainActivity)
+            JSONObject(result).takeIf { it.optBoolean("ok") }?.let { voiceSession = it.getInt("id") }
+            result
+        }
+        @JavascriptInterface fun offAsrPoll(id: Int): String = OfflineAsr.poll(id)
+        @JavascriptInterface fun offAsrStop(id: Int): String = OfflineAsr.stop(id)
+        @JavascriptInterface fun offAsrCancel(id: Int): String = OfflineAsr.cancel(id)
         // 拍照: 由 JS 直接调用, 必起 ACTION_IMAGE_CAPTURE(不再依赖 WebView 的 <input capture>/isCaptureEnabled——
         // 后者在部分设备/WebView 不触发→只弹相册)。结果在 onActivityResult 落盘并经 window.gaCameraResult 回推。(issue#2)
         @JavascriptInterface fun openCamera(): String {
@@ -895,6 +889,7 @@ class MainActivity : Activity() {
             pendingQrAfterPerm = false
             IntentIntegrator(this).apply {
                 setRequestCode(QR_REQ)
+                setCaptureActivity(GanetQrCaptureActivity::class.java)
                 setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
                 setPrompt("Scan PC QR · 扫描电脑二维码")
                 setBeepEnabled(false)
@@ -1014,24 +1009,11 @@ class MainActivity : Activity() {
         if (waitMs > 0) runCatching { latch.await(waitMs, TimeUnit.MILLISECONDS) }   // 有界等待: 等不到就如实回"还没授", 绝不无限期占着桥线程
     }
 
-    private fun resolveMicRequest(granted: Boolean) {
-        val request = pendingMicRequest ?: return
-        pendingMicRequest = null
-        runCatching {
-            val audio = request.resources.filter { it == PermissionRequest.RESOURCE_AUDIO_CAPTURE }
-            if (granted && audio.isNotEmpty() && !isFinishing && !isDestroyed)
-                request.grant(audio.toTypedArray())
-            else request.deny()
-        }
-    }
-
     override fun onRequestPermissionsResult(req: Int, perms: Array<out String>, res: IntArray) {
         super.onRequestPermissionsResult(req, perms, res)
         if (req == MIC_REQ) {
             micPermissionInFlight = false
             if (res.isNotEmpty()) Sense.markAsked(this, perms)
-            resolveMicRequest(res.firstOrNull() == PackageManager.PERMISSION_GRANTED &&
-                checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
             return
         }
         if (req == CAM_PERM_QR) {
@@ -1120,12 +1102,22 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        synchronized(voiceLock) { voiceForeground = true }
         isForeground = true
         fgSince = System.currentTimeMillis()
         FloatService.live?.dismissAsk()
         if (!permissionCoordinator.pushResumeState()) return
         // 排空 Python agent loop 写的埋点队列(agent 可能在后台跑完一段任务), 及时补身份上报。
         runCatching { Analytics.drainAgentEvents() }
+    }
+
+    override fun onPause() {
+        synchronized(voiceLock) {
+            voiceForeground = false
+            if (voiceSession > 0) OfflineAsr.cancel(voiceSession)
+            voiceSession = 0
+        }
+        super.onPause()
     }
 
     // 退出/切后台时尽量把埋点队列发出(用户随后可能杀进程,失败则保留至下次启动补发)
@@ -1144,7 +1136,6 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
-        resolveMicRequest(false)
         micPermissionInFlight = false
         Analytics.flush()
         runCatching { tts?.shutdown() }

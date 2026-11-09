@@ -1,3 +1,6 @@
+Source: https://files.pythonhosted.org/packages/d9/9a/4019b524b03a13438637b11538c82781a5eda427394380381af8f04f467a/pynacl-1.6.2.tar.gz
+Path: pynacl-1.6.2/LICENSE
+
                               Apache License
                         Version 2.0, January 2004
                      http://www.apache.org/licenses/

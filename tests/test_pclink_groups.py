@@ -77,3 +77,28 @@ def test_overlapping_group_changes_do_not_leave_unowned_connections(monkeypatch)
             state['config'] = None
             await mod._sync_group(None)
     asyncio.run(run())
+
+
+def test_unpair_disconnects_group_even_when_forgetting_room_fails(monkeypatch, tmp_path):
+    import pytest
+    mod, state = fixture(monkeypatch)
+    rooms = tmp_path / 'rooms.json'
+    original = '{"pc":{"room":"fixture-room"},"other":{"room":"keep"}}'
+    rooms.write_text(original)
+    mod.ROOMS = str(rooms)
+    def fail_replace(*args):
+        raise PermissionError('synthetic read-only store')
+    monkeypatch.setattr(mod.os, 'replace', fail_replace)
+    async def run():
+        state['release'].set()
+        await mod._sync_group(state['config'])
+        await asyncio.sleep(0)
+        try:
+            with pytest.raises(PermissionError):
+                await mod._unpair()
+            assert mod._group == [None, None, None]
+            assert len(state['closed']) == 1
+            assert rooms.read_text() == original
+        finally:
+            await mod._sync_group(None)
+    asyncio.run(run())

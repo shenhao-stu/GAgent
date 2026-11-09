@@ -74,10 +74,10 @@ the entire APK or Android codebase**. [Core, memory and counting scope →](docs
 | 🪟 **Offscreen apps and web tasks** | Move supported apps to a virtual display, or run a separate background WebView. App virtual displays require self-ADB and device verification. |
 | 🌐 **A browser that keeps your session** | Sign in yourself, then let the task browser reuse the stored cookies. It uses Android WebView, with no separate desktop-browser binary to install. |
 | 🔗 **PC Link / P2P / GAnet** | Connect a phone to paired computers and authorized peers for cross-device work. Compatible peer software, services and your credentials are required. |
-| 🎙️ **Step Voice streaming input** | Speak a task and review the transcript. The client supports the Step ASR streaming path through a configured compatible WSS service. |
+| 🎙️ **Offline voice input** | Hold to speak, release to transcribe, or slide up to cancel. Chinese/English recognition runs on-device after a one-time model download; no speech service key. |
 | 🛠️ **APK Factory** | Describe a small app, generate its project, then submit, track and fetch its APK through your configured build service. Templates and clients are included. |
 
-**Local tools are ready to configure; hosted integrations are opt-in.** PC Link has no default relay: enter the relay you run or are authorized to use, or tap the explicit public GenericAgent relay preset and review its note, then scan the computer QR to pair. Voice and APK Factory do not include service credentials or build workers. [All setup steps](docs/CONFIGURATION.md) · [Component boundaries](docs/OFFICIAL_MODULES.md)
+**Local tools are ready to configure; hosted integrations are opt-in.** PC Link has no default relay: enter the relay you run or are authorized to use, or tap the explicit public GenericAgent relay preset and review its note, then scan the computer QR to pair. Voice input is local; APK Factory requires your own build service. [All setup steps](docs/CONFIGURATION.md) · [Component boundaries](docs/OFFICIAL_MODULES.md)
 
 ## 🧠 A small core, useful memory, less repeated context
 

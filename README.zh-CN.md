@@ -68,10 +68,10 @@ https://github.com/shenhao-stu/GAgent/blob/main/docs/INSTALL_WITH_AGENT.md
 | 🪟 **App 离屏与网页后台操作** | 支持的 App 可放入虚拟屏，网页可运行在独立后台 WebView。App 虚拟屏需要 self-ADB，并按设备验收。 |
 | 🌐 **可保留登录态的内置浏览器** | 你先完成登录，任务浏览器复用已保存的 Cookie。基于 Android WebView，无需另装桌面浏览器内核。 |
 | 🔗 **PC Link / P2P / GAnet** | 从手机连接已配对电脑和授权节点，组合跨设备工作流；需兼容的对端软件、服务及自己的凭据。 |
-| 🎙️ **Step Voice 流式语音输入** | 说出任务，核对转写后发送。通过配置的兼容 WSS 服务接入 Step ASR 流式路径。 |
+| 🎙️ **离线语音输入** | 按住说话、松开识别、上滑取消。首次下载模型后在手机上识别中英文，无需语音服务密钥。 |
 | 🛠️ **APK 工厂：做出你想要的 App** | 用自然语言描述小应用，生成工程，再通过已配置的构建服务提交、查询和下载 APK；仓库保留模板与客户端。 |
 
-**本地工具直接配置，可选服务主动接入。** PC Link 没有默认中继：填写你自建或获授权使用的中继，或点击需确认的 GenericAgent 公共中继预设并阅读说明，再扫码配对电脑。语音和 APK 工厂不附带服务凭据或构建节点。[完整开启步骤](docs/CONFIGURATION.md) · [组件与服务端边界](docs/OFFICIAL_MODULES.md)
+**本地工具直接配置，可选服务主动接入。** PC Link 没有默认中继：填写你自建或获授权使用的中继，或点击需确认的 GenericAgent 公共中继预设并阅读说明，再扫码配对电脑。语音输入在本地运行；APK 工厂需配置自己的构建服务。[完整开启步骤](docs/CONFIGURATION.md) · [组件与服务端边界](docs/OFFICIAL_MODULES.md)
 
 ## 🧠 小内核，长记忆，减少重复 Token
 

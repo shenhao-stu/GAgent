@@ -19,7 +19,7 @@ def test_profile_import_requires_save_and_provider_remains_available(language):
         page.route('http**://**', lambda route: (outgoing.append(route.request.url), route.abort()))
         page.add_init_script('''
           window.savedProfiles=[]; window.kv={};
-          const services={voice:{url:'wss://voice.example.com/asr',has_token:true}};
+          const services={apk:{url:'https://build.example.com',has_token:true}};
           window.GA=new Proxy({
             ready:()=> 'ok', poll:()=> '{}', isDark:()=>false,
             appVersion:()=> '{"name":"2.33.1","code":134}',
@@ -41,12 +41,13 @@ def test_profile_import_requires_save_and_provider_remains_available(language):
         card = page.locator('#integrationsPanel')
         expect(card).to_be_visible()
         assert card.locator('input[type=password]').evaluate_all('(xs)=>xs.every(x=>!x.value)')
-        profile = {'schema': 1, 'integrations': {'voice': {'url': 'wss://speech.example.com/asr', 'token': 'sample-user-token', 'model': 'asr'}}}
+        profile = {'schema': 1, 'integrations': {'apk': {'url': 'https://build.example.com', 'token': 'sample-user-token'}, 'voice': {'url': 'wss://retired.example', 'token': 'discard-me'}}}
         card.locator('input[type=file]').set_input_files({'name':'connection.json','mimeType':'application/json','buffer':json.dumps(profile).encode()})
         expect(card.locator('input[type=password][placeholder]')).to_have_value('sample-user-token')
         assert page.evaluate('savedProfiles.length') == 0
         card.get_by_role('button', name='保存' if language == 'zh' else 'Save', exact=True).click()
-        assert page.evaluate('savedProfiles[0].voice') == profile['integrations']['voice']
+        assert page.evaluate('savedProfiles[0].apk') == profile['integrations']['apk']
+        assert 'voice' not in page.evaluate('savedProfiles[0]')
         page.evaluate('openIntegrations()')
         page.get_by_role('button', name='模型服务商' if language == 'zh' else 'Model provider', exact=True).click()
         assert page.locator('#provListPanel').is_visible()
@@ -92,10 +93,10 @@ def test_optional_module_settings_text_is_readable_in_both_themes(dark):
         page.route('http**://**', lambda route: route.abort())
         page.add_init_script('''
           window.kv={};
-          const services={voice:{url:'wss://voice.example.com/asr',has_token:true,model:'asr'},ganet:{url:'https://mesh.example.com',owner_id:'7',has_token:true}};
+          const services={pclink:{url:'wss://pair.example.com/ws',has_token:true},ganet:{url:'https://mesh.example.com',owner_id:'7',has_token:true}};
           window.GA=new Proxy({ready:()=> 'ok', poll:()=> '{}', isDark:()=>%s,
             send:(c)=>c==='/integrations.get'?JSON.stringify(services):c==='/config'?'{"ok":true,"items":[]}':
-              c.startsWith('/integrations.save ')?'{"ok":false,"error":"voice requires a wss URL without embedded credentials"}':
+              c.startsWith('/integrations.save ')?'{"ok":false,"error":"pclink requires a wss URL without embedded credentials"}':
               c.startsWith('/kv.get ')?'':'{}'
           },{get:(t,k)=>t[k]||(()=> '{}')});
         ''' % ('true' if dark else 'false'))
@@ -159,39 +160,6 @@ def test_unconfigured_pclink_opens_its_relay_fields_and_save_refreshes_status():
         panel.get_by_role('button', name='Save', exact=True).click()
         expect(page.locator('#pcLinkV')).to_have_text('Not linked')
         assert page.evaluate('statusCalls') > before
-        assert not errors
-        browser.close()
-
-
-def test_unconfigured_voice_opens_settings_without_requesting_microphone():
-    errors = []
-    with sync_playwright() as engine:
-        browser = engine.chromium.launch(executable_path=os.environ.get('PLAYWRIGHT_CHROMIUM_EXECUTABLE'))
-        page = browser.new_page(viewport={'width': 390, 'height': 844}, locale='en')
-        page.on('pageerror', lambda error: errors.append(str(error)))
-        page.route('http**://**', lambda route: route.abort())
-        page.add_init_script('''
-          window.micRequests=0;
-          navigator.mediaDevices.getUserMedia=async()=>{micRequests++;throw Error('not expected')};
-          window.GA=new Proxy({ready:()=> 'ok', poll:()=> '{}', isDark:()=>false,
-            sttStart:()=> '{"ok":false,"error":"voice_not_configured"}', sttSend:()=> '{}', sttPoll:()=> '{}', sttStop:()=> '{}',
-            send:(c)=>c==='/integrations.get'?'{}':c==='/config'?'{"ok":true,"items":[]}':c.startsWith('/kv.get ')?'':'{}'
-          },{get:(t,k)=>t[k]||(()=> '{}')});
-        ''')
-        page.goto((WEB / 'index.html').as_uri())
-        page.locator('.pcAgree').click()
-        page.locator('#voiceBtn').click()
-        expect(page.locator('#integrationsPanel')).to_be_visible()
-        expect(page.locator('#int_voice_url')).to_be_in_viewport()
-        expect(page.locator('#toast')).to_contain_text('Optional modules')
-        assert page.evaluate('micRequests') == 0
-        page.evaluate('closeSettings();PCLINK.openView()')   # the PC view (above settings) has its own voice key
-        expect(page.locator('#setv')).not_to_have_class(re.compile(r'(^|\s)on(\s|$)'))
-        page.locator('#pcVoiceBtn').click()                 # voice start is asynchronous (waits two frames)
-        expect(page.locator('#pcView')).not_to_have_class(re.compile(r'(^|\s)on(\s|$)'))
-        expect(page.locator('#setv')).to_have_class(re.compile(r'(^|\s)on(\s|$)'))
-        expect(page.locator('#int_voice_url')).to_be_in_viewport()
-        assert page.evaluate('micRequests') == 0
         assert not errors
         browser.close()
 

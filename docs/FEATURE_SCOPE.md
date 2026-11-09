@@ -39,7 +39,7 @@ HTTPS/WSS、P2P 传输加密和设备总线鉴权继续保留，它们承担通�
 | --- | --- |
 | P2P relay operations and credential issuance / P2P 中继运营与凭据签发服务 | PC Link / P2P client and explicit WSS configuration / 客户端与显式 WSS 配置 |
 | GAnet identity issuer and mesh control plane / GAnet 身份签发与组网控制面 | Pairing, mesh and SSH clients / 配对、组网与 SSH 客户端 |
-| Hosted voice relay and vendor credentials / 托管语音代理及供应商凭据 | Streaming voice client / 流式语音客户端 |
+| Hosted voice relay and vendor credentials / 托管语音代理及供应商凭据 | On-device offline recognition / 设备端离线识别 |
 | APK factory workers, quotas and signer service / APK 工厂构建工作节点、额度与签名服务 | Project scaffold/template, submission, polling and download client / 工程模板、提交、轮询和下载客户端 |
 | Production deployment, administration and commercial web pages / 生产部署、运维管理与商业网页 | No production environment or privileged credentials / 不携带生产环境与管理凭据 |
 | iOS and ESP32 work / iOS 与 ESP32 工程 | Maintained separately; not deleted and not part of this Android export / 继续在原项目维护，没有删除，也未并入此次 Android 分发 |
@@ -68,7 +68,8 @@ P2P、GAnet、语音代理和构建服务若继续作为独立开源组件发布
 | Virtual-display and vendor-assistant adapters / 虚拟屏与厂商助手适配 | `VdHelper.kt`, `vdisplay.py`, `vendor_bridge.py` | Requires compatible devices/setup / 依赖兼容设备与配置 |
 | Feishu tools and bot runtime / 飞书工具与机器人运行时 | `lark_native.py`, `fsbot/` | User supplies app credentials and grants permissions / 用户提供应用凭据与权限 |
 | Local modification backup and merge / 本地自修改备份与融合 | `Evolution.kt`, `evolution.py` | Tracks local text changes during asset updates / 在资源更新时跟踪本地文本改动 |
-| PC Link, GAnet, voice and APK-builder clients / PC Link、GAnet、语音与 APK 构建客户端 | `pclink.py`, `ganet.py`, `VoiceClient.kt`, `apk_factory.py`, `service_config.py` | Optional, disabled until configured, require compatible services / 默认未接入，需配置兼容服务 |
+| PC Link, GAnet and APK-builder clients / PC Link、GAnet 与 APK 构建客户端 | `pclink.py`, `ganet.py`, `apk_factory.py`, `service_config.py` | Optional, disabled until configured, require compatible services / 默认未接入，需配置兼容服务 |
+| Offline voice / 离线语音 | `OfflineAsr.kt`, `VoiceModel.kt`, `webui/voice.js` | Download the public model once; grant microphone access / 首次下载公开模型并授权麦克风 |
 | Build, signing integration, source scans and license notices / 构建、签名接入、源码扫描与许可证声明 | `.github/workflows/android.yml`, `tools/`, `THIRD_PARTY.md` | Signing secrets stay outside Git / 签名秘密不进入 Git |
 
 Python and WebUI paths in this table are under `app/src/main/assets/ga_runtime/`;

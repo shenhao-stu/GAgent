@@ -1,3 +1,6 @@
+Source: https://files.pythonhosted.org/packages/9d/af/182eb91b0df3fe75c4d9f26fe70684569566745f6ba7e5c9c73a862c5252/cryptography-50.0.2.tar.gz
+Path: cryptography-50.0.2/LICENSE.APACHE
+
 
                                  Apache License
                            Version 2.0, January 2004

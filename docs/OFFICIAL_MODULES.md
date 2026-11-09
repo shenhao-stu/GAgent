@@ -2,19 +2,18 @@
 
 [Configuration fields and profile import / 配置字段与导入](CONFIGURATION.md#modules)
 
-P2P, GAnet and streaming voice can be offered as official services while
+P2P and GAnet can be offered as official services while
 the Android framework remains independently usable. All integrations start
 disabled. A connection profile supplies addresses and a user's credentials;
 installing the framework does not enroll the user or call an official service.
 
-P2P、GAnet 和官方语音可作为独立官方服务。开源框架不依赖购买、登录或
+P2P 和 GAnet 可作为独立官方服务。开源框架不依赖购买、登录或
 激活这些组件。用户在设置中主动配置后接入，也可以使用兼容的自建服务。
 
 | Module / 组件 | Client entry / 客户端入口 | Kept on server / 服务端保留 |
 | --- | --- | --- |
 | P2P / PC Link | Integrations: WSS signaling URL and a scoped relay credential; pair a peer | Relay operations, credential issuer, abuse control |
 | GAnet | Integrations: HTTPS API, user token, issued owner ID | Identity issuer, mesh control plane, administrative keys |
-| Voice / 语音 | Integrations: WSS endpoint, user token, model | Vendor speech keys and token issuance |
 | APK builder | Integrations: HTTPS endpoint and user token | Build workers, quotas, signing authority |
 
 ## Credential design
@@ -58,3 +57,6 @@ legacy server token is short-lived merely because the settings UI hides it.
 
 本版本实现显式接入配置、令牌遮蔽、地址校验和现有客户端协议。自动登录、续签和新的服务端权限签发器尚未包含，不能把界面遮蔽当作
 服务端权限隔离，也不能承诺客户端代码“不可逆向”。
+
+Voice input is local and needs no service profile; see [offline voice](OFFLINE_VOICE.md).
+语音输入使用离线模型，不属于可选服务配置。

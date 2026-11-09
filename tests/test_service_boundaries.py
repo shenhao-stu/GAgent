@@ -52,7 +52,7 @@ def test_token_never_exported_or_moved_to_a_different_host():
 
 def test_merge_does_not_mutate_callers():
     original = {'pclink': {'url': 'wss://pair.example/ws', 'token': 'sample-relay-credential'}}
-    updates = {'voice': {'url': 'wss://asr.example', 'token': 'test-asr-token'}}
+    updates = {'apk': {'url': 'https://build.example', 'token': 'test-build-token'}}
     snapshot = json.dumps([original, updates], sort_keys=True)
     result = config.merge_config(original, updates)
     assert json.dumps([original, updates], sort_keys=True) == snapshot
@@ -86,3 +86,26 @@ def test_save_get_commands_work_without_model_credentials():
     assert json.loads(entry._send_for(None, '/integrations.save ' + json.dumps(request)))['ok']
     response = json.loads(entry._send_for(None, '/integrations.get'))
     assert response['pclink']['url'] == request['pclink']['url']
+
+
+def test_legacy_voice_credentials_are_removed_without_changing_other_services():
+    path = config.config_path()
+    path.parent.mkdir(parents=True)
+    active = {'pclink': {'url': 'wss://pair.example/ws', 'token': 'keep-this-test-token'}}
+    path.write_text(json.dumps({**active, 'voice': {'url': 'wss://old.example', 'token': 'retired-test-token'}}))
+    assert config.load_config() == active
+    assert json.loads(path.read_text()) == active
+    assert os.stat(path).st_mode & 0o777 == 0o600
+    with pytest.raises(ValueError):
+        config.save_config({'voice': {'url': 'wss://old.example', 'token': 'rejected-test-token'}})
+    assert json.loads(path.read_text()) == active
+
+
+def test_invalid_legacy_config_is_not_partially_rewritten():
+    path = config.config_path()
+    path.parent.mkdir(parents=True)
+    original = json.dumps({'voice': {'token': 'retired-test-token'}, 'apk': {'url': 'http://unsafe.example'}})
+    path.write_text(original)
+    with pytest.raises(ValueError):
+        config.load_config()
+    assert path.read_text() == original
