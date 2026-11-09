@@ -22,8 +22,18 @@ internal object VoiceModel {
 
     fun directory(ctx: Context) = File(ctx.filesDir, "asr/paraformer-zh-small")
     fun ready(ctx: Context) = files.all { File(directory(ctx), it.first).length() == it.second }
-    fun verify(ctx: Context) = files.all {
-        File(directory(ctx), it.first).let { f -> f.isFile && f.length() == it.second && digest(f) == it.third }
+    fun verify(ctx: Context): Boolean {
+        var valid = true
+        for ((name, size, sha) in files) {
+            val file = File(directory(ctx), name)
+            if (!file.isFile || file.length() != size || digest(file) != sha) {
+                // These fixed app-owned assets are replaceable. Make the next
+                // user attempt offer a verified download instead of retrying bad bytes.
+                if (file.isFile) file.delete()
+                valid = false
+            }
+        }
+        return valid
     }
 
     fun status(ctx: Context) = JSONObject().put("modelReady", ready(ctx))

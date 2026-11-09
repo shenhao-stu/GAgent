@@ -9,6 +9,8 @@ import shlex
 import subprocess
 import sys
 import tarfile
+import time
+import urllib.error
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,8 +36,15 @@ def source(name):
     BUILD.mkdir(parents=True, exist_ok=True)
     archive = BUILD / spec['url'].rsplit('/', 1)[1]
     if not archive.exists() or hashlib.sha256(archive.read_bytes()).hexdigest() != spec['sha256']:
-        with urllib.request.urlopen(spec['url'], timeout=60) as response:
-            data = response.read()
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(spec['url'], timeout=60) as response:
+                    data = response.read()
+                break
+            except (urllib.error.URLError, TimeoutError):
+                if attempt == 2:
+                    raise
+                time.sleep(2 ** attempt)
         if hashlib.sha256(data).hexdigest() != spec['sha256']:
             raise ValueError('Source digest mismatch: ' + name)
         archive.write_bytes(data)
@@ -79,6 +88,10 @@ def prepare(package):
         (BUILD / 'android-arm64.ini').write_text(
             "[properties]\nlongdouble_format = 'IEEE_QUAD_LE'\n"
             f"[built-in options]\nc_link_args = {flags!r}\ncpp_link_args = {flags!r}\n")
+    elif package == 'opencv-python':
+        # cibuildwheel configures C/C++ but CMake otherwise picks the host assembler.
+        with Path(env['CMAKE_TOOLCHAIN_FILE']).open('a') as toolchain:
+            toolchain.write('\nset(CMAKE_ASM_COMPILER "$ENV{CC}")\n')
 
 
 def build(package):
@@ -93,7 +106,9 @@ def build(package):
     values = {'ANDROID_API_LEVEL': '24', 'CMAKE_BUILD_PARALLEL_LEVEL': '2',
               'PIP_EXTRA_INDEX_URL': 'https://chaquo.com/pypi-13.1',
               'PIP_FIND_LINKS': str(output)}
-    if package in ('cffi', 'cryptography', 'numpy'):
+    if package in ('bcrypt', 'cryptography'):
+        values['CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS'] = '-C link-arg=-Wl,-z,max-page-size=16384'
+    if package in ('cffi', 'cryptography', 'numpy', 'opencv-python'):
         env['CIBW_BEFORE_BUILD'] = shlex.join([sys.executable, str(Path(__file__).resolve()),
                                              '--prepare', package])
     if package == 'cffi':
@@ -156,7 +171,7 @@ def build(package):
               'endif()\n# Find specified Python version')
         values.update(ENABLE_HEADLESS='1', CMAKE_ARGS=' '.join([
             '-DBUILD_LIST=core,imgproc,imgcodecs,python3', '-DBUILD_TESTS=OFF',
-            '-DOPENCV_FORCE_PYTHON_LIBS=ON', '-DANDROID_STL=c++_static',
+            '-DOPENCV_FORCE_PYTHON_LIBS=ON', '-DCMAKE_MODULE_LINKER_FLAGS=-static-libstdc++',
             '-DPYTHON3_NUMPY_VERSION=2.5.4',
             '-DBUILD_EXAMPLES=OFF', '-DBUILD_ANDROID_EXAMPLES=OFF',
             '-DBUILD_ANDROID_PROJECTS=OFF', '-DINSTALL_ANDROID_EXAMPLES=OFF',
@@ -171,7 +186,7 @@ def build(package):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('package', nargs='?', choices=list(SOURCES))
-    parser.add_argument('--prepare', choices=['cffi', 'cryptography', 'numpy'])
+    parser.add_argument('--prepare', choices=['cffi', 'cryptography', 'numpy', 'opencv-python'])
     args = parser.parse_args()
     if args.prepare:
         prepare(args.prepare)

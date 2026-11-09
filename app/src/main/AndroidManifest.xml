@@ -80,7 +80,6 @@
         <!-- 无桥 HTML 预览(v2.19): 生成的 html 产物全屏渲染, 独立 WebView 零 JS 接口(不可信脚本摸不到 GA 桥) -->
         <activity android:name=".HtmlPreviewActivity" android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"/>
-        <!-- 订阅方案整页: 独立 WebView + 精简 GA 桥, load 白名单站点(改站即生效, 不再注入 plan.js) -->
         <!-- 前台任务浏览器(浏览器三级路由 L1 默认): agent 可见可截图可 CDP 驱动; 无 FLAG_SECURE, 结构上独立于登录浏览器 -->
         <activity android:name=".AgentBrowserActivity" android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"/>
@@ -105,8 +104,6 @@
              不设 stopWithTask: 采集是用户显式开启的长任务, 划掉最近任务不等于要停止记录(停止入口是通知上的按钮与 /sense/session stop)。 -->
         <service android:name=".SenseService" android:exported="false"
             android:foregroundServiceType="microphone|location"/>
-        <!-- gaagent://plan?rs=<码> 深链蹦床: 路演落地页「一键领取」→ 存码拉起主任务 → 引擎就绪后
-             带码开订阅页(SPA 自动预填), 全程零手输。透明即关, 与 SenseQuickActivity 同型。 -->
         <!-- 无感开录透明中转(A14): 磁贴/桌面快捷方式的开录意图落点, 满足 A34「mic FGS 须由可见 Activity 起」。
              透明主题 + 不进最近任务; 起完会话即 finish, 用户只感到「点一下就在录」。
              不导出: 磁贴 PendingIntent 与静态快捷方式都以本应用身份启动; 导出则任何 App 都能让 GA 开麦。 -->

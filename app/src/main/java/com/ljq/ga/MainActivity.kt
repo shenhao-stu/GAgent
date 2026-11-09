@@ -17,7 +17,6 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.webkit.JavascriptInterface
-import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -91,7 +90,6 @@ class MainActivity : Activity() {
     private var camForBridge = false                         // true=经 GA.openCamera 直连(回推 WebUI); false=经 onShowFileChooser(回填 fileCb)(issue#2)
     private val FILE_REQ = 4011
     private val MIC_REQ = 8
-    private var pendingMicRequest: PermissionRequest? = null
     private var micPermissionInFlight = false
     private val SENSE_REQ = 9                                 // sense 采集类权限的按需申请(见 requestSensePerms)
     @Volatile private var senseLatch: CountDownLatch? = null   // 桥线程等、UI 线程放: 让"申请→用户点完"能在一次调用内闭环
@@ -171,31 +169,8 @@ class MainActivity : Activity() {
             // 旧 onPageFinished 按系统夜间强制 data-theme → 每次加载覆盖用户选择(浅色/跟随系统失效根因), 已移除。
             // 跟随系统由 JS 经 GA.isDark()(读系统 uiMode, 权威)解析, index.html 头部内联脚本预置避免闪白。
             webChromeClient = object : WebChromeClient() {
-                // 仅在网页请求录音时申请麦克风；启动与文字输入不需要该权限。
-                override fun onPermissionRequest(request: PermissionRequest?) {
-                    request ?: return
-                    runOnUiThread {
-                        val audio = request.resources.filter { it == PermissionRequest.RESOURCE_AUDIO_CAPTURE }
-                        when {
-                            audio.isEmpty() || isFinishing || isDestroyed -> request.deny()
-                            checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED ->
-                                request.grant(audio.toTypedArray())
-                            micPermissionInFlight -> request.deny()
-                            else -> {
-                                pendingMicRequest = request
-                                micPermissionInFlight = true
-                                runCatching { requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), MIC_REQ) }
-                                    .onFailure { micPermissionInFlight = false; resolveMicRequest(false) }
-                            }
-                        }
-                    }
-                }
-                override fun onPermissionRequestCanceled(request: PermissionRequest?) {
-                    runOnUiThread {
-                        if (pendingMicRequest === request) pendingMicRequest = null
-                        // 系统弹框仍在途；旧结果返回前不能接管另一个网页请求。
-                    }
-                }
+                // Web media permissions remain denied by default. Offline voice
+                // requests Android microphone permission through its native bridge.
                 override fun onShowFileChooser(
                     wv: WebView?, cb: ValueCallback<Array<Uri>>?, params: FileChooserParams?
                 ): Boolean {
@@ -1028,24 +1003,11 @@ class MainActivity : Activity() {
         if (waitMs > 0) runCatching { latch.await(waitMs, TimeUnit.MILLISECONDS) }   // 有界等待: 等不到就如实回"还没授", 绝不无限期占着桥线程
     }
 
-    private fun resolveMicRequest(granted: Boolean) {
-        val request = pendingMicRequest ?: return
-        pendingMicRequest = null
-        runCatching {
-            val audio = request.resources.filter { it == PermissionRequest.RESOURCE_AUDIO_CAPTURE }
-            if (granted && audio.isNotEmpty() && !isFinishing && !isDestroyed)
-                request.grant(audio.toTypedArray())
-            else request.deny()
-        }
-    }
-
     override fun onRequestPermissionsResult(req: Int, perms: Array<out String>, res: IntArray) {
         super.onRequestPermissionsResult(req, perms, res)
         if (req == MIC_REQ) {
             micPermissionInFlight = false
             if (res.isNotEmpty()) Sense.markAsked(this, perms)
-            resolveMicRequest(res.firstOrNull() == PackageManager.PERMISSION_GRANTED &&
-                checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
             return
         }
         if (req == CAM_PERM_QR) {
@@ -1159,7 +1121,6 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
-        resolveMicRequest(false)
         micPermissionInFlight = false
         Analytics.flush()
         runCatching { tts?.shutdown() }

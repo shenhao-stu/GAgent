@@ -51,6 +51,10 @@ running inside the app.
   device bus or its capability to remote peers or arbitrary WebView content.
 - Keep external content separate from the privileged UI bridge. Treat model and
   page output as untrusted data, not permission to change policy.
+- Chat rejects remote/data frames and embedded objects. Model HTML is sanitized;
+  if the sanitizer is unavailable or fails, rendering falls back to plain text.
+  Generated HTML uses a separate WebView without a native bridge. CSP is an
+  additional boundary, not a sandbox for script already running in the chat.
 - Preserve certificate verification. Credentials must not follow an untrusted
   redirect, fallback origin or changed integration endpoint.
 - Keep optional services opt-in. Unconfigured clients must fail explicitly

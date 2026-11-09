@@ -49,6 +49,20 @@ class NativeAcceptance : Instrumentation() {
                     report.put("voice", result)
                     check(result.optBoolean("ok") && result.optString("text").length >= 4) { "empty_transcript" }
                 }
+                "integrity" -> {
+                    check(VoiceModel.verify(ctx))
+                    val tokens = File(VoiceModel.directory(ctx), "tokens.txt")
+                    val original = tokens.readBytes()
+                    try {
+                        val changed = original.clone().also { it[0] = (it[0].toInt() xor 1).toByte() }
+                        tokens.writeBytes(changed)
+                        check(VoiceModel.ready(ctx)) { "fixture_size_changed" }
+                        check(!VoiceModel.verify(ctx)) { "corrupt_asset_accepted" }
+                        check(!VoiceModel.ready(ctx)) { "corrupt_asset_not_invalidated" }
+                    } finally { tokens.writeBytes(original) }
+                    check(VoiceModel.verify(ctx))
+                    report.put("sameSizeCorruptionRejected", true)
+                }
                 "microphone" -> {
                     val start = JSONObject(OfflineAsr.start(ctx))
                     check(start.optBoolean("ok")) { start.toString() }
