@@ -135,3 +135,8 @@ YOLO 权重可选安装、默认不捆绑；iOS 与 ESP32 开发独立维护。
 [官网](https://gaagent.ai/) · [GA 手机版](https://app.gaagent.ai/) · [GenericAgent](https://github.com/lsdefine/GenericAgent) · [AndroidBench](https://androidbench.gaagent.ai/) · [Logo](docs/assets/README.md)
 
 设置中的「本地图标识别」可导入并验证用户提供的兼容 ONNX 模型，无需模型 API Key，并可检测实际屏幕。可选检测权重仍需单独提供，见[开启指南](docs/OPTIONAL_YOLO.md)。
+
+本次同步加入多电脑 PC Hub、按连接归属路由请求、快速重连恢复、会话增量渲染、
+设置区块故障隔离与精简 OCR 输出；手机观察默认使用视觉路径。开源版已移除
+GA Plan、账户商业与计费界面，模型使用用户自己的服务商配置。
+[同步范围与验证](docs/UPSTREAM_SYNC.md)。

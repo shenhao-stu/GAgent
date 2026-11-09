@@ -9,7 +9,7 @@ os.environ['GA_LANG'] = 'zh'
 os.makedirs(os.path.join(GA, 'temp', 'model_responses'), exist_ok=True)
 open(os.path.join(GA, 'mykey.py'), 'w').write('keys=[]\n')
 
-GACORE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'app', 'src', 'main', 'assets', 'gacore')
+GACORE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'app', 'src', 'main', 'assets', 'ga_runtime')
 sys.path.insert(0, os.path.abspath(GACORE))
 import android_entry as ae
 
@@ -51,8 +51,10 @@ class FakeAgent:
         self.is_running = False
         self.stop_sig = False
         self.llm_no = 0
-        self.llmclient = FakeClient()
-        self.llmclients = [self.llmclient]
+        self._model_lock = threading.RLock()
+        self.llmclients = [FakeClient(), FakeClient()]
+        self.llmclients[1].backend.name = 'second'
+        self.llmclient = self.llmclients[0]
         self.history = []
         self.handler = None
         self.task_dir = None
@@ -62,6 +64,13 @@ class FakeAgent:
         self.never_stop = False
         self.stopped = False
         FakeAgent.ALL.append(self)
+
+    def load_llm_sessions(self):
+        pass  # Fixed in-memory providers.
+
+    def next_llm(self, index):
+        self.llm_no = index
+        self.llmclient = self.llmclients[index]
 
     def put_task(self, query, source='user', images=None):
         dq = queue.Queue()
@@ -82,7 +91,7 @@ class FakeAgent:
                 return
             q, dq = task['query'], task['output']
             self.received.append(q)
-            if q.startswith('/llm') or q.startswith('/session.'):
+            if q.startswith('/session.'):
                 bad = 'BAD' in q
                 dq.put({'done': ('未找到 LLM: BAD' if bad else '✅ ok'), 'source': 'system', 'turn': 0, 'outputs': []})
                 continue
@@ -133,6 +142,7 @@ def reset():
         ae._hist[:] = []
     with ae._preset_lock:
         ae._PRESET_CMDS.clear()
+        ae._MODEL_SELECTION = None
     try: os.remove(chat_json())
     except OSError: pass
     shutil.rmtree(sessions_dir(), ignore_errors=True)
@@ -408,22 +418,17 @@ def t08_no_zombie_drain():
 def t09_preset_replay():
     reset()
     enter('m1')
-    a1 = ae._REG['m1'].agent
-    ae.send('/llm example-provider')
-    check(wait_until(lambda: '/llm example-provider' in a1.received), 'T09 前置: m1 未收到 /llm')
-    ae.send('/session.reasoning_effort=high')
-    check(wait_until(lambda: '/session.reasoning_effort=high' in a1.received), 'T09 前置: m1 未收到 /session')
-
-    check(ae._switch_convo('m2') == 'ok', 'T09 切 m2 失败')
-    a2 = agent_of('m2')
+    check(json.loads(ae.select_model('second', 'chosen'))['ok'], 'T09 model selection failed')
+    effort = '/session.reasoning_effort=high'
+    ae.send(effort)
+    check(wait_until(lambda: effort in agent_of('m1').received), 'T09 first session missed preset')
+    enter('m2')
+    agent = agent_of('m2')
+    check(agent.llmclient.backend.name == 'second' and agent.llmclient.backend.model == 'chosen',
+          'T09 wrong model before the first message')
     ae.send('hello')
-    check(wait_until(lambda: 'hello' in a2.received), 'T09 m2 未收到用户任务')
-    check('/llm example-provider' in a2.received, 'T09/FIX-6 新会话未重放 /llm(会跑在错误 provider 上)')
-    check('/session.reasoning_effort=high' in a2.received, 'T09/FIX-6 新会话未重放 /session.*')
-    check(a2.received.index('/llm example-provider') < a2.received.index('hello'),
-          'T09/FIX-6 重放必须排在用户第一条消息之前: ' + repr(a2.received))
-    check(a2.received.index('/llm example-provider') < a2.received.index('/session.reasoning_effort=high'),
-          'T09/FIX-6 重放未按记录顺序: ' + repr(a2.received))
+    check(wait_until(lambda: agent.received == [effort, 'hello']),
+          'T09 expected only the session preset before the first user task')
 
 
 def t10_vars_survive_eviction_without_pinning_agent():
@@ -488,22 +493,12 @@ def t11_bare_llm_not_recorded():
 def t12_failed_llm_does_not_overwrite_preset():
     reset()
     enter('k1')
-    a1 = ae._REG['k1'].agent
-    ae.send('/llm good_one')
-    check(wait_until(lambda: '/llm good_one' in a1.received), 'T12 前置: 未收到 /llm good_one')
-    check(wait_until(lambda: ae._PRESET_CMDS.get('llm') == '/llm good_one'), 'T12 前置: 成功的 /llm 未被记录')
-
-    ae.send('/llm BAD_one')
-    check(wait_until(lambda: '/llm BAD_one' in a1.received), 'T12 前置: 未收到 /llm BAD_one')
-    check(wait_until(lambda: ae._PRESET_CMDS.get('llm') == '/llm good_one', 6.0),
-          'T12/N3 失败的 /llm 覆盖了可用预设: ' + repr(ae._PRESET_CMDS.get('llm')))
-
-    check(ae._switch_convo('k2') == 'ok', 'T12 切 k2 失败')
-    a2 = agent_of('k2')
-    ae.send('hello')
-    check(wait_until(lambda: 'hello' in a2.received), 'T12 k2 未收到用户任务')
-    check('/llm good_one' in a2.received, 'T12/N3 新会话未重放可用预设: ' + repr(a2.received))
-    check('/llm BAD_one' not in a2.received, 'T12/N3 新会话重放了失败预设: ' + repr(a2.received))
+    check(json.loads(ae.select_model('second'))['ok'], 'T12 valid provider rejected')
+    check(not json.loads(ae.select_model('missing'))['ok'], 'T12 unknown provider accepted')
+    enter('k2')
+    agent = agent_of('k2')
+    check(agent.llmclient.backend.name == 'second', 'T12 failed selection replaced valid provider')
+    check(not agent.received, 'T12 selecting a provider enqueued a task')
 
 
 def t13_focus_never_retired_without_force():
@@ -761,35 +756,31 @@ def t23_bind_writes_no_disk():
 def t24_model_is_global_across_convos():
     reset()
     enter('a')
-    ae.send('/llm X')
-    sa = ae._REG['a']
-    check(wait_until(lambda: '/llm X' in agent_of('a').received), 'T24/R3 当前会话未收到切模型命令')
+    check(json.loads(ae.select_model('second', 'X'))['ok'], 'T24 select X failed')
     enter('b')
-    sb = ae._REG['b']
     b_agent = agent_of('b')
-    check(wait_until(lambda: '/llm X' in b_agent.received), 'T24/R3 新建会话必须继承全局模型选择')
+    check(b_agent.llmclient.backend.model == 'X', 'T24 new session lost selection')
     enter('a')
-    ae.send('/llm Y')
-    check(wait_until(lambda: '/llm Y' in agent_of('a').received), 'T24/R3 当前会话未收到第二次切模型')
+    check(json.loads(ae.select_model('second', 'Y'))['ok'], 'T24 select Y failed')
     enter('b')
-    check(ae._REG['b'].agent is b_agent, 'T24/R3 已建会话不该被重建')
-    check(wait_until(lambda: '/llm Y' in b_agent.received), 'T24/R3 已建会话切回焦点时必须补放最新模型选择')
+    check(agent_of('b') is b_agent, 'T24 existing session was replaced')
+    check(b_agent.llmclient.backend.model == 'Y', 'T24 existing session did not pick up Y')
     with ae._hist_lock:
-        check(len(ae._hist) == 0, 'T24/R3 补放不得消耗任何一次 LLM 轮次(_hist 必须为空): ' + repr(len(ae._hist)))
-    check(not ae._REG['b'].state['running'], 'T24/R3 补放不得把会话置为运行中')
+        check(not ae._hist, 'T24 selecting a model added a chat turn')
+    check(not b_agent.received and not ae._REG['b'].state['running'], 'T24 model switch ran a task')
 
 
 def t25_preset_undo_is_cas():
     reset()
     with ae._preset_lock: ae._PRESET_CMDS.clear()
-    tok1 = ae._record_preset('/llm A')
-    tok2 = ae._record_preset('/llm B')
+    tok1 = ae._record_preset('/session.reasoning_effort=low')
+    tok2 = ae._record_preset('/session.reasoning_effort=high')
     ae._undo_preset(tok1)
     with ae._preset_lock: vals = list(ae._PRESET_CMDS.values())
-    check(vals == ['/llm B'], 'T25/R5 过期 token 必须不回滚(CAS), 实为 ' + repr(vals))
+    check(vals == ['/session.reasoning_effort=high'], 'T25/R5 过期 token 必须不回滚(CAS), 实为 ' + repr(vals))
     ae._undo_preset(tok2)
     with ae._preset_lock: vals = list(ae._PRESET_CMDS.values())
-    check(vals == ['/llm A'], 'T25/R5 最新 token 必须回滚到上一条, 实为 ' + repr(vals))
+    check(vals == ['/session.reasoning_effort=low'], 'T25/R5 最新 token 必须回滚到上一条, 实为 ' + repr(vals))
 
 
 def t26_preset_timeout_rolls_back():
@@ -806,8 +797,8 @@ def t26_preset_timeout_rolls_back():
     a.put_task = lambda *args, **kw: BoomQ()
     try:
         seq0 = ae._preset_seq
-        ae.send('/llm Z')
-        check(wait_until(lambda: ae._preset_seq > seq0), 'T26/R5 切模型命令未被登记')
+        ae.send('/session.reasoning_effort=high')
+        check(wait_until(lambda: ae._preset_seq > seq0), 'T26/R5 会话设置未登记')
         with ae._preset_lock: mid = list(ae._PRESET_CMDS.values())
         check(wait_until(lambda: not ae._PRESET_CMDS), 'T26/R5 判定超时必须回滚, 残留 ' + repr(mid))
     finally:

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-CORE = Path(__file__).resolve().parents[1] / 'app/src/main/assets/gacore'
+CORE = Path(__file__).resolve().parents[1] / 'app/src/main/assets/ga_runtime'
 sys.path.insert(0, str(CORE))
 import bus_auth
 import service_config as config

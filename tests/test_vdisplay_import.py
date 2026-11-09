@@ -14,7 +14,7 @@ def test_import_uses_installation_identity_without_device_io(monkeypatch, packag
     else:
         monkeypatch.setenv('GA_PACKAGE', package)
     monkeypatch.setitem(sys.modules, 'droid', ModuleType('droid'))
-    path = Path(__file__).parents[1] / 'app/src/main/assets/gacore/vdisplay.py'
+    path = Path(__file__).parents[1] / 'app/src/main/assets/ga_runtime/vdisplay.py'
     spec = importlib.util.spec_from_file_location('vdisplay_under_test', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

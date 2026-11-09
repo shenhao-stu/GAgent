@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 
 import pytest
-CORE = Path(__file__).parents[1] / 'app/src/main/assets/gacore'
+CORE = Path(__file__).parents[1] / 'app/src/main/assets/ga_runtime'
 sys.path.insert(0, str(CORE))
 
 

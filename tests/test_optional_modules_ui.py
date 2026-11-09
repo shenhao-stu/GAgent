@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import expect, sync_playwright
 
-WEB = Path(__file__).parents[1] / 'app/src/main/assets/gacore/webui'
+WEB = Path(__file__).parents[1] / 'app/src/main/assets/ga_runtime/webui'
 
 
 @pytest.mark.parametrize('language', ['zh', 'en'])
@@ -48,7 +48,7 @@ def test_profile_import_requires_save_and_provider_remains_available(language):
         card.get_by_role('button', name='保存' if language == 'zh' else 'Save', exact=True).click()
         assert page.evaluate('savedProfiles[0].voice') == profile['integrations']['voice']
         page.evaluate('openIntegrations()')
-        page.get_by_role('button', name='模型服务商 / GA Plan' if language == 'zh' else 'Model provider / GA Plan', exact=True).click()
+        page.get_by_role('button', name='模型服务商' if language == 'zh' else 'Model provider', exact=True).click()
         assert page.locator('#provListPanel').is_visible()
         assert not errors
         assert not outgoing
@@ -116,6 +116,7 @@ def test_optional_module_settings_text_is_readable_in_both_themes(dark):
         page.evaluate('PCLINK.closeView();openIntegrations()')
         page.locator('#integrationsPanel').get_by_role('button', name='保存', exact=True).click()
         expect(page.locator('#integrationsPanel .intErr')).to_contain_text('wss URL')
+        page.wait_for_function('!_setAnim')  # contrast is measured after navigation fades in
         assert page.evaluate(LOW_CONTRAST_JS, '#integrationsPanel') == []
         assert page.locator('#integrationsPanel .intChip.on').count() == 2
         assert not errors

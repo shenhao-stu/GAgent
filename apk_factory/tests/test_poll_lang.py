@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 
-GACORE = Path(__file__).resolve().parents[2] / "app" / "src" / "main" / "assets" / "gacore"
+GACORE = Path(__file__).resolve().parents[2] / "app" / "src" / "main" / "assets" / "ga_runtime"
 sys.path.insert(0, str(GACORE))
 import android_entry as ae  # noqa: E402
 

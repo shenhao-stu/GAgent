@@ -6,7 +6,7 @@ import types
 
 import pytest
 
-CORE = Path(__file__).parents[1] / 'app/src/main/assets/gacore'
+CORE = Path(__file__).parents[1] / 'app/src/main/assets/ga_runtime'
 sys.path.insert(0, str(CORE))
 
 
@@ -73,6 +73,8 @@ def _race_link(monkeypatch, tmp_path):
     """Keeper connects to the saved room only after `release` is set, so tests can interleave pair/unpair."""
     import json
     module = load_link()
+    from unittest.mock import AsyncMock
+    monkeypatch.setattr(module, "_sync_group", AsyncMock(return_value=False))
     config = {'url': 'wss://relay.example/ws', 'token': 'sample-user'}
     monkeypatch.setattr(module.service_config, 'load_config', lambda: {'pclink': config})
     rooms = tmp_path / 'rooms.json'
@@ -83,7 +85,10 @@ def _race_link(monkeypatch, tmp_path):
         return json.loads(Path(path).read_text())[name]
     async def connect_saved(name, path, access_key):
         state['started'].set()
-        await state['release'].wait()
+        try:
+            await state['release'].wait()
+        except asyncio.CancelledError:
+            pass  # emulate a transport that completes despite cancellation
         return state['old']
     async def connect_code(url, code, name, rooms_file, access_key):
         Path(rooms_file).write_text(json.dumps({name: {'signal_url': url, 'room': 'new-room'}}))

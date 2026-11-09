@@ -16,7 +16,9 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
-SKIP = {'.git', '.gradle', 'build', '.pytest_cache', '__pycache__', '.venv', 'dist', '.kotlin'}
+SKIP_ROOT = {'.git', '.gradle', 'build', '.pytest_cache', '.venv', 'dist', '.kotlin'}
+BUILD_DIRS = {('app', 'build'), ('tsbridge', 'build')}
+CACHE_DIRS = {'__pycache__', '.pytest_cache'}
 FORBIDDEN_NAMES = {'local.properties', 'debug.keystore', 'mykey.py', 'mykey.json',
                    '.bus_token', 'keypatch.json', '_ga_voice_sig.py', 'gakey_gen.h', '.env',
                    'ga.integrations.json', 'pclink_rooms.json', 'devices.json',
@@ -66,7 +68,7 @@ def public_documentation_link(name, data, start, end):
 
 # Optional modules offers one public relay as an explicit, user-confirmed preset (never a default).
 # Exact file and exact quoted URL only; any other hosted endpoint, in any file, still fails.
-PUBLIC_RELAY_PRESET_FILES = {'app/src/main/assets/gacore/webui/integrations.js', 'assets/gacore/webui/integrations.js'}
+PUBLIC_RELAY_PRESET_FILES = {'app/src/main/assets/ga_runtime/webui/integrations.js', 'assets/ga_runtime/webui/integrations.js'}
 PUBLIC_RELAY_PRESET_URL = b"'wss://p2p." + b"gaagent" + b".ai/ws'"   # split so this tool does not contain the literal
 
 
@@ -132,7 +134,11 @@ def audit_archive(name, data, depth=0, *, allow_public_docs=False):
 
 def source_files(root):
     # Include new untracked files too; an allowlisted clean export must be checked before its first commit.
-    return sorted(p for p in root.rglob('*') if p.is_file() and not any(x in SKIP for x in p.relative_to(root).parts))
+    def included(path):
+        parts = path.relative_to(root).parts
+        return (parts[0] not in SKIP_ROOT and parts[:2] not in BUILD_DIRS
+                and not any(x in CACHE_DIRS for x in parts))
+    return sorted(p for p in root.rglob('*') if (p.is_file() or p.is_symlink()) and included(p))
 
 
 def audit_tree(root):

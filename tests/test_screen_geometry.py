@@ -6,7 +6,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app/src/main/assets/gacore'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app/src/main/assets/ga_runtime'))
 import droid
 
 
@@ -71,7 +71,7 @@ def test_full_frame_scroll_clamps_to_last_pixel_before_native_safe_margins():
 def test_tap_rotation_during_verification_is_uncertain():
     with patch.object(droid, 'ping', return_value=dict(w=40, h=80, rot=0)), \
             patch.object(droid, 'shot', side_effect=[np.zeros((80, 40, 3), np.uint8), np.zeros((40, 80, 3), np.uint8)]), \
-            patch.object(droid, '_act', return_value={}), patch.object(droid, '_fg', return_value='test'):
+            patch.object(droid, '_act', return_value={}):
         result = droid.tap(10, 10, wait=0)
     assert result['uncertain'] is True
     assert result['verified'] is False

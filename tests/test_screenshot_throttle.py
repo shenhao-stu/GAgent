@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1] / 'app/src/main/assets/gacore'))
+sys.path.insert(0, str(Path(__file__).parents[1] / 'app/src/main/assets/ga_runtime'))
 import droid
 
 
@@ -24,10 +24,12 @@ def test_back_to_back_observations_receive_fresh_frames(monkeypatch, prefix):
         return cv2.imencode('.png', pixels)[1].tobytes()
 
     monkeypatch.setattr(droid, '_get', get)
+    monkeypatch.setattr(droid, '_LAST_SHOT', float('-inf'))
+    monkeypatch.setattr(droid.time, 'time', lambda: clock[0])
     monkeypatch.setattr(droid.time, 'sleep', lambda seconds: clock.__setitem__(0, clock[0] + seconds))
     first = droid.shot()
     second = droid.shot()
-    assert len(requests) == 3
+    assert len(requests) == 2
     assert .333 <= clock[0] <= .5
     assert not np.array_equal(first, second), 'a cached screenshot is not a fresh observation'
 

@@ -31,6 +31,8 @@ object VoiceClient {
     private lateinit var appCtx: Context
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .followRedirects(false)
+            .followSslRedirects(false)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MINUTES)   // WS 长连接
             .writeTimeout(10, TimeUnit.SECONDS)

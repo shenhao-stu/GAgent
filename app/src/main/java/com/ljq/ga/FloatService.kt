@@ -63,6 +63,8 @@ class FloatService : Service() {
         }
     }
     private var mode = 1   // 三态循环(点浮窗切换): 0=竖丸(贴边 vertical pill, 最小态, 取代旧小球) / 1=单行(S号·摘要) / 2=近三步多行
+    private var dockOverride = false // 本轮用户手动切换后，不再强制贴边。
+    private val displayMode get() = if (codeRuns.get() > 0 && !dockOverride) 0 else mode
     private var last: JSONObject? = null                 // 当前聚合焦点会话，供既有渲染/语言逻辑复用
     private var lastPollSnap: JSONObject? = null         // poll_all 的 1s 聚合快照
     private val wasRunningByCid = mutableMapOf<String, Boolean>()
@@ -114,6 +116,53 @@ class FloatService : Service() {
     companion object {
         @Volatile var live: FloatService? = null
         @Volatile var lastError: String? = null
+        private val codeRuns = java.util.concurrent.atomic.AtomicInteger()
+        @JvmStatic fun codeRunDelta(delta: Int) {
+            val count = codeRuns.addAndGet(delta) // 全局计数：并发会话和 Service 重建均不提前展开。
+            val s = live ?: return
+            val done = java.util.concurrent.CountDownLatch(1)
+            val update = Runnable {
+                try {
+                    if (s.alive) {
+                        if (count == 0 || (delta > 0 && count == 1)) s.dockOverride = false
+                        s.render()
+                        if (s.displayMode == 0 && s.last?.optJSONObject("ask") == null) s.snapEdge()
+                    }
+                } finally { done.countDown() }
+            }
+            if (Looper.myLooper() == Looper.getMainLooper()) update.run() else {
+                s.ui.post(update)
+                if (delta > 0) done.await(500, java.util.concurrent.TimeUnit.MILLISECONDS)
+            }
+        }
+        /** GA 自己悬浮层(状态胶囊/ask 面板)当前屏幕矩形 [[x1,y1,x2,y2],...], 物理 px; 供 droid.look 标 self.
+         *  主线程读坐标(拖动中也准), 200ms 超时返回空, 不阻塞 bus。 */
+        fun overlayRects(): List<IntArray> {
+            val s = live ?: return emptyList()
+            val out = java.util.concurrent.CopyOnWriteArrayList<IntArray>()
+            val done = java.util.concurrent.CountDownLatch(1)
+            s.ui.post {
+                runCatching {
+                    val views = listOfNotNull(if (s::tv.isInitialized) s.tv else null, s.askView)
+                    for (v in views) {
+                        if (!v.isAttachedToWindow || v.visibility != View.VISIBLE || v.width <= 0) continue
+                        val p = IntArray(2); v.getLocationOnScreen(p)
+                        out.add(intArrayOf(p[0], p[1], p[0] + v.width, p[1] + v.height))
+                    }
+                }
+                done.countDown()
+            }
+            done.await(200, java.util.concurrent.TimeUnit.MILLISECONDS)
+            // 前台声明 HIDE_NON_SYSTEM_OVERLAY_WINDOWS(设置页等)时系统强制隐藏悬浮窗但不通知 View → 用 a11y 窗口边界核实确实上屏;
+            // 只比 bounds 不取 root, 不触碰前台 App 节点。
+            val wins = runCatching { BusA11yService.instance?.windows }.getOrNull() ?: return out.toList()
+            val bs = wins.map { android.graphics.Rect().also { r -> it.getBoundsInScreen(r) } }
+            return out.filter { r ->
+                val area = (r[2] - r[0]).toLong() * (r[3] - r[1])
+                bs.any { b -> b.left <= r[0] + 2 && b.top <= r[1] + 2 && b.right >= r[2] - 2 && b.bottom >= r[3] - 2 &&
+                    b.width().toLong() * b.height() <= area * 4 }
+            }
+        }
     }
 
     /** Screen rects (l,t,r,b) of this service's visible windows plus the display size they live in.
@@ -245,12 +294,14 @@ class FloatService : Service() {
                                 if (!panelOpenAtDown) showAsk(askObj, last?.optString("cid").orEmpty()) else dismissAsk()   // 开关按手势起点态判定(见 DOWN 处): 起点开→收, 起点关→展(dismissAsk 幂等, OUTSIDE 已先收也无害)
                                 Analytics.track("""{"event":"float_tap","props":{"action":"ask"}}""")
                             } else {
-                                mode = (mode + 1) % 3; render()                        // 普通状态: 循环三态(0竖丸/1单行/2近三步)
+                                mode = if (codeRuns.get() > 0 && !dockOverride) 1 else (mode + 1) % 3
+                                dockOverride = codeRuns.get() > 0
+                                render()                        // 普通状态: 循环三态(0竖丸/1单行/2近三步)
                                 if (mode == 0) tv.post { snapEdge() }                   // 切到竖丸→吸附最近横向边(tv.post: render 后读最终窗宽再贴边)
                                 Analytics.track("""{"event":"float_tap","props":{"mode":$mode}}""")
                             }
                         }
-                    } else { render(); tv.post { constrainPosition(mode == 0) }
+                    } else { render(); tv.post { constrainPosition(displayMode == 0) }
                         Analytics.track("""{"event":"float_drag","props":{"mode":$mode}}""") }
                     true
                 }
@@ -270,6 +321,7 @@ class FloatService : Service() {
         lastError = null
         ui.post(loop)
         live = this
+        if (codeRuns.get() > 0) render()
     }
 
     private val loop = object : Runnable {
@@ -304,7 +356,7 @@ class FloatService : Service() {
         super.onConfigurationChanged(newConfig)
         if (::tv.isInitialized && tv.isAttachedToWindow) {
             tv.maxWidth = minOf((260 * resources.displayMetrics.density).toInt(), resources.displayMetrics.widthPixels)
-            tv.post { if (alive) constrainPosition(mode == 0) }
+            tv.post { if (alive) constrainPosition(displayMode == 0) }
         }
     }
     // 仅在尺寸变化时 updateViewLayout(loop 每秒 render → 避免无谓重排闪烁)。bg/text 是 View 属性, 设置即生效, 不经此。
@@ -312,7 +364,7 @@ class FloatService : Service() {
         if (lp.width == w && lp.height == h) return
         lp.width = w; lp.height = h
         runCatching { wm.updateViewLayout(tv, lp) }
-        tv.post { if (alive) constrainPosition(mode == 0) }
+        tv.post { if (alive) constrainPosition(displayMode == 0) }
     }
     // 给状态色叠加透明度(0..1)→ ARGB int(GradientDrawable.setColor 需 ARGB): 竖丸半透明用
     private fun withAlpha(c: Int, a: Float): Int =
@@ -332,7 +384,8 @@ class FloatService : Service() {
         if (last?.optString("lang") == "en") en else zh
 
     private fun render() {
-        val snap = lastPollSnap ?: return
+        val mode = displayMode
+        val snap = lastPollSnap ?: JSONObject()
         val a = snap.optJSONArray("sessions") ?: JSONArray().put(snap)   // legacy fallback is one synthetic session
         val sessions = (0 until a.length()).mapNotNull { a.optJSONObject(it) }
         if (sessions.isEmpty()) return

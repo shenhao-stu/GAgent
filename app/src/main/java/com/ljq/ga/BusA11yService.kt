@@ -38,31 +38,27 @@ class BusA11yService : AccessibilityService() {
         runCatching { Analytics.track("""{"event":"a11y_disabled","props":{}}""") }   // 用户关掉无障碍=操控能力流失点
         super.onDestroy()
     }
-    // 被动前台包名: 系统推送的 TYPE_WINDOW_STATE_CHANGED 自带 packageName, 不向目标 App 发任何节点请求。
-    // 用于 act() 统计等"只要大概前台"的场合, 替代 rootInActiveWindow?.packageName —— 后者每次动作都会向前台 App
-    // 拉一次根节点, 对把 a11y 访问计入风控的 App(微信)是无谓的暴露(droid.SENSITIVE_APPS 注释)。dump/ping 的精确前台仍走 getWindows。
-    // a11y_config.xml 为 Files「重命名」这类对话框改了三处, 真机逐一排除后的根因是 ③:
-    // ① flagIncludeNotImportantViews: 让容器层(importantForAccessibility=no)入树 —— 空壳从 1 层变 5 层, 但 EditText/按钮仍拿不到;
-    // ② 订阅面 +typeWindowsChanged|typeWindowContentChanged: 节点缓存随内容失效 —— 无效(不是缓存问题); 回调体 O(1) 丢弃, 保留无害;
-    // ③ isAccessibilityTool=true (API33+): Android 14 的 accessibilityDataSensitive —— App 标记的视图子树对**非工具类** a11y 服务
-    //    既不暴露节点(childCount>0 但 getChild 全 null, refresh 无用), 也**丢弃其注入的触摸**(点「取消/确定」无反应, 点对话框外
-    //    scrim 却能关掉——scrim 不在标记子树里); uiautomator/UiAutomation 天然按工具处理, 所以同刻看得到也点得动。
-    //    Files by Google 把重命名/删除等对话框整体标了 dataSensitive。声明为工具后行为与 uiautomator 一致。
-    // 敏感 App 的零注入/dump 置空策略与此无关(策略在 droid.py 按前台包名判, 不因看得到就去动)。
-    private val windowPackages = WindowPackages()
+    // Event-scoped node permission only. Never export or infer a foreground package.
+    private val windowNodePolicy = WindowNodePolicy()
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
-            if (event.windowChanges and AccessibilityEvent.WINDOWS_CHANGE_REMOVED != 0)
-                windowPackages.removed(event.windowId)
-            return
-        }
-        val pkg = event.packageName?.toString()?.takeIf { it.isNotEmpty() } ?: return
-        // An event can precede its window's visibility in getWindows(). Keep the
-        // identity by ID; only current window metadata decides which one is foreground.
-        windowPackages.record(event.windowId, pkg)
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+            event.eventType != AccessibilityEvent.TYPE_WINDOWS_CHANGED) return
+        val current = runCatching { windows.orEmpty() }.getOrDefault(emptyList())
+        windowNodePolicy.retain(current.map { it.id }.toSet())
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        val window = current.firstOrNull { it.id == event.windowId } ?: return
+        if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION &&
+            window.type != AccessibilityWindowInfo.TYPE_SYSTEM) return
+        windowNodePolicy.observe(window.id, event.packageName?.toString())
     }
-    private fun visualOnly() = foregroundPkg().let { it.isEmpty() || it == "com.tencent.mm" }
+    private fun policyWindow(): AccessibilityWindowInfo? {
+        val live = runCatching { windows.orEmpty() }.getOrDefault(emptyList())
+            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION || it.type == AccessibilityWindowInfo.TYPE_SYSTEM }
+        return live.filter { it.isActive }.maxByOrNull { it.layer }
+            ?: live.filter { it.isFocused }.maxByOrNull { it.layer }
+    }
+    fun visualOnly(): Boolean = !windowNodePolicy.allows(policyWindow()?.id)
     override fun onInterrupt() {}
 
     // --- dump ---
@@ -92,7 +88,7 @@ class BusA11yService : AccessibilityService() {
             val pkg = root.packageName?.toString()
             val merged = JSONArray()
             (try { windows } catch (_: Exception) { null })?.filter {
-                it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.root?.packageName?.toString() == pkg
+                it.type == AccessibilityWindowInfo.TYPE_APPLICATION && windowNodePolicy.allows(it.id) && it.root?.packageName?.toString() == pkg
             }?.forEach { w -> w.root?.let { try { it.refresh() } catch (_: Exception) {}; collect(it, sw, sh, merged, 0, full) } }
             if (merged.length() > out.length()) return merged.toString()
         }
@@ -158,36 +154,10 @@ class BusA11yService : AccessibilityService() {
             .put("action_result", accepted).toString()
     }
 
-    // rootInActiveWindow races when GA 自己的 MainActivity 残留在刚启动的目标 App 后面(同 baseLayer)
-    // → 返回 GA 自己的 WebUI, 于是 dump()/ping 误报 com.ljq.ga, agent 据此臆造"GA 顶部悬浮窗拦截"。
-    // 改用 getWindows()(需 flagRetrieveInteractiveWindows)确定性地取真前台窗口: 优先 active/focused,
-    // 再偏好 App 窗口而非系统栏, 最后取最高层; 排除输入法与 GA 自身(让真 App/弹窗胜出, GA 在前台时仍能 dump 自己)。
-    private fun foregroundWindow(): AccessibilityWindowInfo? {
-        activeSystemWindow()?.let { return it }
-        val wins = try { windows } catch (_: Exception) { null }
-        if (wins.isNullOrEmpty()) return null
-        val me = packageName
-        val live = wins.filter { it.root?.packageName != null && it.type != AccessibilityWindowInfo.TYPE_INPUT_METHOD }
-        if (live.isEmpty()) return null
-        return live.maxWithOrNull(compareBy(
-            { it.isActive }, { it.isFocused },
-            { it.type == AccessibilityWindowInfo.TYPE_APPLICATION },
-            { it.root!!.packageName.toString() != me },   // 同等条件下偏好非 GA(化解 GA 残留窗与目标同层竞争), 但不硬排除 → GA 真前台时仍返回自己(否则会落到状态栏 systemui)
-            { it.layer }))
-    }
+    private fun foregroundWindow(): AccessibilityWindowInfo? =
+        policyWindow()?.takeIf { windowNodePolicy.allows(it.id) }
 
-    private fun foregroundRoot(): AccessibilityNodeInfo? = foregroundWindow()?.root ?: rootInActiveWindow
-
-    private fun activeSystemWindow(): AccessibilityWindowInfo? = windows?.filter {
-        it.type == AccessibilityWindowInfo.TYPE_SYSTEM && (it.isActive || it.isFocused)
-    }?.maxByOrNull { it.layer }
-
-    fun foregroundPkg(): String {
-        val foreground = activeSystemWindow() ?: windows?.filter {
-            it.type == AccessibilityWindowInfo.TYPE_APPLICATION && (it.isActive || it.isFocused)
-        }?.maxWithOrNull(compareBy({ it.isActive }, { it.isFocused }, { it.layer }))
-        return windowPackages.current(foreground?.id)
-    }
+    private fun foregroundRoot(): AccessibilityNodeInfo? = foregroundWindow()?.root
 
     // 旋转正确的物理屏尺寸: Service 的 resources.displayMetrics 不随旋转可靠更新, getRealMetrics 才行(横屏修正)。
     private val wm get() = getSystemService(WINDOW_SERVICE) as WindowManager
@@ -275,7 +245,7 @@ class BusA11yService : AccessibilityService() {
     // Analytics 本地队列(MAX_QUEUE=500)并挤掉低频关键事件。只记 op 枚举/前台包名/成败, 不碰坐标与文本。
     fun act(req: JSONObject): String {
         val op = runCatching { req.getString("op") }.getOrDefault("?")
-        val pkg = foregroundPkg()   // Event package plus system-window metadata; no app nodes.
+        val pkg = ""   // No inferred package attribution in action telemetry.
         return try { actInner(req).also { ActStats.hit(op, pkg, true) } }
         catch (e: Exception) { ActStats.hit(op, pkg, false); throw e }
     }
@@ -330,11 +300,7 @@ class BusA11yService : AccessibilityService() {
                 val intent = packageManager.getLaunchIntentForPackage(pkg)
                     ?: throw RuntimeException("no launch intent for: $pkg (not installed?)")
                 intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                val alwaysFloat = getSharedPreferences("ga", MODE_PRIVATE).getBoolean("float_always_on", false)
-                if (req.optBoolean("nofloat", false) && !alwaysFloat) {
-                    // Automatic hide requests must not override the user's explicit always-on preference.
-                    runCatching { stopService(android.content.Intent(this, FloatService::class.java)) }
-                } else if (android.provider.Settings.canDrawOverlays(this)) {
+                if (android.provider.Settings.canDrawOverlays(this)) {
                     // 切走前自动起悬浮窗(有overlay权限时), 让用户能看到GA仍在工作
                     val fsi = android.content.Intent(this, FloatService::class.java).putExtra("trigger", "auto")
                     if (android.os.Build.VERSION.SDK_INT >= 26) startForegroundService(fsi) else startService(fsi)

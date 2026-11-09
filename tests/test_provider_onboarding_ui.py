@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import expect, sync_playwright
 
-WEB = Path(__file__).parents[1] / 'app/src/main/assets/gacore/webui'
+WEB = Path(__file__).parents[1] / 'app/src/main/assets/ga_runtime/webui'
 
 
 @pytest.mark.parametrize('language,protocol,width,height', [

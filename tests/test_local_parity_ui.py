@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 from playwright.sync_api import sync_playwright, expect
-WEB=Path(__file__).parents[1]/'app/src/main/assets/gacore/webui'
+WEB=Path(__file__).parents[1]/'app/src/main/assets/ga_runtime/webui'
 
 
 @pytest.mark.parametrize('theme',['light','dark'])

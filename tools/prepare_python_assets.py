@@ -42,7 +42,7 @@ def prepare(directory):
                 changed += 1
     ca = directory / 'cacert.pem'
     if ca.exists():
-        bundle = ROOT / 'app/src/main/assets/gacore/fsbot/deps/site_packages.tgz'
+        bundle = ROOT / 'app/src/main/assets/ga_runtime/fsbot/deps/site_packages.tgz'
         with tarfile.open(bundle) as archive:
             members = [m for m in archive.getmembers() if m.name.endswith('certifi/cacert.pem')]
             if len(members) != 1:

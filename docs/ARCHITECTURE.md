@@ -48,7 +48,7 @@ accept work. A response from a previous operation must not update a newer one.
 
 ## Boundaries / 模块边界
 
-Paths below are relative to `app/src/main/assets/gacore/`, except Kotlin files,
+Paths below are relative to `app/src/main/assets/ga_runtime/`, except Kotlin files,
 which live under `app/src/main/java/com/ljq/ga/`.
 
 | Boundary / 边界 | Responsibility / 职责 | Invariant / 不变量 |
@@ -56,7 +56,9 @@ which live under `app/src/main/java/com/ljq/ga/`.
 | provider_config.py | Provider parsing and transformations | Preserve unrelated configuration and caller-owned inputs |
 | service_config.py | Pure integration validation, explicit persistence | Unconfigured modules do not request a service; URL changes do not reuse old credentials |
 | android_entry.py | Command dispatch and conversation lifecycle | Commands and output stay associated with the correct live session |
-| kernel_adapter/patches.py | Runtime/thread association | Usage and output belong to the initiating session |
+| gacore/ | Vendored upstream planning and model core | Keep the synchronized snapshot unchanged; integrate through the host |
+| kernel_adapter/ | Workspace wiring, execution and runtime observations | Usage and output belong to the initiating session; serialize process-global execution state |
+| service_http.py | Authenticated service HTTP policy | Do not forward credentials through redirects |
 | droid.py / ScreenGeometry.kt | Device observations and gesture geometry | Coordinates are valid for the observed display; reject stale or out-of-bounds gestures |
 | bus_auth.py / LocalBusAuth.kt | Local capability transport | The random capability goes only to the exact authenticated loopback origin |
 | PermissionCoordinator.kt / OverlayPolicy.kt / FloatService.kt | Permission, lifecycle and overlay placement | Respect the user's always-on preference and keep the handle within display bounds |

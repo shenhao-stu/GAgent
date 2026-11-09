@@ -12,7 +12,8 @@ import pytest
 
 from .test_pclink_scroll_contract import _func_body
 
-CORE = Path(__file__).resolve().parents[2] / 'app/src/main/assets/gacore'
+CORE = Path(__file__).resolve().parents[2] / 'app/src/main/assets/ga_runtime'
+sys.path.insert(0, str(CORE))
 
 
 def test_chat_survives_disconnect_and_resume():
@@ -78,6 +79,11 @@ def _module():
     spec = importlib.util.spec_from_file_location('pclink_reconnect_test', CORE / 'pclink.py')
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
+    from unittest.mock import AsyncMock
+    config = {'url': 'wss://relay.example/ws', 'token': 'synthetic'}
+    mod.service_config = types.SimpleNamespace(pclink_config=lambda: config)
+    mod._sock_config = config
+    mod._sync_group = AsyncMock(return_value=False)
     return mod
 
 
@@ -98,7 +104,7 @@ def test_resume_interrupts_failed_connect_backoff(monkeypatch):
             return sock
 
         config = {'url': 'wss://relay.example/ws', 'token': 'sample-relay-credential'}
-        monkeypatch.setattr(mod.service_config, 'load_config', lambda: {'pclink': config})
+        monkeypatch.setattr(mod.service_config, 'pclink_config', lambda: config)
         monkeypatch.setitem(sys.modules, 'p2p_ws_client', types.SimpleNamespace(
             connect_saved=connect, load_room=lambda *a, **k: {'signal_url': config['url']}))
         monkeypatch.setattr(mod, '_paired', lambda: True)

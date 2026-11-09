@@ -1,0 +1,16 @@
+PaddleOCR on-device models
+=========================
+ch_PP-OCRv4_det_infer.onnx / ch_PP-OCRv4_rec_infer.onnx
+ch_ppocr_mobile_v2.0_cls_infer.onnx / rec_keys.txt (character dictionary)
+Source: https://github.com/PaddlePaddle/PaddleOCR
+Copyright PaddlePaddle Authors. License: Apache-2.0.
+ONNX conversion retained from the original Android distribution.
+
+The former YOLO-derived ui_detect_yolo.onnx is deliberately excluded.
+OCR and accessibility remain available without it. Supplying another detector
+is a separate choice and requires compliance with that detector's license.
+
+ch_PP-OCRv4_rec_compact.onnx derives from ch_PP-OCRv4_rec_infer.onnx by
+appending ArgMax and ReduceMax output operators. Recognition weights are unchanged;
+only top-1 IDs and scores cross the Android transport. Apache-2.0 attribution above
+applies. tests/test_compact_ocr.py compares exact outputs and CTC decoding.

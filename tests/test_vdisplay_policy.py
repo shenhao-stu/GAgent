@@ -1,4 +1,4 @@
-"""Offscreen display policy: frame ownership/freshness, coordinate bounds, and never moving the user's foreground app."""
+"""Offscreen display policy: frame ownership/freshness, coordinate bounds, and launching without unreliable foreground identity guesses."""
 import importlib.util
 import sys
 from pathlib import Path
@@ -6,7 +6,7 @@ from types import ModuleType
 
 import pytest
 
-PATH = Path(__file__).parents[1] / 'app/src/main/assets/gacore/vdisplay.py'
+PATH = Path(__file__).parents[1] / 'app/src/main/assets/ga_runtime/vdisplay.py'
 
 
 def load(monkeypatch, droid):
@@ -70,12 +70,13 @@ def test_vd_tap_rejects_out_of_bounds_without_sending_input(monkeypatch):
     assert droid.calls[-1] == 'input -d 9 swipe 540 1800 540 1800 50'
 
 
-def test_vd_start_refuses_to_move_the_users_foreground_app(monkeypatch):
+def test_vd_start_uses_explicit_target_without_guessing_foreground(monkeypatch):
     droid = FakeDroid(foreground='com.android.settings')
+    droid.ping = lambda: pytest.fail('foreground guesses must not control launches')
     vd = load(monkeypatch, droid)
-    with pytest.raises(RuntimeError, match='主屏前台'):
-        vd.vd_start('com.android.settings')
-    assert not [c for c in droid.calls if 'am start' in c or 'app_process' in c]
+    assert vd.vd_start('com.android.settings', activity='.Settings') == 9
+    assert any('am start --display 9 -n com.android.settings/.Settings' == c for c in droid.calls)
+    assert not any('force-stop' in c for c in droid.calls)
 
 
 def test_vd_shot_refuses_frames_from_a_dead_helper(monkeypatch, tmp_path):

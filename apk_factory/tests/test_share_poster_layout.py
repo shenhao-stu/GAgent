@@ -8,7 +8,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-WEBUI = ROOT / "app" / "src" / "main" / "assets" / "gacore" / "webui"
+WEBUI = ROOT / "app" / "src" / "main" / "assets" / "ga_runtime" / "webui"
 MODULE = WEBUI / "share_poster.js"
 INDEX = WEBUI / "index.html"
 APP_JS = WEBUI / "app.js"

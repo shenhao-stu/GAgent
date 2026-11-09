@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-CORE = Path(__file__).resolve().parents[1] / "app/src/main/assets/gacore"
+CORE = Path(__file__).resolve().parents[1] / "app/src/main/assets/ga_runtime"
 sys.path.insert(0, str(CORE))
 import jev_ui as jev
 import run_guard

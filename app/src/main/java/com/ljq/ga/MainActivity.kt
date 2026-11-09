@@ -66,7 +66,7 @@ class GanetQrCaptureActivity : CaptureActivity() {
     }
 }
 
-// 极薄壳: UI全在 assets/gacore/webui (随filesDir热更), 逻辑全在 android_entry.py
+// 极薄壳: UI全在 assets/ga_runtime/webui (随filesDir热更), 逻辑全在 android_entry.py
 class MainActivity : Activity() {
     companion object {
         @Volatile var live: MainActivity? = null
@@ -318,6 +318,10 @@ class MainActivity : Activity() {
             runCatching { latch.await(4, TimeUnit.SECONDS) }
             return r
         }
+        @JavascriptInterface fun selectModel(name: String, model: String): String =
+            if (Py.ready) runCatching { Py.call("select_model", name, model) }
+                .getOrElse { org.json.JSONObject().put("ok", false).put("error", it.toString()).toString() }
+            else """{"ok":false,"error":"Engine is not ready"}"""
         @JavascriptInterface fun send(t: String): String =
             if (Py.ready) runCatching { Py.call("send", t) }.getOrElse { it.toString() } else "引擎未就绪"
         @JavascriptInterface fun scanGanetQr() = runOnUiThread {

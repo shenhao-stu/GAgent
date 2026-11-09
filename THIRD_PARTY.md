@@ -48,3 +48,7 @@ signing. These are packaging changes to third-party artifacts, not upstream rele
 The old YOLO-derived detector weights are excluded. Supplying or distributing
 another model requires a separate license review. Service branding and private
 server implementations are not granted by the project source license.
+
+The compact PP-OCRv4 recognition graph is a derived output graph of the bundled
+PaddleOCR model, with unchanged recognition weights and Apache-2.0 attribution.
+See its bundled MODEL_NOTICE and `tests/test_compact_ocr.py`.

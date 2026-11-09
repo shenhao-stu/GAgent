@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-CORE = Path(__file__).parents[1] / 'app/src/main/assets/gacore'
+CORE = Path(__file__).parents[1] / 'app/src/main/assets/ga_runtime'
 sys.path.insert(0, str(CORE))
 FLOAT = Path(__file__).parents[1] / 'app/src/main/java/com/ljq/ga/FloatService.kt'
 

@@ -21,9 +21,8 @@ class PermissionCoordinator(
         activity.runOnUiThread {
             if (MainActivity.live !== activity || activity.isDestroyed) return@runOnUiThread
             val always = activity.getSharedPreferences("ga", Context.MODE_PRIVATE).getBoolean("float_always_on", false)
-            val suppressed = BusA11yService.instance?.foregroundPkg() == "com.tencent.mm"
             if (!needsBackgroundOverlay(Settings.canDrawOverlays(activity), MainActivity.isForeground,
-                    busy, always, suppressed) || FloatService.live != null) return@runOnUiThread
+                    busy, always) || FloatService.live != null) return@runOnUiThread
             val intent = Intent(activity, FloatService::class.java).putExtra("trigger", "background")
             runCatching {
                 if (android.os.Build.VERSION.SDK_INT >= 26) activity.startForegroundService(intent)

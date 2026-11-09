@@ -1,0 +1,3 @@
+
+# Preserve byte-for-byte upstream core; style changes belong upstream.
+app/src/main/assets/ga_runtime/gacore/** -whitespace

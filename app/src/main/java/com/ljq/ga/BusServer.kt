@@ -165,7 +165,7 @@ class BusHttpd(port: Int, private val auth: LocalBusAuth) : NanoHTTPD("127.0.0.1
         // HELP 文档表：单一真值源，逐条 (path, doc) 按原文档顺序排列；分节分隔线附着于该节首条 doc。
         // HELP 正文由此表自动拼接生成，文本内容与拼接结果须与重构前逐字节一致（已用脚本核对）。
         private val ROUTE_DOCS: List<Pair<String, String>> = listOf(
-            "/ping" to "GET  /ping                      -> {ver,a11y,pkg:真实前台包名,rot:旋转0..3,w,h:物理屏宽高px,loaded:[model paths]}",
+            "/ping" to "GET  /ping                      -> {ver,a11y,rot:旋转0..3,w,h:物理屏宽高px,loaded:[model paths]}",
             "/onnx/info" to "GET  /onnx/info?model=<abspath> -> {inputs:[{name,dtype,shape}],outputs:[...]}",
             "/onnx/run" to "POST /onnx/run?model=<abspath>  body/resp同构framing: [4B meta_len LE][meta JSON {\"inputs\"|\"outputs\":[{name,dtype,shape}]}][raw tensors按序拼接,LE]",
             "/a11y/dump" to "GET  /a11y/dump?full=1          -> JSON elements [{t,d,x,y,l,click,edit,scroll,chk,sel}] (须开无障碍)",
@@ -223,17 +223,17 @@ class BusHttpd(port: Int, private val auth: LocalBusAuth) : NanoHTTPD("127.0.0.1
     // 路由注册表：path -> handler。取代原 if/else when 链，端点集合/路径/参数/响应体逐字不变，
     // 未命中路径落 else 分支返回 HELP（404 即文档，行为不变）。
     private val routes: Map<String, (IHTTPSession, Map<String, String>) -> Response> = linkedMapOf(
-        "/ping" to { _: IHTTPSession, _: Map<String, String> ->
+        "/ping" to { _: IHTTPSession, p: Map<String, String> ->
             val service = BusA11yService.instance
             val geometry = service?.screenGeometry()
             json(JSONObject()
                 .put("ver", Bus.VER)
                 .put("a11y", service != null)
-                .put("pkg", service?.foregroundPkg() ?: "")
                 .put("rot", geometry?.rot ?: 0)
                 .put("w", geometry?.w ?: 0)
                 .put("h", geometry?.h ?: 0)
-                .put("loaded", JSONArray(Onnx.loaded())).toString())
+                .put("loaded", JSONArray(Onnx.loaded()))
+                .put("overlay", JSONArray(FloatService.overlayRects().map { JSONArray(it.toList()) })).toString())
         },
         "/onnx/info" to { _, p ->
             json(Onnx.info(p["model"] ?: throw RuntimeException("need ?model=<abspath>")))
@@ -245,6 +245,9 @@ class BusHttpd(port: Int, private val auth: LocalBusAuth) : NanoHTTPD("127.0.0.1
             val out = Onnx.run(p["model"] ?: throw RuntimeException("need ?model=<abspath>"), body)
             newFixedLengthResponse(Response.Status.OK, "application/octet-stream",
                 ByteArrayInputStream(out), out.size.toLong())
+        },
+        "/a11y/policy" to { _, _ ->
+            json(JSONObject().put("visual_only", svc().visualOnly()).toString())
         },
         "/a11y/dump" to { _, p ->
             json(svc().dump(p["full"] == "1"))

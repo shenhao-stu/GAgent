@@ -5,12 +5,13 @@ import sys
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1] / 'app/src/main/assets/gacore'))
+sys.path.insert(0, str(Path(__file__).parents[1] / 'app/src/main/assets/ga_runtime'))
 import droid
 
 
-@pytest.fixture
-def asynchronous_screen(monkeypatch):
+@pytest.fixture(params=[True, False], ids=['visual', 'nodes'])
+def asynchronous_screen(monkeypatch, request):
+    monkeypatch.setattr(droid, 'SAFE_MODE', request.param)
     state = {'now': 0.0, 'ends_at': 0.0, 'actions': [], 'observations': []}
     screen = dict(w=120, h=240, rot=0, pkg='com.android.settings')
 
@@ -36,6 +37,10 @@ def asynchronous_screen(monkeypatch):
         return np.full((240, 120, 3), 255 if observe('shot') else 0, dtype=np.uint8)
 
     monkeypatch.setattr(droid, 'ping', lambda: dict(screen))
+    def policy(path, **kwargs):
+        assert path == '/a11y/policy'
+        return {'visual_only': False}
+    monkeypatch.setattr(droid, '_get', policy)
     monkeypatch.setattr(droid, '_act', dispatch)
     monkeypatch.setattr(droid, 'dump', dump)
     monkeypatch.setattr(droid, 'shot', shot)
@@ -48,7 +53,7 @@ def test_scroll_observes_after_gesture_duration_and_settlement(asynchronous_scre
     state = asynchronous_screen
     result = droid.scroll('up', dur=duration, settle=settle)
     assert result['scrolled'] is True
-    assert {kind for kind, _ in state['observations']} == {'dump', 'shot'}
+    assert {kind for kind, _ in state['observations']} == ({'shot'} if droid.SAFE_MODE else {'dump', 'shot'})
     assert all(at >= state['ends_at'] + settle for _, at in state['observations'])
 
 
@@ -97,7 +102,7 @@ def test_scroll_view_moves_toward_requested_content(asynchronous_screen, view, a
     assert action['dur'] == 900
     assert result['view_direction'] == view
     assert result['scrolled'] is True
-    assert result['evidence'] == 'text'
+    assert result['evidence'] == ('pixel' if droid.SAFE_MODE else 'text')
 
 
 def test_scroll_view_keeps_missing_observation_uncertain(asynchronous_screen, monkeypatch):

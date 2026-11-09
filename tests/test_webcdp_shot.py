@@ -3,7 +3,7 @@ import base64
 import sys
 from pathlib import Path
 
-CORE = Path(__file__).resolve().parents[1] / 'app/src/main/assets/gacore'
+CORE = Path(__file__).resolve().parents[1] / 'app/src/main/assets/ga_runtime'
 sys.path.insert(0, str(CORE))
 import webcdp
 

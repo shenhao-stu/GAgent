@@ -6,18 +6,18 @@
 
 | Change / 修改目标 | First place to inspect / 首查位置 |
 | --- | --- |
-| Provider configuration or protocol selection | app/src/main/assets/gacore/provider_config.py, llmcore.py and existing provider adapters |
-| Tool/session lifecycle | app/src/main/assets/gacore/android_entry.py, kernel_adapter/ |
-| Phone observation or gesture | app/src/main/assets/gacore/droid.py; BusA11yService.kt, ScreenGeometry.kt |
+| Provider configuration or protocol selection | app/src/main/assets/ga_runtime/provider_config.py, gacore/llmcore.py and existing provider adapters |
+| Tool/session lifecycle | app/src/main/assets/ga_runtime/android_entry.py, kernel_adapter/ |
+| Phone observation or gesture | app/src/main/assets/ga_runtime/droid.py; BusA11yService.kt, ScreenGeometry.kt |
 | Overlay or background transition | MainActivity.kt, PermissionCoordinator.kt, OverlayPolicy.kt, FloatService.kt |
 | Local device authentication | bus_auth.py, LocalBusAuth.kt |
 | Optional service configuration | service_config.py; the owning client such as pclink.py or ganet.py |
-| UI and translations | app/src/main/assets/gacore/webui/; assets/i18n.js |
-| Runtime instructions | app/src/main/assets/gacore/memory/ |
+| UI and translations | app/src/main/assets/ga_runtime/webui/; assets/i18n.js |
+| Runtime instructions | app/src/main/assets/ga_runtime/memory/ |
 | Packaged dependencies and notices | app/build.gradle, tsbridge/, tools/, third_party/ |
 | Build and release verification | .github/workflows/android.yml |
 
-Python paths without a prefix above are under `app/src/main/assets/gacore/`;
+Python paths without a prefix above are under `app/src/main/assets/ga_runtime/`;
 Kotlin paths are under `app/src/main/java/com/ljq/ga/`.
 
 ## Make the smallest coherent change / 做最小且完整的修改
