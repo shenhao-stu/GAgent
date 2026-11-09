@@ -10,7 +10,7 @@ terms continue to apply. Exact dependency versions are in `app/build.gradle`,
 | OpenSSL 3.5.9 | Apache-2.0 | [OpenSSL](https://github.com/openssl/openssl/tree/openssl-3.5.9); supplied by the Chaquopy CPython runtime |
 | Kotlin / AndroidX / OkHttp / Conscrypt | Apache-2.0 | [Kotlin](https://github.com/JetBrains/kotlin), [AndroidX](https://android.googlesource.com/platform/frameworks/support/), [OkHttp](https://github.com/square/okhttp), [Conscrypt](https://github.com/google/conscrypt) |
 | NanoHTTPD | BSD-3-Clause | [NanoHTTPD](https://github.com/NanoHttpd/nanohttpd) |
-| sherpa-onnx | Apache-2.0; model terms separate | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), [voice model provenance](docs/OFFLINE_VOICE.md) |
+| sherpa-onnx | Apache-2.0; static dependencies retain their notices; model terms separate | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), [voice model provenance](docs/OFFLINE_VOICE.md) |
 | libffi / OpenSSL | MIT / Apache-2.0 | Fixed sources in `tools/native-sources.json`; linked into cffi / cryptography |
 | ONNX Runtime | MIT | [ONNX Runtime](https://github.com/microsoft/onnxruntime) |
 | LibADB Android | Apache-2.0 option; auxiliary BSD/MIT notices retained | [LibADB 3.1.1](https://github.com/MuntashirAkon/libadb-android/tree/3.1.1) |

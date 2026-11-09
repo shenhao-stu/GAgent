@@ -2,6 +2,7 @@ package com.ljq.ga
 
 import android.app.Activity
 import android.app.Instrumentation
+import android.content.Intent
 import android.os.Bundle
 import android.os.SystemClock
 import com.chaquo.python.Python
@@ -63,17 +64,40 @@ class NativeAcceptance : Instrumentation() {
                     check(VoiceModel.verify(ctx))
                     report.put("sameSizeCorruptionRejected", true)
                 }
-                "microphone" -> {
-                    val start = JSONObject(OfflineAsr.start(ctx))
+                "microphone", "lifecycle", "acoustic" -> {
+                    val activity = startActivitySync(Intent(ctx, MainActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+                    val start = JSONObject(activity.Bridge().offAsrStart())
                     check(start.optBoolean("ok")) { start.toString() }
                     val id = start.getInt("id")
-                    Thread.sleep(1200)
-                    check(JSONObject(OfflineAsr.poll(id)).optDouble("sec") > 0) { "no_audio_samples" }
-                    report.put("capture", JSONObject(OfflineAsr.poll(id)))
-                    OfflineAsr.cancel(id)
-                    check(JSONObject(OfflineAsr.poll(id)).optString("error") == "session_expired")
-                    check(!JSONObject(OfflineAsr.stop(id)).optBoolean("ok"))
-                    report.put("staleSessionRejected", true)
+                    try {
+                        Thread.sleep(if (arguments.getString("phase") == "acoustic") 10_000 else 1200)
+                        check(JSONObject(OfflineAsr.poll(id)).optDouble("sec") > 0) { "no_audio_samples" }
+                        report.put("capture", JSONObject(OfflineAsr.poll(id)))
+                        when (arguments.getString("phase")) {
+                            "acoustic" -> {
+                                OfflineAsr.stop(id)
+                                val deadline = SystemClock.elapsedRealtime() + 30_000
+                                var result = JSONObject(OfflineAsr.poll(id))
+                                while (!result.optBoolean("done") && SystemClock.elapsedRealtime() < deadline) {
+                                    Thread.sleep(100); result = JSONObject(OfflineAsr.poll(id))
+                                }
+                                report.put("voice", result)
+                                check(result.optBoolean("done") && result.optString("text").length >= 4) { "empty_transcript" }
+                            }
+                            else -> {
+                                if (arguments.getString("phase") == "lifecycle") {
+                                    runOnMainSync { check(activity.moveTaskToBack(true)) }
+                                    val deadline = SystemClock.elapsedRealtime() + 3000
+                                    while (JSONObject(OfflineAsr.poll(id)).optString("error") != "session_expired" &&
+                                        SystemClock.elapsedRealtime() < deadline) Thread.sleep(100)
+                                } else OfflineAsr.cancel(id)
+                                check(JSONObject(OfflineAsr.poll(id)).optString("error") == "session_expired")
+                                check(!JSONObject(OfflineAsr.stop(id)).optBoolean("ok"))
+                                report.put("staleSessionRejected", true)
+                            }
+                        }
+                    } finally { OfflineAsr.cancel(id) }
                 }
                 else -> error("unknown_phase")
             }

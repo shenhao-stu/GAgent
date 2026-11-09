@@ -169,6 +169,15 @@ def build(package):
               'if(NOT EXISTS "${PYTHON3_NUMPY_INCLUDE_DIRS}/numpy/arrayobject.h")\n'
               '  message(FATAL_ERROR "Target NumPy headers are missing")\n'
               'endif()\n# Find specified Python version')
+        refinement = root / 'opencv/modules/python/src2/typing_stubs_generation/api_refinement.py'
+        patch(refinement, 'from .ast_utils import (find_function_node, SymbolName,',
+              'from .ast_utils import (ScopeNotFoundError, SymbolNotFoundError, find_function_node, SymbolName,')
+        patch(refinement, '    for symbol_name, refine_symbol in NODES_TO_REFINE.items():\n        refine_symbol(root, symbol_name)',
+              '    for symbol_name, refine_symbol in NODES_TO_REFINE.items():\n'
+              '        try:\n            find_function_node(root, symbol_name)\n'
+              '        except (ScopeNotFoundError, SymbolNotFoundError):\n'
+              '            continue  # Optional module excluded from this build.\n'
+              '        refine_symbol(root, symbol_name)')
         values.update(ENABLE_HEADLESS='1', CMAKE_ARGS=' '.join([
             '-DBUILD_LIST=core,imgproc,imgcodecs,python3', '-DBUILD_TESTS=OFF',
             '-DOPENCV_FORCE_PYTHON_LIBS=ON', '-DCMAKE_MODULE_LINKER_FLAGS=-static-libstdc++',

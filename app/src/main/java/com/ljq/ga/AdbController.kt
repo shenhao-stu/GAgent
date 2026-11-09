@@ -64,8 +64,8 @@ object AdbController {
     // connect 成功后在无争用时刻捕获; connected 只读它的 lock-free 成员, 绝不走 manager.isConnected()(吃 mLock, wedge 期会阻塞 status 查询)。
     @Volatile private var conn: AdbConnection? = null
     @Volatile var lastError: String? = null
-    @Volatile private var pairingRequired = false   // 任一端口报过需配对即置位(后续端口的其他失败不覆盖); 连接或配对成功才清
         private set
+    @Volatile private var pairingRequired = false   // 任一端口报过需配对即置位(后续端口的其他失败不覆盖); 连接或配对成功才清
 
     /** 派生存活真值(lock-free): socket 未关 ∧ CNXN 已建立。任一调用返回/抛出后, 此值恒等于 libadb 地面真相, 不存在脱节窗口。 */
     val connected: Boolean

@@ -134,8 +134,9 @@ repository visibility. Follow [Releasing](RELEASING.md) for those separate steps
 
 Build `:app:assembleDebugAndroidTest`, install the debug APK and its separate test
 APK on an explicitly assigned device, then run `com.ljq.ga.NativeAcceptance` with
-phase `native`, `download`, `voice` (requires a local `wav` path), or `microphone`.
-These checks never require a provider key. The OCR phase uses the app's local bus;
-only one GAgent variant may own that device port during the check. Restore the
-previous app/permission state afterward. Instrumentation is not included in the
-release APK.
+phase `native`, `download`, `voice` (requires a local `wav` path), `integrity`,
+`microphone`, `lifecycle`, or `acoustic` (10 seconds of audible test speech).
+Grant microphone permission explicitly for microphone phases. These checks never
+require a provider key. OCR resolves this variant's private local-bus port and
+capability. Assign one active device controller, then restore the previous
+app/permission state. Instrumentation is not included in the release APK.
