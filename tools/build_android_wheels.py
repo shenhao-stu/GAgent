@@ -115,6 +115,7 @@ def build(package):
         cross = BUILD / 'android-arm64.ini'
         cross.write_text("[properties]\nlongdouble_format = 'IEEE_QUAD_LE'\n")
         env['CIBW_CONFIG_SETTINGS'] = ('setup-args=-Dblas=none setup-args=-Dlapack=none '
+            'setup-args=-Dc_link_args=-lpython3.13 setup-args=-Dcpp_link_args=-lpython3.13 '
             'setup-args=--cross-file=' + str(cross) + ' compile-args=-j2')
     elif package == 'opencv-python':
         project = root / 'pyproject.toml'
