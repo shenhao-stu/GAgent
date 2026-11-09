@@ -70,7 +70,7 @@ dependencies {
     //  sun-security-android = libadb 依赖的 X509 证书生成(轻量, 不引 BouncyCastle)。Conscrypt 供 TLSv1.3(minSdk24 满足)。
     implementation 'com.github.MuntashirAkon:libadb-android:3.1.1'
     implementation 'com.github.MuntashirAkon:sun-security-android:1.1'
-    implementation 'org.conscrypt:conscrypt-android:2.5.2'
+    implementation 'org.conscrypt:conscrypt-android:2.9.0'
     // PCLink 扫码配对(与拍照走外置相机、不声明 CAMERA 的路径分开; 扫码需应用内预览→声明 CAMERA + 运行时授权)
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
 }

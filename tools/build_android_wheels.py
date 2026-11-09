@@ -20,6 +20,15 @@ def run(args, cwd, env=None):
     subprocess.run(args, cwd=cwd, env=env, check=True, timeout=2400)
 
 
+def patch(path, before, after):
+    text = path.read_text()
+    if after in text:
+        return
+    if text.count(before) != 1:
+        raise ValueError('Native source layout changed: ' + str(path.relative_to(BUILD)))
+    path.write_text(text.replace(before, after))
+
+
 def source(name):
     spec = SOURCES[name]
     BUILD.mkdir(parents=True, exist_ok=True)
@@ -128,8 +137,27 @@ def build(package):
     elif package == 'opencv-python':
         project = root / 'pyproject.toml'
         project.write_text(project.read_text().replace('numpy==2.1.3', 'numpy==2.5.4'))
+        # Upstream disables Android Python bindings. cibuildwheel supplies the
+        # target Python library and NumPy wheel; enable discovery of those files.
+        patch(root / 'opencv/modules/python/CMakeLists.txt',
+              'if(ANDROID OR APPLE_FRAMEWORK OR WINRT)',
+              'if(APPLE_FRAMEWORK OR WINRT)')
+        detect = root / 'opencv/cmake/OpenCVDetectPython.cmake'
+        patch(detect, 'if(NOT ANDROID AND NOT APPLE_FRAMEWORK)',
+              'if(NOT APPLE_FRAMEWORK)')
+        patch(detect, '\n    if(NOT ANDROID AND NOT IOS AND NOT XROS)',
+              '\n    if(NOT IOS AND NOT XROS)')
+        patch(detect, 'endif(NOT ANDROID AND NOT IOS AND NOT XROS)',
+              'endif(NOT IOS AND NOT XROS)')
+        patch(detect, '# Find specified Python version',
+              'set(PYTHON3_NUMPY_INCLUDE_DIRS "$ENV{VIRTUAL_ENV}/../xbuild_files/numpy/_core/include")\n'
+              'if(NOT EXISTS "${PYTHON3_NUMPY_INCLUDE_DIRS}/numpy/arrayobject.h")\n'
+              '  message(FATAL_ERROR "Target NumPy headers are missing")\n'
+              'endif()\n# Find specified Python version')
         values.update(ENABLE_HEADLESS='1', CMAKE_ARGS=' '.join([
             '-DBUILD_LIST=core,imgproc,imgcodecs,python3', '-DBUILD_TESTS=OFF',
+            '-DOPENCV_FORCE_PYTHON_LIBS=ON', '-DANDROID_STL=c++_static',
+            '-DPYTHON3_NUMPY_VERSION=2.5.4',
             '-DBUILD_EXAMPLES=OFF', '-DBUILD_ANDROID_EXAMPLES=OFF',
             '-DBUILD_ANDROID_PROJECTS=OFF', '-DINSTALL_ANDROID_EXAMPLES=OFF',
             '-DWITH_UNIFONT=OFF', '-DWITH_AVIF=OFF', '-DWITH_OPENJPEG=OFF',

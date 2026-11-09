@@ -50,8 +50,8 @@
   },
   {
     "name": "Conscrypt",
-    "source": "https://raw.githubusercontent.com/google/conscrypt/2.5.2/LICENSE",
-    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    "source": "https://raw.githubusercontent.com/google/conscrypt/2.9.0/LICENSE",
+    "sha256": "eebc1e08d5edeea3b0866243385c0ec20bda335a1e4adaed3874525ede3d6e0c"
   },
   {
     "name": "NanoHTTPD",

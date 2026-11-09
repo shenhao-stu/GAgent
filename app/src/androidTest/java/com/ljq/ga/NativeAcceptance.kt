@@ -8,6 +8,8 @@ import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import org.json.JSONObject
 import java.io.File
+import org.conscrypt.Conscrypt
+import javax.net.ssl.SSLContext
 
 /** Explicit on-device checks, packaged only in the separate instrumentation APK. */
 class NativeAcceptance : Instrumentation() {
@@ -20,6 +22,10 @@ class NativeAcceptance : Instrumentation() {
             val ctx = targetContext
             when (arguments.getString("phase", "native")) {
                 "native" -> {
+                    val tls = SSLContext.getInstance("TLS", Conscrypt.newProvider())
+                    tls.init(null, null, null)
+                    check("TLSv1.3" in tls.supportedSSLParameters.protocols)
+                    report.put("conscrypt", Conscrypt.version().let { "${it.major()}.${it.minor()}.${it.patch()}" })
                     AssetUnpacker(ctx).extractAssets()
                     if (!Python.isStarted()) Python.start(AndroidPlatform(ctx))
                     val py = Python.getInstance()

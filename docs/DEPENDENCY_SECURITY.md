@@ -17,6 +17,7 @@ separate on-device native acceptance results before treating a candidate as read
 | PyNaCl / bcrypt / cffi | 1.6.2 / 5.0.0 / 2.1.1; libffi 3.8.0 | Android signature/password-hash checks; source versions alone do not identify bundled C libraries |
 | NumPy / OpenCV | 1.26.2 / 4.5.1 → 2.5.4 / 5.0.0.93 | Actual arm64 numerical, image and OCR checks; NumPy uses internal BLAS/LAPACK fallback |
 | ONNX Runtime / sherpa | 1.31.1 / 2.0.1 | OCR and local speech inference on the target device; model download terms are separate |
+| Conscrypt | 2.5.2 → 2.9.0 | Native TLS 1.3 initialization and cipher check; wireless pairing still needs device acceptance |
 | certifi | 2026.10.23, including bundled Lark and generated CA assets | Native TLS uses Android's trust store independently |
 | Go mesh | Go 1.27.3 with the prior pinned modules | Prior scan flagged deprecated OpenPGP outside the inspected import graph; re-audit if mesh imports change |
 | aiohttp family | Existing patched portable wheels retained | Pure Python paths trade some performance for compatibility |
