@@ -28,7 +28,7 @@ class NativeAcceptance : Instrumentation() {
                     val isolated = object : ContextWrapper(ctx) { override fun getFilesDir() = temp }
                     val ga = File(temp, "ga")
                     try {
-                        val edited = listOf("memory/global_mem.txt", "memory/album_select_sop.md")
+                        val edited = listOf("memory/global_mem.txt", "memory/app_ops_sop.md")
                         for (rel in edited) {
                             for (file in listOf(File(ga, rel), File(ga, ".evolution/baseline/$rel"))) {
                                 file.parentFile?.mkdirs(); file.writeText("synthetic user notes")
@@ -40,6 +40,12 @@ class NativeAcceptance : Instrumentation() {
                         check(personal.readText() == "personal fixture")
                         val packaged = ctx.assets.open("ga_runtime/memory/global_mem.txt").use { it.readBytes() }
                         check(File(ga, ".evolution/baseline/memory/global_mem.txt").readBytes().contentEquals(packaged))
+                        val legacy = JSONObject(ctx.assets.open("memory_legacy_sha256.json")
+                            .use { it.readBytes().toString(Charsets.UTF_8) }).getJSONObject("files")
+                        val untouched = File(temp, "untouched-default.txt").apply { writeBytes(packaged) }
+                        check(MemoryDefaults.install(untouched, legacy.getString("memory/global_mem.txt"),
+                            "updated fixture".toByteArray()))
+                        check(untouched.readText() == "updated fixture")
                         // A second upgrade uses the new asset-only baseline and still preserves edits.
                         check(File(ga, ".ver").delete())
                         AssetUnpacker(isolated).extractAssets()
