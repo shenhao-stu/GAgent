@@ -3,6 +3,7 @@ package com.ljq.ga
 import android.app.Activity
 import android.app.Instrumentation
 import android.content.Intent
+import android.content.ContextWrapper
 import android.os.Bundle
 import android.os.SystemClock
 import com.chaquo.python.Python
@@ -22,6 +23,32 @@ class NativeAcceptance : Instrumentation() {
         try {
             val ctx = targetContext
             when (arguments.getString("phase", "native")) {
+                "memory" -> {
+                    val temp = File(ctx.cacheDir, "memory-acceptance").apply { mkdirs() }
+                    val isolated = object : ContextWrapper(ctx) { override fun getFilesDir() = temp }
+                    val ga = File(temp, "ga")
+                    try {
+                        val edited = listOf("memory/global_mem.txt", "memory/album_select_sop.md")
+                        for (rel in edited) {
+                            for (file in listOf(File(ga, rel), File(ga, ".evolution/baseline/$rel"))) {
+                                file.parentFile?.mkdirs(); file.writeText("synthetic user notes")
+                            }
+                        }
+                        val personal = File(ga, "memory/user_notes.md").apply { writeText("personal fixture") }
+                        AssetUnpacker(isolated).extractAssets()
+                        check(edited.all { File(ga, it).readText() == "synthetic user notes" })
+                        check(personal.readText() == "personal fixture")
+                        val packaged = ctx.assets.open("ga_runtime/memory/global_mem.txt").use { it.readBytes() }
+                        check(File(ga, ".evolution/baseline/memory/global_mem.txt").readBytes().contentEquals(packaged))
+                        // A second upgrade uses the new asset-only baseline and still preserves edits.
+                        check(File(ga, ".ver").delete())
+                        AssetUnpacker(isolated).extractAssets()
+                        check(edited.all { File(ga, it).readText() == "synthetic user notes" })
+                        check(personal.readText() == "personal fixture")
+                        report.put("legacyCapturedEditsPreserved", true)
+                            .put("removedGuideEditsPreserved", true).put("secondUpgradePreserved", true)
+                    } finally { temp.deleteRecursively() }
+                }
                 "native" -> {
                     val tls = SSLContext.getInstance("TLS", Conscrypt.newProvider())
                     tls.init(null, null, null)

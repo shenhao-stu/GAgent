@@ -11,25 +11,46 @@ class MemoryDefaultsTest {
 
     @Test fun freshAndUnchangedDefaultsReceiveTheNewVersion() {
         val target = File(folder.root, "memory/guide.md")
-        val baseline = File(folder.root, "baseline.md")
-        assertTrue(MemoryDefaults.install(target, baseline, "old".toByteArray()))
-        baseline.writeText("old")
-        assertTrue(MemoryDefaults.install(target, baseline, "new".toByteArray()))
+        assertTrue(MemoryDefaults.install(target, null, "old".toByteArray()))
+        assertTrue(MemoryDefaults.install(target, hash("old"), "new".toByteArray()))
         assertEquals("new", target.readText())
     }
 
     @Test fun userEditsSurviveConsecutiveUpgrades() {
         val target = folder.newFile("guide.md").apply { writeText("my notes") }
-        val baseline = folder.newFile("baseline.md").apply { writeText("old") }
-        assertFalse(MemoryDefaults.install(target, baseline, "new".toByteArray()))
-        baseline.writeText("new")
-        assertFalse(MemoryDefaults.install(target, baseline, "next".toByteArray()))
+        assertFalse(MemoryDefaults.install(target, hash("old"), "new".toByteArray()))
+        assertFalse(MemoryDefaults.install(target, hash("new"), "next".toByteArray()))
         assertEquals("my notes", target.readText())
     }
 
     @Test fun existingMemoryWithoutAnOwnedBaselineIsPreserved() {
         val target = folder.newFile("guide.md").apply { writeText("existing") }
-        assertFalse(MemoryDefaults.install(target, File(folder.root, "missing"), "new".toByteArray()))
+        assertFalse(MemoryDefaults.install(target, null, "new".toByteArray()))
         assertEquals("existing", target.readText())
     }
+
+    @Test fun legacyBaselineContainingUserEditsIsNotAnOwnershipProof() {
+        val target = folder.newFile("guide.md").apply { writeText("my notes") }
+        val baseline = folder.newFolder("baseline")
+        File(baseline, "memory").mkdirs()
+        File(baseline, "memory/guide.md").writeText("my notes")
+        val known = MemoryDefaults.knownHashes(baseline, mapOf("memory/guide.md" to hash("old")), false)
+        assertFalse(MemoryDefaults.install(target, known["memory/guide.md"], "new".toByteArray()))
+        assertFalse(MemoryDefaults.remove(target, known["memory/guide.md"]))
+        assertEquals("my notes", target.readText())
+    }
+
+    @Test fun packagedBaselineSupportsLaterDefaultsAndSafeRemoval() {
+        val baseline = folder.newFolder("baseline")
+        File(baseline, "memory").mkdirs()
+        File(baseline, "memory/guide.md").writeText("new")
+        val known = MemoryDefaults.knownHashes(baseline, mapOf("memory/guide.md" to hash("old")), true)
+        val target = folder.newFile("guide.md").apply { writeText("new") }
+        assertTrue(MemoryDefaults.remove(target, known["memory/guide.md"]))
+        assertFalse(target.exists())
+        val unknown = folder.newFile("notes.md").apply { writeText("private notes") }
+        assertFalse(MemoryDefaults.remove(unknown, known["memory/notes.md"]))
+    }
+
+    private fun hash(value: String) = MemoryDefaults.sha256(value.toByteArray())
 }

@@ -374,7 +374,18 @@ already behind a system screen could still start a microphone session. The nativ
 entry now serializes its foreground check and session assignment with `onPause`,
 which cancels the session before leaving the foreground. The device lifecycle phase
 also asserts that a background restart returns `not_foreground`. This follow-up
-requires fresh device acceptance; earlier lifecycle samples alone did not cover it.
+passed fresh device acceptance on `f50a829`: native dependencies, integrity, known
+WAV, microphone and lifecycle all passed. An independent Home-screen check also
+returned `not_foreground`; the old build returned success for the same check.
+The portrait PC scanner opened and closed on-device. No optical pairing was tried.
+
+Before upgrading user data, review found that older releases copied live memory
+into the baseline. An unchanged baseline could therefore already contain user edits.
+Migration now uses hashes of the 33 public defaults from `ab0d7f0` until an
+asset-only baseline exists. Unit regressions cover replacement and removal; a
+separate device phase exercises the actual unpacker with synthetic poisoned legacy
+baselines across two upgrades. Its final result must be recorded with the signed
+artifact; source review alone is not device migration evidence.
 
 ### Scope and remaining limits / 范围与剩余限制
 

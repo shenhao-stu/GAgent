@@ -56,6 +56,9 @@ they do not prove every feature works on every device or network.
   downloads are HTTPS-only and hash-pinned; recognition audio stays on the phone.
 - Default memory is reduced to a short index and task references. Upgrades replace
   untouched defaults and preserve user edits; baselines come from packaged assets.
+  Older baselines copied live user memory, so the first migration instead checks
+  the SHA-256 manifest of public defaults from `ab0d7f0`. Unknown or edited memory
+  is retained, including retired guides; later baselines are marked asset-only.
 
 ## Public repository controls / 公网仓库防护
 
