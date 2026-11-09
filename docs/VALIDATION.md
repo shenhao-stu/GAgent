@@ -1,6 +1,6 @@
 # Validation snapshot / 验收快照
 
-Latest update: [2.33.8 follow-up, 2026-10-25](#v2338).
+Latest update: [2.34.0 native and voice acceptance, 2026-11-09](#v2340).
 
 **Initial Pixel snapshot:** 2026-10-23
 
@@ -314,3 +314,64 @@ optical QR pairing in this app, a fresh install, foldables and other OEMs.
 Follow [Testing](TESTING.md) for new evidence and [Roadmap](ROADMAP.md) for the
 remaining engineering priorities. Personal device traces and screenshots are not
 distributed in this repository.
+
+
+<a id="v2340"></a>
+## 2.34.0 native and voice acceptance / 原生依赖与语音验收
+
+**2026-11-09:** MEIZU 21, Android 16, arm64, portrait. Candidate `22131e7`,
+[CI 42588615719](https://github.com/shenhao-stu/GAgent/actions/runs/42588615719).
+PR merge source `f8f05b6` has the same tree as the candidate. Both verification
+and Android builds passed: **482 tests and 10 subtests**, auxiliary suites,
+Kotlin tests, source/history scans and APK audits. The tested debug APK SHA-256 is
+`723bf801dd3a6d04e9472440f35c0581394c39537a81dab24fde25371cbe2b2d`.
+Its signature was verified; an in-memory payload mutation was rejected.
+
+| On-device check / 真机项目 | Observed result / 结果 |
+| --- | --- |
+| Embedded runtime | CPython 3.13.16; Python and cryptography both linked OpenSSL 3.5.9 |
+| Crypto / SSH | AES-GCM, X25519, PyNaCl signatures, bcrypt and Paramiko RSA signature round trips passed |
+| Numerical / image processing | NumPy solve and 128-bit long double passed; OpenCV PNG round trip, resize and malformed text metadata passed |
+| Linked image codecs | Actual OpenCV build reports libpng 1.6.59 and zlib 1.4 |
+| OCR / TLS | Synthetic image read as `GAgent 123`; Conscrypt 2.9.0 initialized TLS 1.3 |
+| Voice model | Earlier candidate with identical voice implementation downloaded all 81,904,027 bytes on-device via HTTPS; fixed SHA-256 checks passed |
+| Composer interaction | Actual press/release appended to the existing draft without sending; upward swipe preserved the draft and cancelled. This acoustic sample contained recognition errors and a truncated ending; it was not scored as an exact transcript |
+| Voice integrity / decoding | Same-size corruption rejected; restored assets verified; 8.1-second public Chinese/English WAV matched the expected transcript exactly on `22131e7` |
+| Microphone / lifecycle | Actual microphone capture, explicit cancellation and background cancellation passed on the same voice implementation; stale session results rejected |
+
+The public audio fixture transcribed as `yesterday was 星期一 today is tuesday
+明天是星期三`. Native decoding of the known WAV took 58 ms in one warm measurement;
+this is not end-to-end latency or a speed benchmark. A separate acoustic check
+played the fixture through laptop speakers into the phone's microphone: the first
+attempt did not match; the second matched exactly after increasing playback volume.
+Playback volume was restored after that check. During the later composer trial,
+output volume changed to zero and was left there; no further audio was played. These samples do not establish general ASR accuracy.
+
+An earlier complete CI build (`88baa61`) failed the actual cryptography import with
+`PyBytes_Type` missing. The fix explicitly links the embedded Python library and
+adds an ELF linkage gate; the above native checks passed after the fix. Two test
+setup failures (truncated WAV transfer and a misplaced restored model directory)
+were corrected before recording voice passes. A model restored between disposable
+debug installations is not counted as another fresh-download test.
+
+中文：构建通过后仍在真机发现了加密库链接错误，修复并实测后才记为通过。语音测试保留
+首次收音失败；第二次逐字匹配，音量已恢复。测试仅使用公开音频和合成数据，不调用收费模型。
+
+### Scope and remaining limits / 范围与剩余限制
+
+- This is author verification, not an independent security audit. Secret scans,
+  APK inventories and five DOM security regressions do not prove absence of flaws.
+- OpenCV supplies the app's image/OCR subset. Optional desktop modules and several
+  codecs are excluded; external scripts requiring those APIs may need adaptation.
+- The new Python extension ELFs have 16 KB alignment, but the existing Go JNI library
+  still has 4 KB alignment. Full-APK 16 KB page-size compatibility is **not** claimed.
+- Python's separate zlib runtime reports `1.3.0.1-motley`; the OpenCV zlib 1.4 override
+  does not update Android/system or other copies. sherpa's static ORT 1.28.2 is
+  separate from OCR's Java ORT 1.31.1.
+- User-modified memory preservation is covered by native unit tests; do not treat
+  shortened packaged defaults as permission to delete user memory.
+- Physical-camera QR acceptance remains deferred by the owner. Earlier PC Link
+  manual pairing/read/write/reconnect evidence and current protocol regression
+  tests do not substitute for a new optical scan or every cross-network service.
+- The debug candidate above is distinct from any later signed main artifact. Record
+  its source, signature, digest and upgrade result separately before distribution.

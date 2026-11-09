@@ -7,6 +7,35 @@ publicly released. Exact artifacts and acceptance belong to their release record
 
 ## Unreleased / 未发布变更
 
+## 2.34.0 / 143 — 2026-11-09 (source candidate / 源码候选)
+
+- Replace standalone streaming voice settings with on-device Chinese/English
+  hold-to-talk. Download a hash-verified model once, release to append to the draft,
+  slide up or leave the foreground to cancel; never send automatically.
+  使用离线中英文语音，删除独立在线语音配置；转写追加草稿，上滑或切后台取消。
+- Upgrade CPython/Chaquopy, cryptography/OpenSSL, Paramiko, NumPy/OpenCV,
+  inference and TLS dependencies. Build arm64 Python extensions from pinned source;
+  check target linkage and update OpenCV's bundled libpng/zlib security fixes.
+  升级原生依赖，固定源码校验值，校验 Android 链接并修复图像编解码依赖。
+- Compact default memory and update untouched defaults during upgrades while
+  preserving user edits. Keep GA's core unchanged and document edition differences.
+  精简默认记忆，升级保留用户修改；核心不变，明确开闭源适配差异。
+- Block nested content in the privileged WebView and fall back to plain text when
+  sanitization fails. Retain explicit authenticated service configuration and WSS.
+  限制特权页面嵌套内容，清理失败显示纯文本，保留服务鉴权与 WSS 边界。
+
+OpenCV now includes the image-processing/OCR subset, not every desktop module.
+See [native/voice acceptance and remaining limits](docs/VALIDATION.md#v2340).
+OpenCV 为图像处理/OCR 子集；真机结果与剩余限制见验收记录。
+
+## 2.33.9 / 142 — 2026-11-09 (source update / 源码更新)
+
+- Adapt the latest upstream multi-computer PC Link, routing/reconnect, UI and device
+  fixes while preserving OSS endpoint and authorization boundaries. Remove GA Plan,
+  commercial account/billing bridges and hosted telemetry. See
+  [the synchronization record](docs/UPSTREAM_SYNC.md).
+  同步多电脑 PC Link、重连、界面和设备修复，保留开源鉴权边界；删除商业计费账户路径。
+
 ## 2.33.8 / 141 — 2026-10-25 (open-source prerelease / 开源预发布)
 
 - Web tool: the foreground browser's screenshot no longer times out on Android WebView,

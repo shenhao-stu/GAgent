@@ -20,9 +20,10 @@ creating a draft and making a repository public are distinct actions.
   Do not claim a public launch while the repository remains private.
 
 For this project, source is published as a preview by the owner's decision.
-The supported Python/native-wheel migration remains an open **stable APK release
-gate**. Publishing source does not mark those findings fixed or publish draft
-releases. Optional YOLO redistribution needs its own resolved rights; a user-download
+The Python/native-wheel migration has bounded device evidence in
+[Validation](VALIDATION.md#v2340). Stable APK publication still requires acceptance
+of its exact signed artifact and the documented compatibility limits; a green PR
+build alone does not publish a release. Optional YOLO redistribution needs its own resolved rights; a user-download
 guide is not permission to bundle weights.
 
 ## 2. Build and verify the same commit / 验证同一提交
