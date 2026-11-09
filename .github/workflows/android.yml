@@ -62,10 +62,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
-        with:
-          distribution: liberica
-          java-version: '17.0.21'
+      - name: Use the runner JDK 17
+        run: |
+          test -x "$JAVA_HOME_17_X64/bin/java"
+          printf 'JAVA_HOME=%s\n' "$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          printf '%s/bin\n' "$JAVA_HOME_17_X64" >> "$GITHUB_PATH"
+          "$JAVA_HOME_17_X64/bin/java" -version
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.13'

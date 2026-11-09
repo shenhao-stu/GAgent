@@ -14,7 +14,7 @@ include a Gradle wrapper. Run commands below from the repository root.
 | Component / 组件 | Declared configuration / 当前配置 | Source / 来源 |
 | --- | --- | --- |
 | Build host in CI | Ubuntu 24.04 | Android workflow |
-| JDK | Liberica 17.0.21 in CI; Java 17 target | Workflow, app/build.gradle |
+| JDK | Runner-provided JDK 17 (version logged in CI); Java 17 target | Workflow, app/build.gradle |
 | Gradle / Android Gradle Plugin | 8.2 / 8.1.4 | Workflow, build.gradle |
 | Kotlin / Chaquopy | 1.9.22 / 17.2.0 | build.gradle |
 | Android SDK / build tools | 34 / 34.0.0 | Workflow, app/build.gradle |

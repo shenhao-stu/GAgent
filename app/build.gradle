@@ -44,6 +44,8 @@ android {
 chaquopy {
     defaultConfig {
         version "3.13"
+        // OpenCV's upstream loader opens config.py and enumerates sibling modules.
+        extractPackages "cv2"
         def bp = (project.findProperty("chaquopy.python") ?: System.getenv("CHAQUOPY_PYTHON"))?.toString()?.trim()
         if (bp) { buildPython bp }
         // buildPython 默认不写死: Chaquopy 自动探测 PATH 上的 python3.13 (CI/作者Mac/本机一致)。
