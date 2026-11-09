@@ -82,6 +82,12 @@ using cibuildwheel (NDK r27), then the portable wheel script adds HTTP dependenc
 `build/python-wheels/`. Gradle consumes both and downloads the hash-pinned sherpa JNI AAR. Android wheels are not the desktop
 wheels installed for tests.
 
+The Android OpenCV wheel is `opencv-python-headless`. It includes core numerical,
+image-processing and image-codec bindings (plus required geometry/flann modules).
+Native desktop windows, video/FFmpeg and optional vision modules are not bundled;
+custom scripts requiring those APIs need a different build. The app's OCR and
+screenshot paths are covered by the native device checks.
+
 | Output / 产物 | Meaning / 含义 |
 | --- | --- |
 | app/build/outputs/apk/debug/app-debug.apk | Debug package; separate application ID |

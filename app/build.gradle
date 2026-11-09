@@ -52,7 +52,26 @@ chaquopy {
         // Private mesh relay and pinned PC SSH both require these Chaquopy-compatible dependencies.
         pip {
             options '--find-links', rootProject.file('build/python-wheels').absolutePath
-            install "requests==2.34.2"; install "certifi==2026.10.23"; install "charset-normalizer==2.1.1"; install "beautifulsoup4==4.15.0"; install "numpy==2.5.4"; install "opencv-python==5.0.0.93"; install "websocket-client==1.9.2"; install "PyYAML==6.0.3"; install "websockets==16.1.1"; install "cryptography==50.0.2"; install "aiohttp==3.14.5"; install "multidict==7.1.0"; install "yarl==1.25.1"; install "frozenlist==1.8.0"; install "propcache==0.5.4"; install "paramiko==5.1.0"; install "bcrypt==5.0.0"; install "pynacl==1.6.2"; install "cffi==2.1.1" }
+            install "requests==2.34.2"
+            install "certifi==2026.10.23"
+            install "charset-normalizer==2.1.1"
+            install "beautifulsoup4==4.15.0"
+            install "numpy==2.5.4"
+            install "opencv-python-headless==5.0.0.93"
+            install "websocket-client==1.9.2"
+            install "PyYAML==6.0.3"
+            install "websockets==16.1.1"
+            install "cryptography==50.0.2"
+            install "aiohttp==3.14.5"
+            install "multidict==7.1.0"
+            install "yarl==1.25.1"
+            install "frozenlist==1.8.0"
+            install "propcache==0.5.4"
+            install "paramiko==5.1.0"
+            install "bcrypt==5.0.0"
+            install "pynacl==1.6.2"
+            install "cffi==2.1.1"
+        }
     }
 }
 dependencies {

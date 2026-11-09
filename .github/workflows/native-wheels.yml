@@ -30,6 +30,10 @@ jobs:
         with:
           packages: platform-tools
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ~/.cache/cibuildwheel
+          key: android-cibw435-toolchain-${{ runner.os }}-cp313
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         id: wheels
         with:
           path: build/python-wheels
