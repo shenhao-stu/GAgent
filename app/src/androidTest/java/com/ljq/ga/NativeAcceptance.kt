@@ -100,6 +100,11 @@ class NativeAcceptance : Instrumentation() {
                                 check(JSONObject(OfflineAsr.poll(id)).optString("error") == "session_expired")
                                 check(!JSONObject(OfflineAsr.stop(id)).optBoolean("ok"))
                                 report.put("staleSessionRejected", true)
+                                if (arguments.getString("phase") == "lifecycle") {
+                                    val restart = JSONObject(activity.Bridge().offAsrStart())
+                                    check(!restart.optBoolean("ok") && restart.optString("error") == "not_foreground")
+                                    report.put("backgroundStartRejected", true)
+                                }
                             }
                         }
                     } finally { OfflineAsr.cancel(id) }

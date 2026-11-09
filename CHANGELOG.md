@@ -17,6 +17,8 @@ publicly released. Exact artifacts and acceptance belong to their release record
   hold-to-talk. Download a hash-verified model once, release to append to the draft,
   slide up or leave the foreground to cancel; never send automatically.
   使用离线中英文语音，删除独立在线语音配置；转写追加草稿，上滑或切后台取消。
+  Native foreground/session synchronization also rejects delayed background starts.
+  原生层同步前台状态与录音会话，拒绝迟到的后台启动。
 - Upgrade CPython/Chaquopy, cryptography/OpenSSL, Paramiko, NumPy/OpenCV,
   inference and TLS dependencies. Build arm64 Python extensions from pinned source;
   check target linkage and update OpenCV's bundled libpng/zlib security fixes.

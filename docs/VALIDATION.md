@@ -369,6 +369,13 @@ leave `startActivitySync` waiting for a nonexistent new Activity. Final CI and
 signed-main device evidence must include these later changes; the APK digest above
 identifies only the earlier native-dependency candidate.
 
+A later direct native-bridge check exposed a background-start boundary: an Activity
+already behind a system screen could still start a microphone session. The native
+entry now serializes its foreground check and session assignment with `onPause`,
+which cancels the session before leaving the foreground. The device lifecycle phase
+also asserts that a background restart returns `not_foreground`. This follow-up
+requires fresh device acceptance; earlier lifecycle samples alone did not cover it.
+
 ### Scope and remaining limits / 范围与剩余限制
 
 - This is author verification, not an independent security audit. Secret scans,
