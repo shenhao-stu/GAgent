@@ -66,7 +66,7 @@ class NativeAcceptance : Instrumentation() {
                 }
                 "microphone", "lifecycle", "acoustic" -> {
                     val activity = startActivitySync(Intent(ctx, MainActivity::class.java)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)) as MainActivity
                     sendStatus(1, Bundle().apply { putString("phase", "waiting_for_foreground") })
                     val foregroundDeadline = SystemClock.elapsedRealtime() + 15_000
                     while (!activity.hasWindowFocus() && SystemClock.elapsedRealtime() < foregroundDeadline)
