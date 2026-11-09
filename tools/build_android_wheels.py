@@ -178,6 +178,12 @@ def build(package):
               '        except (ScopeNotFoundError, SymbolNotFoundError):\n'
               '            continue  # Optional module excluded from this build.\n'
               '        refine_symbol(root, symbol_name)')
+        patch(root / 'opencv/modules/python/src2/typing_stubs_generation/generation.py',
+              '    for node in PREDEFINED_TYPES.values():\n',
+              '    for node in PREDEFINED_TYPES.values():\n'
+              '        if node.ctype_name in ("FeatureDetector", "DescriptorExtractor", "FeatureExtractor") \\\n'
+              '                and "Feature2D" not in root.classes:\n'
+              '            continue  # features2d is optional in a partial build.\n')
         values.update(ENABLE_HEADLESS='1', CMAKE_ARGS=' '.join([
             '-DBUILD_LIST=core,imgproc,imgcodecs,python3', '-DBUILD_TESTS=OFF',
             '-DOPENCV_FORCE_PYTHON_LIBS=ON', '-DCMAKE_MODULE_LINKER_FLAGS=-static-libstdc++',

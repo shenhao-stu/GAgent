@@ -8,6 +8,23 @@ identity and optional service configuration.
 本次把上游功能适配到开源宿主，未合并私有 Git 历史；保留独立包名、用户模型配置、
 本地总线鉴权、可选组件开关和数据隐私边界。
 
+## Edition differences / 两个版本的差异
+
+| Area / 范围 | Open-source adaptation / 开源适配 |
+| --- | --- |
+| GA core | Seven tracked core files match the reference byte for byte; Android wiring stays in adapters / 7 个核心文件逐字节一致 |
+| PC Link | Latest multi-computer, response ownership and reconnect fixes retained; explicit WSS configuration replaces official endpoint rewriting / 保留最新多电脑与响应归属修复，显式配置安全端点 |
+| GAnet | Generic pairing and device transport retained; credentials and ownership are user-configured / 保留配对和设备传输，用户自行配置凭据 |
+| Voice | Native offline hold-to-talk reused; independent streaming settings and transport removed; system TTS retained / 复用离线按住说话，删除独立在线配置，保留系统朗读 |
+| Accounts and billing | GA Plan, commercial account bridges and managed quota synchronization removed; ordinary model providers remain / 删除商业账户计费路径，保留通用模型配置 |
+| Device tools | Upstream tools retained with OSS geometry, frame freshness, local authorization and revoked-ADB-pairing safeguards / 保留设备能力及开源版边界修复 |
+| Memory | Short defaults and focused references; upgrades preserve user edits / 精简默认记忆，升级保留用户改动 |
+| Privacy and rendering | Hosted telemetry disabled; local capability tokens, separate HTML preview and fail-closed sanitization retained / 禁用托管遥测，隔离 HTML 预览，清理失败时显示纯文本 |
+| Native dependencies | Rebuilt Android wheels and updated inference/TLS libraries; actual artifact and device evidence required / 重建原生依赖，以实包和真机结果验收 |
+
+Source equality and adaptation review establish where behavior is implemented;
+they do not prove every feature works on every device or network.
+
 ## Scope / 范围
 
 - PC Link: multi-hub discovery, encoded session routing, hub selection, reconnect
