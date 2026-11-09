@@ -1,8 +1,8 @@
 package com.ljq.ga
 
 internal fun needsBackgroundOverlay(permission: Boolean, foreground: Boolean,
-                                    busy: Boolean, always: Boolean, suppressed: Boolean): Boolean =
-    permission && !foreground && (!suppressed || always) && (busy || always)
+                                    busy: Boolean, always: Boolean): Boolean =
+    permission && !foreground && (busy || always)
 
 internal fun overlayPosition(x: Int, y: Int, width: Int, height: Int,
                              screenWidth: Int, screenHeight: Int, dock: Boolean): Pair<Int, Int> {

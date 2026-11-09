@@ -10,7 +10,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-GACORE = ROOT / "app" / "src" / "main" / "assets" / "gacore"
+GACORE = ROOT / "app" / "src" / "main" / "assets" / "ga_runtime"
+PHONE_USE = GACORE / "memory" / "phone_use.md"
 ZH = GACORE / "assets" / "global_mem_insight_template.txt"
 EN = GACORE / "assets" / "global_mem_insight_template_en.txt"
 DROID = GACORE / "droid.py"
@@ -108,8 +109,12 @@ def test_sensitive_apps_share_one_code_policy():
     droid = DROID.read_text(encoding="utf-8")
     assert "SENSITIVE_APPS" in droid and "com.tencent.mm" in droid   # 单一真相源=策略注册表 SENSITIVE_APPS(SENSITIVE_PKGS 为其派生)
     assert "_app_policy" in droid            # 单一策略漏斗: dump/scroll/paste 共用, 无内联复制漂移
-    assert "_sensitive_fg" in droid          # 便宜的 ping().pkg 判定, 不读 a11y 树
+    assert "_visual_only" in droid           # 节点许可不暴露包名
     assert "fail-closed" in droid            # 前台未解析→按敏感处理, 安全方向不可回退
+    sop = PHONE_USE.read_text(encoding="utf-8")
+    assert "SENSITIVE_APPS" in sop           # SOP 措辞指向代码注册表(单一真相源), 不复制清单
+    for token in ("敏感App", "恒返回 []", "视觉路径"):
+        assert token in sop
 
 
 def test_tap_docstring_documents_safety_not_evasion():

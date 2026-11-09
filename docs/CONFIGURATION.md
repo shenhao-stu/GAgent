@@ -36,7 +36,7 @@ For image questions, ask GAgent:
 > Configure vision from the bundled SOP and template using my existing image-capable provider. Do not print credentials; test a synthetic image first.
 
 The local adapter is `memory/vision_api.py`, created from
-[`vision_api.template.py`](../app/src/main/assets/gacore/memory/vision_api.template.py).
+[`vision_api.template.py`](../app/src/main/assets/ga_runtime/memory/vision_api.template.py).
 Set `DEFAULT_BACKEND` to `claude` or `openai`, and set the matching
 `CLAUDE_CONFIG_KEY` or `OPENAI_CONFIG_KEY` to the **configuration name** in `mykey`,
 not the literal API key. Changing the chat model alone does not change this reference.
@@ -70,14 +70,14 @@ OpenAI 模板使用 Chat Completions。升级会保留用户已有的 `vision_ap
 | OCR / 文字识别 | Bundled; no separate account or model download / 已内置 | `droid.look(cache=False)` returns readable labels on a text-rich screen / 有文字页面返回识别项 |
 | YOLO / 图标检测 | Install compatible ONNX; [guide](OPTIONAL_YOLO.md) / 按指南独立安装 | Real detections and loaded model, not just a file / 实际检测与已加载模型 |
 | Files and memory / 文件与记忆 | Local tools are included; allow shared-storage access when needed / 本地工具已含，按需授权共享存储 | Create and read back a new test file; review saved procedures / 创建并读回测试文件 |
-| Browser / 内置浏览器 | Sign in through the app browser; task/background WebViews share cookies / 在内置浏览器登录，任务与后台 WebView 复用 Cookie | Verify the URL, content and session; [background guide](../app/src/main/assets/gacore/memory/offscreen_sop.md) / 核对地址、内容与登录态 |
+| Browser / 内置浏览器 | Sign in through the app browser; task/background WebViews share cookies / 在内置浏览器登录，任务与后台 WebView 复用 Cookie | Verify the URL, content and session; [background guide](../app/src/main/assets/ga_runtime/memory/offscreen_sop.md) / 核对地址、内容与登录态 |
 | Scheduled agent tasks / 定时任务 | Ask the agent to create a bounded schedule using `droid.alarm_set` / 创建明确的定时任务 | `droid.alarm_list()`; check actual delivery and cancellation / 核验列表、到达与取消 |
-| Notification rules / 通知规则 | Grant Android Notification access; define explicit rules using the [notification SOP](../app/src/main/assets/gacore/memory/notif_trigger_sop.md) / 授权通知使用权并配置规则 | `droid.notif_trigger_status()` and a new synthetic notification / 状态与新建测试通知 |
-| Feishu / 飞书 | Own app credentials and scopes; follow [bot setup](../app/src/main/assets/gacore/memory/feishu_bot_sop.md) and [API tools](../app/src/main/assets/gacore/memory/lark_sop.md) / 自有应用凭据与授权范围 | Verify status and a test-space interaction; no unsolicited messages / 测试空间核验 |
-| Sensing / 感知 | Explicitly activate needed features and permissions using the [sensing SOP](../app/src/main/assets/gacore/memory/sense_sop.md) / 按需主动开启 | Check a short capture, stop state and local retention policy / 短时采集、停止与留存核验 |
-| Wireless ADB / 无线 ADB | Settings → Wireless debugging self-connect; follow the [setup guide](../app/src/main/assets/gacore/memory/adb_self_setup.md) / 设置 → 无线调试自连 | Check the actual paired connection; ordinary GUI use does not require ADB / 核验配对，普通 GUI 无需 ADB |
+| Notification rules / 通知规则 | Grant Android Notification access; define explicit rules using the [notification SOP](../app/src/main/assets/ga_runtime/memory/notif_trigger_sop.md) / 授权通知使用权并配置规则 | `droid.notif_trigger_status()` and a new synthetic notification / 状态与新建测试通知 |
+| Feishu / 飞书 | Own app credentials and scopes; follow [bot setup](../app/src/main/assets/ga_runtime/memory/feishu_bot_sop.md) and [API tools](../app/src/main/assets/ga_runtime/memory/lark_sop.md) / 自有应用凭据与授权范围 | Verify status and a test-space interaction; no unsolicited messages / 测试空间核验 |
+| Sensing / 感知 | Explicitly activate needed features and permissions using the [sensing SOP](../app/src/main/assets/ga_runtime/memory/sense_sop.md) / 按需主动开启 | Check a short capture, stop state and local retention policy / 短时采集、停止与留存核验 |
+| Wireless ADB / 无线 ADB | Settings → Wireless debugging self-connect; follow the [setup guide](../app/src/main/assets/ga_runtime/memory/adb_self_setup.md) / 设置 → 无线调试自连 | Check the actual paired connection; ordinary GUI use does not require ADB / 核验配对，普通 GUI 无需 ADB |
 | Virtual display / 虚拟屏 | Compatible wireless ADB/device and `vdisplay.vd_probe()` / 兼容设备与探测 | Explicitly experimental; verify display, input and teardown on that device / 实验能力，逐机验收创建、输入与停止 |
-| Vendor assistant / 厂商助手 | Use discovery from the [adapter guide](../app/src/main/assets/gacore/memory/vendor_assistant_sop.md) / 按规程发现可用助手 | No universal OEM support; check the actual assistant and outcome / 不保证所有厂商支持 |
+| Vendor assistant / 厂商助手 | Use discovery from the [adapter guide](../app/src/main/assets/ga_runtime/memory/vendor_assistant_sop.md) / 按规程发现可用助手 | No universal OEM support; check the actual assistant and outcome / 不保证所有厂商支持 |
 | Local evolution / 本地修改保留 | Included asset-update/evolution machinery; keep your own backups / 已保留更新融合机制，仍需备份 | Verify specific edited files after upgrade; do not assume every change survives / 升级后逐项核对 |
 
 Notification access is different from permission to **post** notifications. Android
@@ -99,8 +99,8 @@ The Android repository contains clients, not a one-command deployment of these s
 | PC Link | `url`, `token` | WSS signaling endpoint, individual credential compatible with request signing, paired computer / WSS、逐用户兼容凭据与配对电脑 |
 | Mesh / GAnet | `url`, `token`, `owner_id` | HTTPS API, user token and numeric identity issued by that server / HTTPS、用户令牌及服务签发的数字身份 |
 | Streaming ASR | `url`, `token`, `model` | Compatible WSS relay; default `step-asr-1.1-stream`, PCM16/16 kHz mono; microphone permission / 兼容中继、模型与麦克风授权 |
-| APK build service | `url`, `token` | HTTPS builder and own token; [project-to-APK workflow](../app/src/main/assets/gacore/memory/apk_factory_sop.md); workers/signing stay server-side / 构建工作节点与签名在服务端 |
-| Model provider / GA Plan | Use Providers & Models instead / 使用服务商与模型页 | Provider-issued endpoint, user key and model / 服务商签发的接口、用户密钥与模型 |
+| APK build service | `url`, `token` | HTTPS builder and own token; [project-to-APK workflow](../app/src/main/assets/ga_runtime/memory/apk_factory_sop.md); workers/signing stay server-side / 构建工作节点与签名在服务端 |
+| Model provider | Use Providers & Models instead / 使用服务商与模型页 | Provider-issued endpoint, user key and model / 服务商签发的接口、用户密钥与模型 |
 
 An importable [profile example](examples/integrations.example.json) shows the exact
 JSON shape: `schema: 1` and an `integrations` object. Its `.invalid` URLs and example
@@ -121,8 +121,8 @@ connection before a real task. [Protocols and authority](OFFICIAL_MODULES.md).
 
 Jev is a text-candidate selector, not a chat model, image model or YOLO replacement.
 It is disabled until a private `files/ga/jev_config.json` enables selected packages
-and supplies your key; use the [example](../app/src/main/assets/gacore/jev_config.example.json)
-and [Jev guide](../app/src/main/assets/gacore/memory/jev_phone_use.md).
+and supplies your key; use the [example](../app/src/main/assets/ga_runtime/jev_config.example.json)
+and [Jev guide](../app/src/main/assets/ga_runtime/memory/jev_phone_use.md).
 This adapter pins `jev-1.13.0` and its protocol. It is not configured in the normal
 model-provider or optional-service form.
 

@@ -34,7 +34,7 @@ python tools/test_mykey_writer.py
 python tools/test_provider_selection.py
 python tools/test_jev_ui.py
 python tools/test_sess_registry.py
-find app/src/main/assets/gacore/webui -name '*.js' -print0 | xargs -0 -n1 node --check
+find app/src/main/assets/ga_runtime/webui -name '*.js' -print0 | xargs -0 -n1 node --check
 ~~~
 
 The `tools/test_*.py` commands above are explicit CI steps; do not assume

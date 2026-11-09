@@ -27,7 +27,7 @@ class AssetUnpacker(private val ctx: Context) {
                 .onFailure { Analytics.track("{\"event\":\"evo_backup_fail\",\"props\":{\"msg\":${JSONObject.quote(it.message ?: it.javaClass.simpleName)}}}") }
             // UI 资源允许整目录刷新；避免旧 filesDir/webui 中 index.html 等残留导致 APK 内新版未生效。
             File(gaDir, "webui").deleteRecursively()
-            val stat = copyAssetDir("gacore", gaDir)
+            val stat = copyAssetDir("ga_runtime", gaDir)
             // 官方删除传播: APK 已移除的文件(如 v2.16 删 weixin_native)从存量设备同步清掉。
             // 必须先 prune 再 refreshBaseline: prune 以旧 baseline 为"曾是官方文件"的证据。
             var pruned = 0

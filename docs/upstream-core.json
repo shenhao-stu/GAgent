@@ -1,0 +1,13 @@
+{
+  "upstream": "GAndroid",
+  "revision": "eae6e54d36491256c8b6c69c1394a52c5abdf151",
+  "files": {
+    "gacore/agent_loop.py": "bd322f7064d037ed737d6ce0d5ccb53a95baec66112e9a972d4fcff3370eb439",
+    "gacore/agentmain.py": "327d5b27012356df39e8c12f444ba61d2eba87cad9aa87a1ed72958c0516ab7f",
+    "gacore/assets/cc_system_template.txt": "3d92d4f7403dd1b31793b90e8241d51ad1c118d79cb6da1d943214f210961889",
+    "gacore/ga.py": "a624e8d79bbd019755bb53b82d89944fb94a4c9fbdb1ac55ce1456374982870f",
+    "gacore/legacy_llmcore.py": "f81d63e6b465bb45ee6b432565b68ba53083494600578774faa4c36808610f76",
+    "gacore/llmcore.py": "a221b76e4ed72050b06f47375ca30c3af8b2110804bc55b510a29e2ebb7e1419",
+    "gacore/simphtml.py": "233aaa04a04d57450929c252fcac6c0f707c7ec02a08c289c7c8c783060d3bff"
+  }
+}

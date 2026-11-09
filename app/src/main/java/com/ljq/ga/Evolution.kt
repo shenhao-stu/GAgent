@@ -20,7 +20,7 @@ object Evolution {
                r.endsWith(".js") || r.endsWith(".css") || r.endsWith(".html")
     }
 
-    // 递归列出 asset 树里的跟踪文本文件(rel 相对 gacore 根); 空 list = 文件(与 copyAssetDir 约定一致)。
+    // 递归列出 asset 树里的跟踪文本文件(rel 相对 ga_runtime 根); 空 list = 文件(与 copyAssetDir 约定一致)。
     private fun listAssetTracked(ctx: Context, path: String, rel: String, out: MutableSet<String>) {
         val items = ctx.assets.list(path) ?: return
         if (items.isEmpty()) { if (isTrackedText(rel)) out.add(rel); return }
@@ -34,7 +34,7 @@ object Evolution {
         val base = baselineDir(gaDir)
         if (!base.isDirectory) return 0                              // 首次: 无基线不备份(仅 refreshBaseline 建基线)
         val rels = LinkedHashSet<String>()
-        listAssetTracked(ctx, "gacore", "", rels)             // theirs 路径集
+        listAssetTracked(ctx, "ga_runtime", "", rels)             // theirs 路径集
         if (base.isDirectory) base.walkTopDown().filter { it.isFile }
             .forEach { rels.add(it.relativeTo(base).path.replace('\\', '/')) }   // ∪ baseline-only(官方删除但本地改过)
         val dir = File(gaDir, ".evolution/backups").apply { mkdirs() }
@@ -65,7 +65,7 @@ object Evolution {
         val base = baselineDir(gaDir)
         if (!base.isDirectory) return 0                       // 首装无基线: 无历史官方文件可清
         val theirs = LinkedHashSet<String>()
-        listAssetTracked(ctx, "gacore", "", theirs)
+        listAssetTracked(ctx, "ga_runtime", "", theirs)
         var n = 0
         for (bf in base.walkTopDown().filter { it.isFile }) {
             val rel = bf.relativeTo(base).path.replace('\\', '/')
@@ -81,7 +81,7 @@ object Evolution {
         val base = baselineDir(gaDir)
         base.deleteRecursively(); base.mkdirs()
         val rels = LinkedHashSet<String>()
-        listAssetTracked(ctx, "gacore", "", rels)
+        listAssetTracked(ctx, "ga_runtime", "", rels)
         for (rel in rels) {
             val src = File(gaDir, rel); if (!src.isFile) continue
             val dst = File(base, rel); dst.parentFile?.mkdirs(); src.copyTo(dst, overwrite = true)

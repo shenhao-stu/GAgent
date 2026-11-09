@@ -18,6 +18,9 @@ def link(monkeypatch):
     clock = [100.0]
     monkeypatch.setattr(mod, 'time', types.SimpleNamespace(monotonic=lambda: clock[0]))
     mod.clock = clock
+    config = {'url': 'wss://relay.example/ws', 'token': 'fixture-token'}
+    mod.service_config = types.SimpleNamespace(pclink_config=lambda: config)
+    mod._sock_config = config
     return mod
 
 
@@ -65,13 +68,15 @@ def test_resume_is_single_flight_and_rate_limited(link):
     asyncio.run(run())
 
 
-def test_disconnected_resume_wakes_only_once_per_cooldown(link):
+def test_disconnected_resume_bypasses_probe_cooldown(link):
     async def run():
         link._wake[0] = asyncio.Event()
-        for now, expected in [(100, True), (101, False), (129, False), (130, True)]:
+        link._resume_at[0] = 100
+        link._resume_busy[0] = True  # a previous connection's probe may still be unwinding
+        for now in (100, 101, 129, 130):
             link.clock[0] = now
             await link._resume()
-            assert link._wake[0].is_set() == expected
+            assert link._wake[0].is_set()
             link._wake[0].clear()
     asyncio.run(run())
 

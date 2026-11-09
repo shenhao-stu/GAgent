@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import sync_playwright
 
-WEB = Path(__file__).parents[1] / 'app/src/main/assets/gacore/webui'
+WEB = Path(__file__).parents[1] / 'app/src/main/assets/ga_runtime/webui'
 STUB = '''
   window.GA=new Proxy({ready:()=> 'ok', poll:()=> '{}', isDark:()=>false,
     send:(c)=>c==='/integrations.get'?'{}':c==='/config'?'{"ok":true,"items":[]}':

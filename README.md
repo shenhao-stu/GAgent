@@ -150,3 +150,9 @@ YOLO weights are optional and not bundled. iOS and ESP32 development remain sepa
 [Website](https://gaagent.ai/) · [GA Mobile](https://app.gaagent.ai/) · [GenericAgent](https://github.com/lsdefine/GenericAgent) · [AndroidBench](https://androidbench.gaagent.ai/) · [Logo](docs/assets/README.md)
 
 Settings → Local icon detection now imports and validates a user-supplied compatible ONNX model without a provider key, and can test a real screenshot. Optional detector weights remain separately supplied; see [setup](docs/OPTIONAL_YOLO.md).
+
+The current synchronization adds multiple paired PC hubs, connection-owned request
+routing, prompt reconnect recovery, incremental conversation rendering, isolated
+settings failures and compact OCR output. Visual-only phone observation is the
+default. GA Plan, account commerce and billing UI are removed from this edition;
+model access uses your provider configuration. [Scope and validation](docs/UPSTREAM_SYNC.md).

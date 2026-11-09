@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 
-APP_JS = Path(__file__).resolve().parents[2] / "app" / "src" / "main" / "assets" / "gacore" / "webui" / "app.js"
+APP_JS = Path(__file__).resolve().parents[2] / "app" / "src" / "main" / "assets" / "ga_runtime" / "webui" / "app.js"
 
 
 def _src():
@@ -61,7 +61,8 @@ def test_prompt_input_recomputes_send_enabled_after_resize():
 def test_running_attachments_model_and_boot_all_use_gate():
     src = _src()
     assert "function updateSendEnabled(){return applySendEnabled()}" in src
-    assert "GA.send('/llm '+JSON.stringify(payload));applySendEnabled()" in src
+    switch = _func_body(src, "switchBackendModel")
+    assert switch.index("GA.selectModel(") < switch.index("applySendEnabled()")
     assert "applySendEnabled();applyI18n()" in src
 
     set_running = _func_body(src, "setRunning")

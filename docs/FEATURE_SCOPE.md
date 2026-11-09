@@ -25,19 +25,18 @@ HTTPS/WSS、P2P 传输加密和设备总线鉴权继续保留，它们承担通�
 
 | Capability / 能力 | Current result / 当前结果 | Evidence / 证据 |
 | --- | --- | --- |
-| Mandatory hosted login, plans, payment, orders, credits and redemption entry / 强制托管登录、套餐支付、订单积分和领取入口 | Removed from the app; users configure a model provider themselves / 已从应用剥离，改为用户自行配置模型服务商 | `PlanActivity.kt`, `DeepLinkActivity.kt`, `webui/auth.js` absent; [provider configuration](../app/src/main/assets/gacore/provider_config.py) |
+| Mandatory hosted login, plans, payment, orders, credits and redemption entry / 强制托管登录、套餐支付、订单积分和领取入口 | Removed from the app; users configure a model provider themselves / 已从应用剥离，改为用户自行配置模型服务商 | `PlanActivity.kt`, `DeepLinkActivity.kt`, `webui/auth.js` absent; [provider configuration](../app/src/main/assets/ga_runtime/provider_config.py) |
 | Source encryption / 源码加密 | NativeKey, native key store and client decryption removed; assets copied as readable files / 删除 NativeKey、原生密钥与客户端解密链，资源按可读文件装载 | [AssetUnpacker.kt](../app/src/main/java/com/ljq/ga/AssetUnpacker.kt), [bootstrap.py](../app/src/main/python/bootstrap.py) |
 | Hosted telemetry, prompt contribution, remote diagnostics and feedback submission / 托管遥测、提问捐赠、远端诊断和反馈上传 | Collection/upload disabled; compatibility no-ops and bounded local diagnostics remain / 停用收集上传，保留兼容空实现和有界本地诊断 | [Analytics.kt](../app/src/main/java/com/ljq/ga/Analytics.kt), [Diag.kt](../app/src/main/java/com/ljq/ga/Diag.kt) |
 | Embedded service authority / 内置服务权限 | No default shared P2P credential, vendor speech key or client-side root signer / 移除默认共享 P2P 凭据、供应商语音密钥和客户端根签发权限 | [Official modules](OFFICIAL_MODULES.md) |
 | Old update channels / 旧版自动更新通道 | Old manifests disabled; download/install primitives remain; releases are obtained from this repository / 旧清单地址停用，下载与安装基础能力保留，从本仓库获取版本 | [Endpoints.kt](../app/src/main/java/com/ljq/ga/Endpoints.kt), [Updater.kt](../app/src/main/java/com/ljq/ga/Updater.kt) |
-| Bundled YOLO icon detector / 内置 YOLO 图标检测模型 | Weight excluded by default; users may install a compatible model under its applicable terms; OCR still runs / 默认不分发权重，用户可按适用许可自行安装，OCR 保留 | [Model notice](../app/src/main/assets/gacore/models/ui_detect_v1/MODEL_NOTICE.txt), [detector fallback](../app/src/main/assets/gacore/models/ui_detect_v1/ui_detect_lite.py) |
+| Bundled YOLO icon detector / 内置 YOLO 图标检测模型 | Weight excluded by default; users may install a compatible model under its applicable terms; OCR still runs / 默认不分发权重，用户可按适用许可自行安装，OCR 保留 | [Model notice](../app/src/main/assets/ga_runtime/models/ui_detect_v1/MODEL_NOTICE.txt), [detector fallback](../app/src/main/assets/ga_runtime/models/ui_detect_v1/ui_detect_lite.py) |
 | Old release identity and private material / 旧发布身份与私有资料 | Old signing key, production configuration, account data and old Git history excluded; new app ID and signing identity / 不分发旧签名、生产配置、账号资料或旧 Git 历史，使用新应用与签名身份 | [Build](BUILD.md), [review](REVIEW.md) |
 
 ## Outside this repository / 未纳入此次仓库
 
 | Implementation / 实现 | What is distributed instead / 本次保留的接入方式 |
 | --- | --- |
-| GA Plan commerce, billing and the complete GA2api gateway / GA Plan 商业与计费系统、完整 GA2api 网关 | Normal model-provider interface with a user-issued API key / 普通模型服务商接口，由用户填写自己的 API Key |
 | P2P relay operations and credential issuance / P2P 中继运营与凭据签发服务 | PC Link / P2P client and explicit WSS configuration / 客户端与显式 WSS 配置 |
 | GAnet identity issuer and mesh control plane / GAnet 身份签发与组网控制面 | Pairing, mesh and SSH clients / 配对、组网与 SSH 客户端 |
 | Hosted voice relay and vendor credentials / 托管语音代理及供应商凭据 | Streaming voice client / 流式语音客户端 |
@@ -58,7 +57,7 @@ P2P、GAnet、语音代理和构建服务若继续作为独立开源组件发布
 
 | Capability / 能力 | Source / 主要源码 | Conditions / 条件 |
 | --- | --- | --- |
-| Agent planning, tools and code execution / 智能体规划、工具调用与代码执行 | `agent_loop.py`, `agentmain.py`, `llmcore.py`, `ga_android.py` | User-selected model/provider; execution has real effects / 用户配置模型，执行具有真实副作用 |
+| Agent planning, tools and code execution / 智能体规划、工具调用与代码执行 | `gacore/`, `kernel_adapter/` | User-selected model/provider; execution has real effects / 用户配置模型，执行具有真实副作用 |
 | Bilingual UI, sessions, streaming, memory and file tools / 中英文界面、会话、流式输出、记忆和文件工具 | `webui/`, `android_entry.py`, `memory/` | Existing local workflows remain / 保留本地工作流 |
 | Android startup and embedded Python / Android 启动与内嵌 Python | `App.kt`, `MainActivity.kt`, `Py.kt`, `bootstrap.py` | APK retains its native adapter / 仍依赖原生设备适配 |
 | Accessibility, gestures, screenshots, clipboard, overlays and wireless ADB / 无障碍、手势、截图、剪贴板、悬浮窗与无线 ADB | `BusA11yService.kt`, `BusServer.kt`, `FloatService.kt`, `AdbController.kt`, `droid.py` | Permissions and Android-version restrictions apply / 受授权与系统版本限制 |
@@ -72,7 +71,7 @@ P2P、GAnet、语音代理和构建服务若继续作为独立开源组件发布
 | PC Link, GAnet, voice and APK-builder clients / PC Link、GAnet、语音与 APK 构建客户端 | `pclink.py`, `ganet.py`, `VoiceClient.kt`, `apk_factory.py`, `service_config.py` | Optional, disabled until configured, require compatible services / 默认未接入，需配置兼容服务 |
 | Build, signing integration, source scans and license notices / 构建、签名接入、源码扫描与许可证声明 | `.github/workflows/android.yml`, `tools/`, `THIRD_PARTY.md` | Signing secrets stay outside Git / 签名秘密不进入 Git |
 
-Python and WebUI paths in this table are under `app/src/main/assets/gacore/`;
+Python and WebUI paths in this table are under `app/src/main/assets/ga_runtime/`;
 Kotlin application paths are under `app/src/main/java/com/ljq/ga/`.
 
 ## Unresolved / 尚未确定或验收

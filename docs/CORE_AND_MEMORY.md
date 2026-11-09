@@ -13,31 +13,35 @@ of byte-for-byte equivalence with today's upstream main.
 “约 3K 行”来自上游对种子框架的描述。GAgent 沿用其内核架构并适配 Android，
 不将上游的数字当成整个 APK、所有工具或当前仓库的代码总量。
 
-For a reproducible local reference, these four files contain **2,161 physical
-lines** on 2026-10-23, including comments and blank lines:
+The vendored planning core now lives in `ga_runtime/gacore/`. The six Python
+files below contain **3,255 physical lines** at this synchronization (comments and
+blank lines included). This is a named-file count, not the complete application.
 
 | File | Physical lines | Role / 职责 |
 | --- | ---: | --- |
-| [agent_loop.py](../app/src/main/assets/gacore/agent_loop.py) | 133 | Observe/tool/response loop / 执行循环 |
-| [agentmain.py](../app/src/main/assets/gacore/agentmain.py) | 399 | Tool dispatch and execution support / 工具调度与执行 |
-| [llmcore.py](../app/src/main/assets/gacore/llmcore.py) | 1,134 | Model protocols and history handling / 模型协议与历史处理 |
-| [ga_android.py](../app/src/main/assets/gacore/ga_android.py) | 495 | Android agent policy and memory integration / Android 策略与记忆接入 |
+| `gacore/agent_loop.py` | 133 | Execution loop / 执行循环 |
+| `gacore/agentmain.py` | 365 | Session and tool dispatch / 会话与工具调度 |
+| `gacore/ga.py` | 596 | Tools and working memory / 工具与工作记忆 |
+| `gacore/llmcore.py` | 1,143 | Model protocols and history / 模型协议与历史 |
+| `gacore/legacy_llmcore.py` | 145 | Legacy model compatibility / 旧协议兼容 |
+| `gacore/simphtml.py` | 873 | HTML simplification / HTML 精简 |
 
 ~~~sh
-wc -l app/src/main/assets/gacore/{agent_loop,agentmain,llmcore,ga_android}.py
+wc -l app/src/main/assets/ga_runtime/gacore/*.py
 ~~~
 
-This is a named-file count, **not a complete dependency or core inventory**.
-It excludes other Python adapters, Android/Kotlin, WebUI, libraries, model weights
-and build tooling. Changes may alter these counts; use the command at your checkout.
-The small loop explains the design; the complete application still needs its platform.
+`kernel_adapter.install()` owns workspace and Android execution wiring; provider
+configuration, optional services and phone effects stay outside this directory.
+The core files match the synchronized upstream snapshot byte for byte; see
+[the synchronization record](UPSTREAM_SYNC.md) and its hashes. This does not imply
+identity with a future upstream revision.
 
-这些数字只统计列出的四个文件，不能用来宣称全功能应用只有 2,161 行。
-Android 层承担生命周期、权限、取屏、输入与后台工作；保留清晰边界比压低总行数更重要。
+这些数字只统计列出的文件。Android、WebUI、模型权重、依赖和构建工具另计。
+内核按上游快照保留，Android 的执行、配置和服务接入放在宿主适配层。
 
 ## Remember the method, recall the relevant part / 沉淀方法，按需召回
 
-The bundled [memory SOP](../app/src/main/assets/gacore/memory/memory_management_sop.md)
+The bundled [memory SOP](../app/src/main/assets/ga_runtime/memory/memory_management_sop.md)
 organizes knowledge in layers:
 
 | Layer | Content / 内容 | How it helps / 用途 |
@@ -47,8 +51,8 @@ organizes knowledge in layers:
 | L3 | Procedures and executable scripts / 规程与脚本 | Reuse a tested method instead of rediscovering each step / 复用验证过的方法 |
 | L4 | Raw sessions and evidence / 原始会话与证据 | Retrieve detail when a summary is insufficient / 按需追溯原始依据 |
 
-Working-memory checkpoints and selective folding live in `ga_android.py`;
-history-tag compression and trimming live in `llmcore.py`. Context limits depend
+Working-memory checkpoints and selective folding live in `gacore/ga.py`;
+history-tag compression and trimming live in `gacore/llmcore.py`. Context limits depend
 on the selected configuration and model. There is no universal fixed token cap.
 Local text changes also have [asset-update preservation](FEATURE_SCOPE.md), which
 is best-effort merging rather than a guarantee that every edit survives an upgrade.

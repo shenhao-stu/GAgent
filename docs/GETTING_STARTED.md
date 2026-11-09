@@ -165,7 +165,7 @@ inferring it from another check. Exclude keys and personal screenshots from issu
 [PC Link, voice and APK Factory](OFFICIAL_MODULES.md) · [Practical cases](CASES.md)
 
 **Settings → Optional modules** configures clients for compatible services. It
-does not deploy servers or supply shared keys. GA Plan is a normal provider
+does not deploy servers or supply shared keys. Model access uses a normal provider
 configuration. Enable one module, verify its smallest useful action, then continue.
 
 「设置 → 可选组件」用于连接兼容服务，不会自动部署服务端或发放共享密钥。

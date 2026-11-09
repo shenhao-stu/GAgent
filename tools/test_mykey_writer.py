@@ -7,7 +7,7 @@
 import ast, os, py_compile, re, sys, tempfile, threading, secrets, json
 import importlib.util
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = os.path.join(ROOT, 'app', 'src', 'main', 'assets', 'gacore', 'android_entry.py')
+SRC = os.path.join(ROOT, 'app', 'src', 'main', 'assets', 'ga_runtime', 'android_entry.py')
 NAMES = ['_mykey_py_path', '_py_repr', '_cfg_type', '_var_type', '_retype_block_var', '_FIELD_RE', '_line_patchable',
          '_rebuild_single_line_block', '_drop_duplicate_blocks', '_find_mykey_blocks', '_format_mykey_block', '_UI_MANAGED_OPT',
          '_patch_block_lines', '_mykey_lock', '_reindex_mykey_blocks', '_write_mykey_file', '_write_mykey_py_from_dict',
@@ -50,8 +50,8 @@ def check_invariants(p, before_enames, touched, appended=(), removed=()):
     assert en == expect, f'I3 order {en} != {expect}'                                     # I3
 
 CODEX_OLD = """
-native_oai_config_gapreset = {
-    'name': 'GA Plan',
+native_oai_config_fixture = {
+    'name': 'Fixture Provider',
     'apikey': 'sk-ga-1',
     'apibase': 'https://relay.example/v1',
     'model': 'auto-flash',
@@ -119,10 +119,10 @@ def _():
     p = with_file(CODEX_OLD); before = read(p)
     W['_write_mykey_patch']([('native_oai_config', codex_cfg())], [])
     py_compile.compile(p, doraise=True)
-    en = enames(p); assert en == ['GA Plan', 'Codex', 'KIMI'], en                        # I2+I3: 影子块消失, Codex 留在原位
+    en = enames(p); assert en == ['Fixture Provider', 'Codex', 'KIMI'], en                        # I2+I3: 影子块消失, Codex 留在原位
     cx = by_name(p, 'Codex'); assert cx['model'] == 'gpt-6-astra' and 'gpt-6-astra' in cx['models'] and cx['read_timeout'] == 240
     assert all(b['canonical'] for b in blocks(p) if b['ename'] == 'Codex')
-    for nm in ('GA Plan', 'KIMI'): assert by_name(p, nm) == load_text_block(before, nm)   # I4
+    for nm in ('Fixture Provider', 'KIMI'): assert by_name(p, nm) == load_text_block(before, nm)   # I4
     t1 = read(p); W['_write_mykey_patch']([('native_oai_config', codex_cfg())], []); assert read(p) == t1, 'I5 idempotent'
 
 @case('C2 canonical 块原地补丁: 改值/删受管缺失键/保留未管键与注释/顺序不变/幂等')
@@ -202,7 +202,7 @@ def _():
     W['_write_mykey_patch']([('mixin_config_auto', {'name': 'auto', 'llm_nos': ['KIMI'], 'max_retries': 3})], ['Codex'])
     py_compile.compile(p, doraise=True); en = enames(p); assert 'Codex' not in en and en[0] == 'auto', en
     assert load(p)['mixin_config_auto']['llm_nos'] == ['KIMI']
-    W['_write_mykey_patch']([], ['KIMI', 'auto']); assert enames(p) == ['GA Plan'], enames(p)
+    W['_write_mykey_patch']([], ['KIMI', 'auto']); assert enames(p) == ['Fixture Provider'], enames(p)
 
 @case('C9 mixin 保存: 旧 mixin 全部替换, 新块钉在文件顶, 服务商块不动')
 def _():
@@ -248,14 +248,14 @@ def _():
 def _():
     p = with_file(CODEX_OLD)
     r = json.loads(W['_provider_save'](json.dumps(codex_cfg()))); assert r == {'ok': True, 'name': 'Codex'}, r
-    assert enames(p) == ['GA Plan', 'Codex', 'KIMI']
+    assert enames(p) == ['Fixture Provider', 'Codex', 'KIMI']
 
 @case('C16 全量同步 _write_mykey_py_from_dict: 同样处理非规范块与影子块')
 def _():
     p = with_file(CODEX_OLD)
-    W['_write_mykey_py_from_dict']({'native_oai_config': codex_cfg(), 'native_oai_config_gapreset': {'name': 'GA Plan', 'apikey': 'sk-ga-1', 'apibase': 'https://relay.example/v1', 'model': 'auto-flash', 'models': ['auto-flash']},
+    W['_write_mykey_py_from_dict']({'native_oai_config': codex_cfg(), 'native_oai_config_fixture': {'name': 'Fixture Provider', 'apikey': 'sk-ga-1', 'apibase': 'https://relay.example/v1', 'model': 'auto-flash', 'models': ['auto-flash']},
                                    'native_claude_config': {'name': 'KIMI', 'apikey': 'sk-k', 'apibase': 'https://cn.example', 'model': 'kimi-k3', 'models': ['kimi-k3'], 'type': 'claude'}})
-    py_compile.compile(p, doraise=True); assert enames(p) == ['GA Plan', 'Codex', 'KIMI'], enames(p); assert by_name(p, 'Codex')['model'] == 'gpt-6-astra'
+    py_compile.compile(p, doraise=True); assert enames(p) == ['Fixture Provider', 'Codex', 'KIMI'], enames(p); assert by_name(p, 'Codex')['model'] == 'gpt-6-astra'
 
 @case('C17 推理强度切回「默认」: 载荷不含 reasoning_effort → 删掉旧值(界面显示默认而后端仍是 low 的回归)')
 def _():

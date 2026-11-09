@@ -9,11 +9,12 @@ android {
     ndkVersion "25.1.8937393"   // AGP 8.1 默认 NDK; CI(setup-android) 缺则 AGP 经 sdkmanager 自动拉取
     defaultConfig {
         applicationId "io.github.shenhaostu.gagent"
-        minSdk 24; targetSdk 34; versionCode 141; versionName "2.33.8"
+        minSdk 24; targetSdk 34; versionCode 142; versionName "2.33.9"
         ndk { abiFilters "arm64-v8a" }
         buildConfigField "String", "CHANNEL", '"opensource"'
     }
     buildFeatures { buildConfig true }
+    sourceSets.main.assets.srcDirs = [layout.buildDirectory.dir('runtime-assets')]
     signingConfigs {
         if (System.getenv('GAGENT_KEYSTORE_PATH')) {
             release {
@@ -92,7 +93,7 @@ tasks.named('preBuild').configure { dependsOn 'prepareThirdPartyNotices' }
 afterEvaluate {
     tasks.matching { it.name ==~ /generate(Debug|Release)Python(Misc|Requirements)Assets/ }.configureEach { task ->
         inputs.file rootProject.file('tools/prepare_python_assets.py')
-        inputs.file rootProject.file('app/src/main/assets/gacore/fsbot/deps/site_packages.tgz')
+        inputs.file rootProject.file('app/src/main/assets/ga_runtime/fsbot/deps/site_packages.tgz')
         doLast {
             project.exec { spec ->
                 spec.commandLine System.getenv('CHAQUOPY_PYTHON') ?: 'python3',
@@ -101,4 +102,17 @@ afterEvaluate {
             }
         }
     }
+}
+
+// Keep the staged asset tree deterministic across tests and incremental builds.
+def stageRuntimeAssets = tasks.register('stageRuntimeAssets', Sync) {
+    dependsOn 'checkPackagedInputs'
+    from('src/main/assets')
+    into(layout.buildDirectory.dir('runtime-assets'))
+    exclude '**/__pycache__/**', '**/*.pyc', '**/.DS_Store', '**/temp/**'
+}
+tasks.named('preBuild').configure { dependsOn stageRuntimeAssets }
+afterEvaluate {
+    tasks.matching { it.name ==~ /merge.*Assets/ || it.name.toLowerCase(Locale.ROOT).contains('lint') }
+        .configureEach { dependsOn stageRuntimeAssets, 'prepareThirdPartyNotices' }
 }

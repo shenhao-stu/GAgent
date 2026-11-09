@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-GACORE = Path(__file__).resolve().parents[2] / "app" / "src" / "main" / "assets" / "gacore"
+GACORE = Path(__file__).resolve().parents[2] / "app" / "src" / "main" / "assets" / "ga_runtime"
 sys.path.insert(0, str(GACORE))
 import droid  # noqa: E402
 
@@ -24,10 +24,21 @@ class _Img:
 
 
 @pytest.fixture(autouse=True)
-def _resolved_foreground(monkeypatch):
-    """敏感门控 fail-closed 后, 未解析前台会转视觉路径; 本文件历史用例默认前台=普通 App。
-    敏感/未解析场景在各自用例内重打桩 _fg。"""
-    monkeypatch.setattr(droid, "_fg", lambda: "com.android.settings")
+def _node_permission(monkeypatch):
+    """Exercise optional tree-based verification in an ordinary app unless a test overrides it."""
+    monkeypatch.setattr(droid, "SAFE_MODE", False)
+    monkeypatch.setattr(droid, "_get", lambda path, **kw: {"visual_only": False})
+
+
+def test_safe_mode_does_not_inspect_nodes_or_claim_paste_success(monkeypatch):
+    monkeypatch.setattr(droid, "SAFE_MODE", True)
+    monkeypatch.setattr(droid, "_get", lambda *a, **kw: pytest.fail("unexpected bus read"))
+    actions = []
+    monkeypatch.setattr(droid, "_act", lambda **kw: actions.append(kw))
+    assert droid.dump(full=True) == []
+    result = droid.paste(TEXT)
+    assert result["needs_gui_paste"] and result["uncertain"] and not result["hit"]
+    assert actions == [{"op": "clipboard", "text": TEXT}]
 
 
 def _box(l, t, r, b):
@@ -546,24 +557,21 @@ def test_scroll_base_exception_propagates(monkeypatch):
         droid.scroll("up")
 
 
-def test_scroll_package_change_is_uncertain(monkeypatch):
-    pings = iter([
-        {"w": W, "h": H, "pkg": "pkg.before"},
-        {"w": W, "h": H, "pkg": "pkg.after"},
-    ])
-    same = [{"t": "A%d" % i} for i in range(10)]
+def test_scroll_ignores_legacy_package_and_requires_visual_change(monkeypatch):
+    calls = []
+    def status():
+        calls.append(1)
+        return {"w": W, "h": H, "pkg": "stale.launcher"}
     image = np.zeros((240, 120, 3), np.uint8)
-    monkeypatch.setattr(droid, "ping", lambda: next(pings))
-    monkeypatch.setattr(droid, "dump", lambda: list(same))
+    monkeypatch.setattr(droid, "ping", status)
+    monkeypatch.setattr(droid, "dump", lambda: [])
     monkeypatch.setattr(droid, "shot", lambda **kw: image.copy())
     monkeypatch.setattr(droid, "swipe", lambda *a, **kw: {"ok": 1})
     ret = droid.scroll("up", settle=0)
     assert ret["scrolled"] is False
     assert ret["evidence"] == "none"
-    assert ret["uncertain"] is True
-    assert ret["pkg_before"] == "pkg.before"
-    assert ret["pkg"] == "pkg.after"
-    assert "pkg.before" in ret["hint"] and "pkg.after" in ret["hint"]
+    assert not ({"pkg", "pkg_before", "fg"} & ret.keys())
+    assert len(calls) == 1
 
 
 @pytest.mark.parametrize(("times", "expected"), [(0, 1), (650, 10)])
@@ -635,7 +643,7 @@ def test_scroll_stable_shot_failure_is_uncertain(monkeypatch):
     assert "观察" in ret["hint"]
 
 
-def test_scroll_package_sample_covers_stable_evidence(monkeypatch):
+def test_scroll_samples_geometry_once_and_stable_pixels(monkeypatch):
     A = np.zeros((240, 120, 3), np.uint8)
     B = A.copy()
     B[60:170] = 200
@@ -656,30 +664,26 @@ def test_scroll_package_sample_covers_stable_evidence(monkeypatch):
     monkeypatch.setattr(droid, "shot", fake_shot)
     monkeypatch.setattr(droid, "swipe", lambda *a, **kw: {"ok": 1})
     ret = droid.scroll("up", settle=0)
-    assert state == {"shots": 3, "pings": 2}
-    assert ret["scrolled"] is False
-    assert ret["evidence"] == "none"
-    assert ret["uncertain"] is True
-    assert ret["pkg_before"] == "pkg.before"
-    assert ret["pkg"] == "pkg.after"
+    assert state == {"shots": 3, "pings": 1}
+    assert ret["scrolled"] is True
+    assert ret["evidence"] == "pixel"
+    assert "pkg" not in ret and "pkg_before" not in ret
 
 
-def test_scroll_missing_final_package_observation_is_uncertain(monkeypatch):
+def test_scroll_without_package_uses_stable_pixel_evidence(monkeypatch):
     A = np.zeros((240, 120, 3), np.uint8)
     B = A.copy()
     B[60:170] = 200
     frames = iter([A, B, B])
-    pings = iter({"w": W, "h": H, "pkg": pkg} for pkg in ("pkg.before", ""))
     same = [{"t": "A%d" % i} for i in range(10)]
     monkeypatch.setattr(droid, "dump", lambda: list(same))
-    monkeypatch.setattr(droid, "ping", lambda: next(pings))
+    monkeypatch.setattr(droid, "ping", lambda: {"w": W, "h": H})
     monkeypatch.setattr(droid, "shot", lambda **kw: next(frames))
     monkeypatch.setattr(droid, "swipe", lambda *a, **kw: {"ok": 1})
     ret = droid.scroll("up", settle=0)
-    assert ret["scrolled"] is False
-    assert ret["evidence"] == "none"
-    assert ret["uncertain"] is True
-    assert "观察" in ret["hint"]
+    assert ret["scrolled"] is True
+    assert ret["evidence"] == "pixel"
+    assert "pkg" not in ret
 
 
 def test_scroll_geometry_ping_failure_does_not_swipe(monkeypatch):
@@ -826,7 +830,7 @@ def _track_dump(monkeypatch, fg):
         called["dump"] += 1
         return []
 
-    monkeypatch.setattr(droid, "_fg", lambda: fg)
+    monkeypatch.setattr(droid, "_get", lambda path, **kw: {"visual_only": fg != "com.android.settings"})
     monkeypatch.setattr(droid, "dump", _dump)
     return called
 
@@ -877,108 +881,45 @@ def test_scroll_uses_a11y_dump_on_normal_foreground(monkeypatch):
     assert called["dump"] == 2                 # 普通 App: 前后各一次文本对比 dump
 
 
-# ── 前台解析 fail-closed: getWindows 抖到空串/GA 自身时, 门控向安全侧(视觉路径)收敛 ──
-
-def test_resolve_fg_confident_seed_is_single_observation(monkeypatch):
-    monkeypatch.setattr(
-        droid, "_fg",
-        lambda: (_ for _ in ()).throw(AssertionError("must not requery")),
-    )
-    monkeypatch.setattr(
-        time, "sleep",
-        lambda s: (_ for _ in ()).throw(AssertionError("must not wait")),
-    )
-    assert droid._resolve_fg("com.android.settings") == "com.android.settings"
+# Device status never reports a guessed app identity.
+def test_ping_strips_legacy_identity(monkeypatch):
+    monkeypatch.setattr(droid, "_get", lambda *a, **kw: {"pkg": "stale", "fg": "stale", "a11y": True, "w": W, "h": H})
+    assert droid.ping() == {"a11y": True, "w": W, "h": H}
+    assert not any(hasattr(droid, n) for n in ("_fg", "_wait_fg", "_resolve_fg"))
 
 
-def test_resolve_fg_requeries_jitter_to_real_pkg(monkeypatch):
-    seq = iter(["", "com.tencent.mm"])
-    monkeypatch.setattr(droid, "_fg", lambda: next(seq))
-    monkeypatch.setattr(time, "sleep", lambda s: None)
-    assert droid._resolve_fg(droid._SELF_PKG) == "com.tencent.mm"
+def test_missing_node_permission_fails_closed(monkeypatch):
+    monkeypatch.setattr(droid, "_get", lambda *a, **kw: {})
+    assert droid._visual_only() is True
+    monkeypatch.setattr(droid, "_get", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("offline")))
+    assert droid._visual_only() is True
 
 
-@pytest.mark.parametrize("jitter", ["", droid._SELF_PKG])
-def test_resolve_fg_persistent_jitter_is_unresolved(monkeypatch, jitter):
-    monkeypatch.setattr(droid, "_fg", lambda: jitter)
-    monkeypatch.setattr(time, "sleep", lambda s: None)
-    assert droid._resolve_fg(jitter) == ""
+def test_launch_does_not_poll_or_claim_foreground(monkeypatch):
+    monkeypatch.setattr(droid, "_act", lambda **kw: {"ok": True})
+    monkeypatch.setattr(droid, "ping", lambda: pytest.fail("launch must not query foreground"))
+    ret = droid.launch("com.android.settings", wait=0)
+    assert ret["request_sent"] is True
+    assert ret["opened"] is None
+    assert not any(k in ret for k in ("ok", "fg", "pkg"))
 
 
-@pytest.mark.parametrize("jitter", ["", droid._SELF_PKG])
-def test_sensitive_gate_fails_closed_on_unresolved_foreground(monkeypatch, jitter):
-    monkeypatch.setattr(droid, "_fg", lambda: jitter)
-    monkeypatch.setattr(time, "sleep", lambda s: None)
-    assert droid._sensitive_fg() is True
+@pytest.mark.parametrize("ack", [{"ok": 0}, {}, None, {"ok": 1, "error": "blocked"}])
+def test_launch_rejects_unconfirmed_request(monkeypatch, ack):
+    monkeypatch.setattr(droid, "_act", lambda **kw: ack)
+    with pytest.raises(RuntimeError, match="启动请求未获确认"):
+        droid.launch("com.android.settings", wait=0)
 
 
-def test_paste_skips_a11y_dump_on_unresolved_foreground(monkeypatch):
-    called = _track_dump(monkeypatch, droid._SELF_PKG)
-    monkeypatch.setattr(time, "sleep", lambda s: None)
-    monkeypatch.setattr(droid, "_act", lambda **kw: {"ok": 1})
-    monkeypatch.setattr(droid, "shot", lambda: REAL_NUMPY_IMAGE)
-    monkeypatch.setattr(droid, "ocr_text", lambda img: ("", 0.0))
-    monkeypatch.setattr(droid, "_ocr_region", lambda img, x1, y1, x2, y2: [])
-    out = droid.paste(TEXT)
-    assert called["dump"] == 0                 # fail-closed: 未解析前台零 a11y 树读取
-    assert out["hit"] is False
-    assert out["uncertain"] is True
+def test_launch_preserves_transport_failure(monkeypatch):
+    def fail(**kw):
+        raise RuntimeError("offline")
+    monkeypatch.setattr(droid, "_act", fail)
+    with pytest.raises(RuntimeError, match="offline"):
+        droid.launch("com.android.settings", wait=0)
 
 
-def test_paste_jittered_wechat_foreground_stays_gated(monkeypatch):
-    seq = iter(["", "com.tencent.mm"])
-    calls = {"dump": 0}
-    def _dump(full=False):
-        calls["dump"] += 1
-        return []
-    monkeypatch.setattr(droid, "_fg", lambda: next(seq))
-    monkeypatch.setattr(droid, "dump", _dump)
-    monkeypatch.setattr(time, "sleep", lambda s: None)
-    monkeypatch.setattr(droid, "_act", lambda **kw: {"ok": 1})
-    monkeypatch.setattr(droid, "shot", lambda: REAL_NUMPY_IMAGE)
-    monkeypatch.setattr(droid, "ocr_text", lambda img: ("", 0.0))
-    monkeypatch.setattr(droid, "_ocr_region", lambda img, x1, y1, x2, y2: [])
-    out = droid.paste(TEXT)
-    assert calls["dump"] == 0                  # 抖动重查解析出微信 → 仍敏感
-    assert out["uncertain"] is True
-
-
-def test_paste_requery_recovers_normal_dump_path(monkeypatch):
-    from itertools import chain, repeat
-    seq = chain([droid._SELF_PKG], repeat("com.android.settings"))
-    calls = {"dump": 0}
-    def _dump(full=False):
-        calls["dump"] += 1
-        return WECHAT_NODES
-    monkeypatch.setattr(droid, "_fg", lambda: next(seq))
-    monkeypatch.setattr(time, "sleep", lambda s: None)
-    monkeypatch.setattr(droid, "_act", lambda **kw: {"ok": 1})
-    monkeypatch.setattr(droid, "dump", _dump)
-    monkeypatch.setattr(droid, "shot", lambda: REAL_NUMPY_IMAGE)
-    monkeypatch.setattr(droid, "ocr_text", lambda img: (TEXT, .99))
-    ret = droid.paste(TEXT)
-    assert calls["dump"] == 1                  # 抖动恢复 → 普通 App dump 路径不受影响(不永久转视觉)
-    assert ret["hit"] is True
-
-
-def test_scroll_skips_a11y_dump_on_unresolved_foreground(monkeypatch):
-    called = _track_dump(monkeypatch, droid._SELF_PKG)
-    monkeypatch.setattr(droid, "ping", lambda: {"w": W, "h": H, "pkg": droid._SELF_PKG})
-    monkeypatch.setattr(droid, "swipe", lambda *a, **k: {"ok": 1})
-    monkeypatch.setattr(droid, "_scroll_shot", lambda: REAL_NUMPY_IMAGE)
-    monkeypatch.setattr(time, "sleep", lambda s: None)
-    ret = droid.scroll("up", settle=0)
-    assert called["dump"] == 0                 # 前台未解析: 滚动零 a11y 树读取
-    assert ret["scrolled"] is False
-    assert ret["uncertain"] is True
-    assert "观察" in ret["hint"]
-
-
-def test_scroll_self_jitter_requery_keeps_normal_dump_path(monkeypatch):
-    called = _track_dump(monkeypatch, "com.android.settings")
-    monkeypatch.setattr(droid, "ping", lambda: {"w": W, "h": H, "pkg": droid._SELF_PKG})
-    monkeypatch.setattr(droid, "swipe", lambda *a, **k: {"ok": 1})
-    monkeypatch.setattr(droid, "_scroll_shot", lambda: REAL_NUMPY_IMAGE)
-    monkeypatch.setattr(time, "sleep", lambda s: None)
-    droid.scroll("up", settle=0)
-    assert called["dump"] == 2                 # 抖动重查解析出普通前台 → dump 证据路径保留
+def test_safe_mode_does_not_request_node_permission(monkeypatch):
+    monkeypatch.setattr(droid, "SAFE_MODE", True)
+    monkeypatch.setattr(droid, "_get", lambda *a, **kw: pytest.fail("safe mode must not read nodes"))
+    assert droid._visual_only() is True

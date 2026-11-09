@@ -4,17 +4,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OverlayPolicyTest {
-    @Test fun runningOrWaitingTasksRestoreOnManualBackgroundEvenWithoutAlwaysOn() {
-        assertTrue(needsBackgroundOverlay(true, false, true, false, false))
-        assertTrue(needsBackgroundOverlay(true, false, false, true, false))
-        assertFalse(needsBackgroundOverlay(true, false, false, false, false))
-    }
-
-    @Test fun permissionForegroundAndSuppressionRemainIndependentGates() {
-        assertFalse(needsBackgroundOverlay(false, false, true, true, false))
-        assertFalse(needsBackgroundOverlay(true, true, true, true, false))
-        assertFalse(needsBackgroundOverlay(true, false, true, false, true))
-        assertTrue(needsBackgroundOverlay(true, false, true, true, true))
+    @Test fun backgroundOverlayDependsOnlyOnPermissionForegroundAndTaskState() {
+        for (permission in listOf(false, true)) for (foreground in listOf(false, true)) {
+            for (busy in listOf(false, true)) for (always in listOf(false, true)) {
+                val expected = permission && !foreground && (busy || always)
+                assertEquals(expected, needsBackgroundOverlay(permission, foreground, busy, always))
+            }
+        }
     }
 
     @Test fun rotationFoldAndFreeDragCannotLeaveTheHandleOutsideTheScreen() {

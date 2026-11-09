@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 
-WEBUI = Path(__file__).resolve().parents[2] / "app" / "src" / "main" / "assets" / "gacore" / "webui"
+WEBUI = Path(__file__).resolve().parents[2] / "app" / "src" / "main" / "assets" / "ga_runtime" / "webui"
 PCLINK_JS = WEBUI / "pclink.js"
 APP_CSS = WEBUI / "app.css"
 

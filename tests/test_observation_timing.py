@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-CORE = Path(__file__).parents[1] / 'app/src/main/assets/gacore'
+CORE = Path(__file__).parents[1] / 'app/src/main/assets/ga_runtime'
 sys.path.insert(0, str(CORE))
 
 
@@ -79,7 +79,7 @@ def test_main_model_request_records_phases_context_and_usage(entry, timed, monke
         payload = {'model': 'm', 'messages': [{'role': 'user', 'content': [{'type': 'image', 'source': {}},
                                                                           {'type': 'text', 'text': 'x' * 500}]}],
                    'system': 'sys', 'tools': [{'name': 'code_run'}]}
-        llm = SimpleNamespace(max_retries=0, stream=True, connect_timeout=1, read_timeout=1, proxies=None, verify=True)
+        llm = SimpleNamespace(name="fixture", max_retries=0, stream=True, connect_timeout=1, read_timeout=1, proxies=None, verify=True)
         chunks = list(llmcore._stream_with_retry(llm, 'https://x.test/v1/messages', {}, payload,
                                                  lambda r: llmcore._parse_claude_sse(r.iter_lines())))
         assert 'ok' in ''.join(c for c in chunks if isinstance(c, str))
@@ -105,7 +105,7 @@ def test_abandoned_stream_does_not_claim_later_requests(entry, timed, monkeypatc
         return _Resp(SSE)
     monkeypatch.setattr('requests.post', post)
     try:
-        llm = SimpleNamespace(max_retries=0, stream=True, connect_timeout=1, read_timeout=1, proxies=None, verify=True)
+        llm = SimpleNamespace(name="fixture", max_retries=0, stream=True, connect_timeout=1, read_timeout=1, proxies=None, verify=True)
         g = llmcore._stream_with_retry(llm, 'https://x.test/v1/messages', {}, {'model': 'm', 'messages': []},
                                        lambda r: llmcore._parse_claude_sse(r.iter_lines()))
         next(g)                                   # first request in flight, generator then abandoned

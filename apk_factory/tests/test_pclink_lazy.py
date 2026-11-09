@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-WEB = Path(__file__).resolve().parents[2] / 'app/src/main/assets/gacore/webui'
+WEB = Path(__file__).resolve().parents[2] / 'app/src/main/assets/ga_runtime/webui'
 
 
 @pytest.fixture
