@@ -223,5 +223,21 @@
     "name": "sherpa-ONNX-third-party",
     "source": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.28.2/ThirdPartyNotices.txt",
     "sha256": "0e07b95f3a8d6230037707c5c4a2b554d12c4cb67369669ac255635528ffcee2"
+  },
+  {
+    "name": "OpenCV-libpng",
+    "version": "1.6.59",
+    "source": "https://download.sourceforge.net/libpng/libpng-1.6.59.tar.gz",
+    "archive_sha256": "86a3e4b501f7f50e392c4e456ea158893e9a595b1c63eb88c7bb9f6cf8772dad",
+    "path": "libpng-1.6.59/LICENSE",
+    "sha256": "bdb0a645ea18c60507d0368379b1ac5474b92255fcc2d115e07486a7672ba526"
+  },
+  {
+    "name": "OpenCV-zlib",
+    "version": "1.4",
+    "source": "https://zlib.net/zlib-1.4.tar.gz",
+    "archive_sha256": "02dd159783677a749c04adbdd02b55b8a2bcc7e054f51b76b549199a916ad584",
+    "path": "zlib-1.4/LICENSE",
+    "sha256": "e32ff4e00d9d94930537635291da39e7e612703334bf6fde8c7f1686fe8a45a2"
   }
 ]

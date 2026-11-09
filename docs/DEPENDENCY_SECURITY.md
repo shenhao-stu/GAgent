@@ -16,6 +16,7 @@ separate on-device native acceptance results before treating a candidate as read
 | Paramiko | 2.12.0 → 5.1.0 | Native key/signature tests; retain host-key pinning and disabled legacy SSH algorithms |
 | PyNaCl / bcrypt / cffi | 1.6.2 / 5.0.0 / 2.1.1; libffi 3.8.0 | Android signature/password-hash checks; source versions alone do not identify bundled C libraries |
 | NumPy / OpenCV | 1.26.2 / 4.5.1 → 2.5.4 / 5.0.0.93 | Actual arm64 numerical, image and OCR checks; NumPy uses internal BLAS/LAPACK fallback |
+| OpenCV image codecs | Vendored libpng 1.6.57 → 1.6.59; zlib 1.3.2 → 1.4 | Replace pinned C sources while retaining OpenCV's build adapters; verify linked versions, PNG round trip and malformed ancillary metadata on Android |
 | ONNX Runtime / sherpa | OCR: 1.31.1; sherpa: 2.0.1 with static ORT 1.28.2 | Separate native runtimes; the sherpa recipe and JNI binary identify ORT 1.28.2. Verify OCR and speech on the target device; model terms are separate |
 | Conscrypt | 2.5.2 → 2.9.0 | Native TLS 1.3 initialization and cipher check; wireless pairing still needs device acceptance |
 | certifi | 2026.10.23, including bundled Lark and generated CA assets | Native TLS uses Android's trust store independently |
@@ -32,6 +33,9 @@ linking and target ABI information; no runtime security check is disabled.
 OpenCV excludes WebP, TIFF, Jasper, OpenEXR, AVIF, OpenJPEG, FFmpeg and downloaded
 Unicode fonts. Build inventory and linked library inspection must agree with these
 flags. Generated artifacts redact upstream build-user paths before APK hashing.
+The codec overrides address upstream libpng's CVE-2026-46675 fix and zlib's 1.4
+security fixes. They apply to OpenCV's static copies, not Android's system libraries
+or every other dependency's copy. Version inventories must keep those separate.
 Voice models use fixed public HTTPS sources, bounded downloads and SHA-256
 verification; [model provenance](OFFLINE_VOICE.md) does not claim a code license
 also licenses weights.
@@ -45,4 +49,6 @@ Sources: [Chaquopy release notes](https://chaquo.com/chaquopy/doc/current/change
 [cibuildwheel Android](https://cibuildwheel.pypa.io/en/stable/platforms/#android),
 [OpenSSL releases](https://openssl-library.org/source/),
 [NumPy cross compilation](https://numpy.org/doc/stable/building/cross_compilation.html),
+[libpng security notes](https://libpng.org/pub/png/libpng.html),
+[zlib release notes](https://www.zlib.net/),
 [Go report](https://pkg.go.dev/vuln/GO-2026-5932).

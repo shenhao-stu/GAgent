@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -84,14 +85,32 @@ def prepare(package):
         run(['make', 'install_sw'], root, env)
     elif package == 'numpy':
         # Meson's configure probes also need the target Python library search path.
-        flags = ['-L' + env['PYO3_CROSS_LIB_DIR'], '-lpython3.13']
+        flags = ['-L' + env['PYO3_CROSS_LIB_DIR'], '-lpython3.13', '-Wl,-z,max-page-size=16384']
+        cpp_flags = flags + ['-static-libstdc++']
         (BUILD / 'android-arm64.ini').write_text(
             "[properties]\nlongdouble_format = 'IEEE_QUAD_LE'\n"
-            f"[built-in options]\nc_link_args = {flags!r}\ncpp_link_args = {flags!r}\n")
+            f"[built-in options]\nc_link_args = {flags!r}\ncpp_link_args = {cpp_flags!r}\n")
     elif package == 'opencv-python':
         # cibuildwheel configures C/C++ but CMake otherwise picks the host assembler.
         with Path(env['CMAKE_TOOLCHAIN_FILE']).open('a') as toolchain:
             toolchain.write('\nset(CMAKE_ASM_COMPILER "$ENV{CC}")\n')
+
+
+def update_image_codecs(opencv):
+    """Keep OpenCV's CMake adapters, replace vendored C sources with pinned fixes."""
+    for name in ('libpng', 'zlib'):
+        upstream = source(name)
+        target = opencv / '3rdparty' / name
+        for path in target.rglob('*'):
+            if not path.is_file() or not (path.suffix in ('.c', '.h', '.S') or
+                                         path.name in ('zconf.h.in', 'LICENSE')):
+                continue
+            relative = path.relative_to(target)
+            replacement = upstream / ('scripts/pnglibconf.h.prebuilt' if
+                                      str(relative) == 'pnglibconf.h' else relative)
+            if not replacement.is_file():
+                raise ValueError('Codec source layout changed: ' + str(relative))
+            shutil.copyfile(replacement, path)
 
 
 def build(package):
@@ -150,6 +169,9 @@ def build(package):
         env['CIBW_CONFIG_SETTINGS'] = ('setup-args=-Dblas=none setup-args=-Dlapack=none '
             'setup-args=--cross-file=' + str(cross) + ' compile-args=-j2')
     elif package == 'opencv-python':
+        update_image_codecs(root / 'opencv')
+        # The sdist's generated metadata overrides ENABLE_HEADLESS.
+        patch(root / 'cv2/version.py', 'headless = False', 'headless = True')
         project = root / 'pyproject.toml'
         project.write_text(project.read_text().replace('numpy==2.1.3', 'numpy==2.5.4'))
         # Upstream disables Android Python bindings. cibuildwheel supplies the
@@ -186,8 +208,10 @@ def build(package):
               '            continue  # features2d is optional in a partial build.\n')
         values.update(ENABLE_HEADLESS='1', CMAKE_ARGS=' '.join([
             '-DBUILD_LIST=core,imgproc,imgcodecs,python3', '-DBUILD_TESTS=OFF',
-            '-DOPENCV_FORCE_PYTHON_LIBS=ON', '-DCMAKE_MODULE_LINKER_FLAGS=-static-libstdc++',
+            '-DOPENCV_FORCE_PYTHON_LIBS=ON',
+            '-DCMAKE_MODULE_LINKER_FLAGS="-static-libstdc++ -Wl,-z,max-page-size=16384"',
             '-DPYTHON3_NUMPY_VERSION=2.5.4',
+            '-DBUILD_PNG=ON', '-DBUILD_ZLIB=ON',
             '-DBUILD_EXAMPLES=OFF', '-DBUILD_ANDROID_EXAMPLES=OFF',
             '-DBUILD_ANDROID_PROJECTS=OFF', '-DINSTALL_ANDROID_EXAMPLES=OFF',
             '-DWITH_UNIFONT=OFF', '-DWITH_AVIF=OFF', '-DWITH_OPENJPEG=OFF',

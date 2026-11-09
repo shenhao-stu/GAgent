@@ -24,6 +24,7 @@ terms continue to apply. Exact dependency versions are in `app/build.gradle`,
 | KaTeX and mhchem | MIT; included fonts retain upstream notices | [KaTeX](https://github.com/KaTeX/KaTeX) |
 | requests / beautifulsoup4 / PyYAML | Apache-2.0 / MIT / MIT | PyPI packages of the same name |
 | NumPy / OpenCV | BSD-3-Clause / Apache-2.0; Android-native build dependencies retain separate notices | [NumPy](https://github.com/numpy/numpy), [OpenCV](https://github.com/opencv/opencv), [Chaquopy recipes](https://github.com/chaquo/chaquopy/tree/master/server/pypi/packages) |
+| OpenCV libpng / zlib overrides | PNG Reference Library License / zlib; unmodified upstream C sources with OpenCV's CMake adapters | Fixed archives and hashes in `tools/native-sources.json`; separate license texts in `third_party/licenses/` |
 | cryptography / cffi / bcrypt / PyNaCl | Apache-2.0 or BSD / MIT / Apache-2.0 / Apache-2.0 | Hash-pinned source distributions; Android wheels built with cibuildwheel |
 | Paramiko | LGPL-2.1 | [Paramiko](https://github.com/paramiko/paramiko); unmodified Python source wheel in `third_party/`, also embedded in the APK |
 | aiohttp / multidict / yarl / frozenlist / propcache | Apache-2.0 | [aio-libs](https://github.com/aio-libs); portable source builds |

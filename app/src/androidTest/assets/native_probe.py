@@ -4,6 +4,8 @@ import sys
 sys.path.insert(0, GA_DIR)
 os.environ['GA_DIR'] = GA_DIR
 import ssl
+import struct
+import zlib
 import numpy as np
 import cv2
 import cffi
@@ -33,6 +35,14 @@ img = np.full((160, 640, 3), 255, dtype=np.uint8)
 cv2.putText(img, 'GAgent 123', (30, 100), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 0), 3, cv2.LINE_AA)
 ok, encoded = cv2.imencode('.png', img)
 assert ok and np.array_equal(cv2.imdecode(encoded, cv2.IMREAD_COLOR), img)
+build_info = cv2.getBuildInformation()
+assert '1.6.59' in build_info and 'ver 1.4)' in build_info, build_info
+# Malformed ancillary text must not poison the subsequent PNG image/end reader.
+text_chunk = b'zTXt' + b'synthetic\0\0' + b'x\x9cBROKEN'
+chunk = struct.pack('>I', len(text_chunk) - 4) + text_chunk + struct.pack('>I', zlib.crc32(text_chunk))
+png = encoded.tobytes()
+damaged_metadata = np.frombuffer(png[:33] + chunk + png[33:], np.uint8)
+assert np.array_equal(cv2.imdecode(damaged_metadata, cv2.IMREAD_COLOR), img)
 assert cv2.resize(img, (320, 80)).shape == (80, 320, 3)
 import droid
 droid.ort_shim()
@@ -46,3 +56,5 @@ result = {'python': sys.version.split()[0], 'ssl': ssl.OPENSSL_VERSION,
           'versions': {m.__name__: m.__version__ for m in [np, cv2, cffi, bcrypt, nacl, paramiko, cryptography]},
           'ocr': transcript, 'crypto': 'round trips passed', 'numpy': 'solve/quad precision passed',
           'opencv': 'PNG/resize passed'}
+result['opencv_codecs'] = {'libpng': '1.6.59', 'zlib': '1.4', 'malformed_metadata': 'rejected without losing image'}
+result['python_zlib'] = zlib.ZLIB_RUNTIME_VERSION
