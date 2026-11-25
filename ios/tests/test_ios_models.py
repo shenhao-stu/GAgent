@@ -15,7 +15,7 @@ class ModelDiscoveryTests(unittest.TestCase):
         response = types.SimpleNamespace(status_code=status, json=lambda: {'data': [{'id': 'model-a'}]})
         with patch.object(sys, 'platform', platform), patch.object(requests, 'get', return_value=response) as get:
             result = json.loads(android_entry._list_models(json.dumps({
-                'apibase': base, 'apikey': 'fixture-claude-key', 'type': 'claude'})))
+                'apibase': base, 'apikey': 'sk-ant-' + 'fixture', 'type': 'claude'})))
         return result, get
 
     def test_ios_rejects_unsafe_endpoints_before_sending_key(self):
@@ -31,7 +31,7 @@ class ModelDiscoveryTests(unittest.TestCase):
         result, get = self.discover('https://example.com/v1')
         self.assertEqual(result, {'ok': True, 'models': ['model-a']})
         self.assertEqual(get.call_args.args, ('https://example.com/v1/models',))
-        self.assertEqual(get.call_args.kwargs['headers']['x-api-key'], 'fixture-claude-key')
+        self.assertEqual(get.call_args.kwargs['headers']['x-api-key'], 'sk-ant-' + 'fixture')
         self.assertIs(get.call_args.kwargs['allow_redirects'], False)
 
     def test_ios_redirect_cannot_forward_key_or_masquerade_as_models(self):
