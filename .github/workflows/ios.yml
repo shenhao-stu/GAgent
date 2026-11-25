@@ -52,22 +52,28 @@ jobs:
           xcodegen generate
           xcodegen generate -s project.presence.yml
           xcodegen generate -s project.presence-app.yml
-          SIM_ID="$(xcrun simctl list devices available -j | python -c '
-          import json, sys
+          SDK_MAJOR="$(xcrun --sdk iphonesimulator --show-sdk-version | cut -d. -f1)"
+          SIM_ID="$(SDK_MAJOR="$SDK_MAJOR" xcrun simctl list devices available -j | python -c '
+          import json, os, re, sys
+          sdk_major = int(os.environ.get("SDK_MAJOR") or "99")
           devs = json.load(sys.stdin).get("devices", {})
-          candidates = [
-              (runtime, d["udid"], d["name"])
-              for runtime, items in devs.items() if "iOS" in runtime
-              for d in items if d.get("isAvailable") and "iPhone" in d.get("name", "")
-          ]
+          candidates = []
+          for runtime, items in devs.items():
+              m = re.search(r"iOS-(\d+)-(\d+)", runtime)
+              if not m:
+                  continue
+              ver = (int(m.group(1)), int(m.group(2)))
+              for d in items:
+                  if d.get("isAvailable") and "iPhone" in d.get("name", ""):
+                      candidates.append((ver[0] <= sdk_major, ver, d["udid"], d["name"]))
           candidates.sort(reverse=True)
           assert candidates, "No available iPhone Simulator found"
-          print(candidates[0][1])
+          print(candidates[0][2])
           ')"
-          echo "Testing BoardKitTests on Simulator UDID: $SIM_ID"
+          echo "Testing BoardKitTests on Simulator UDID: $SIM_ID (SDK major: $SDK_MAJOR)"
           xcodebuild test \
             -project GAgent.xcodeproj \
             -scheme BoardKitTests \
-            -destination "platform=iOS Simulator,id=$SIM_ID" \
+            -destination "platform=iOS Simulator,arch=arm64,id=$SIM_ID" \
             CODE_SIGNING_ALLOWED=NO \
             -quiet

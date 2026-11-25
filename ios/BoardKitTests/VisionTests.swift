@@ -5,8 +5,13 @@ import XCTest
 final class VisionTests: XCTestCase {
     func testGrayPreservesIntegerWeightsRoundingAndResizePixels() throws {
         let width = 259, height = 257
-        let bytes = (0..<(width * height)).flatMap { i -> [UInt8] in
-            [UInt8(i & 255), UInt8((i >> 8) & 255), UInt8((i * 73) & 255), 255]
+        var bytes = [UInt8]()
+        bytes.reserveCapacity(width * height * 4)
+        for i in 0..<(width * height) {
+            bytes.append(UInt8(truncatingIfNeeded: i))
+            bytes.append(UInt8(truncatingIfNeeded: i >> 8))
+            bytes.append(UInt8(truncatingIfNeeded: i * 73))
+            bytes.append(255)
         }
         let provider = try XCTUnwrap(CGDataProvider(data: Data(bytes) as CFData))
         let image = try XCTUnwrap(CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
@@ -22,8 +27,13 @@ final class VisionTests: XCTestCase {
                 context.interpolationQuality = .medium
                 context.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
             }
-            let expected = (0..<(w * h)).map { i in
-                UInt8((Int(rgba[4*i]) * 299 + Int(rgba[4*i+1]) * 587 + Int(rgba[4*i+2]) * 114 + 500) / 1000)
+            var expected = [UInt8]()
+            expected.reserveCapacity(w * h)
+            for i in 0..<(w * h) {
+                let r = Int(rgba[4 * i]) * 299
+                let g = Int(rgba[4 * i + 1]) * 587
+                let b = Int(rgba[4 * i + 2]) * 114
+                expected.append(UInt8((r + g + b + 500) / 1000))
             }
             let result = Vision.gray(image, w, h)
             XCTAssertEqual(result.w, w)
