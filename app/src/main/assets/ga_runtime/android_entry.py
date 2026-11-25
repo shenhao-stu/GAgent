@@ -39,6 +39,7 @@ _focus_cid = _UNBOUND_CID
 _notif_lock = threading.Lock()
 _gen_lock = threading.Lock()
 _gen_seq = 0
+_IOS_REPLY_EPOCH = secrets.token_hex(16)
 _CONVO_KEEP = 50
 _CONVO_SPECIAL = frozenset((
     'lock', 'task_queue', 'is_running', 'stop_sig', 'llm_no', 'llmclient', 'llmclients'))
@@ -303,6 +304,9 @@ def _write_mykey_file(pp, old, lines):
     """先校验候选源码再原子发布；刷新失败则恢复磁盘和配置缓存。"""
     txt = '\n'.join(lines).rstrip() + '\n'
     compile(txt, pp, 'exec')  # 不执行、不写 pyc；坏语法绝不暴露给并发读者
+    if getattr(globals().get('sys'), 'platform', None) == 'ios':
+        from ios_policy import parse_config
+        parse_config(txt)
     existed = os.path.exists(pp)
     _atomic_write(pp, txt)
     try:
@@ -320,14 +324,36 @@ def _write_mykey_file(pp, old, lines):
         raise
 
 
+def _ios_config_lines(pp, old, recover_invalid=False):
+    if sys.platform != 'ios': return old.splitlines(), None
+    from ios_policy import parse_config
+    recovery = None
+    try: parsed = parse_config(old)
+    except ValueError:
+        if not recover_invalid: raise
+        recovery = 'mykey.legacy-backup-%d.py' % time.time_ns()
+        backup = os.path.join(os.path.dirname(pp), recovery)
+        _atomic_write(backup, old)
+        os.chmod(backup, 0o600)
+        parsed = {}
+    lines = []
+    for var, value in parsed.items():
+        lines.extend(_format_mykey_block(var, value) if isinstance(value, dict) else [var + ' = ' + repr(value)])
+        lines.append('')
+    return lines, recovery
+
+
 def _write_mykey_py_from_dict(incoming):
     """Apply full UI config dict to mykey.py by cfg.name: update matched provider/mixin blocks, append new, delete vanished UI-owned providers/mixin."""
     if not isinstance(incoming, dict):
         raise ValueError('mykey must be object')
     with _mykey_lock:
         pp = _mykey_py_path()
-        old = open(pp, encoding='utf-8').read() if os.path.exists(pp) else ''
-        lines = old.splitlines()
+        old = ''
+        if os.path.exists(pp):
+            with open(pp, encoding='utf-8') as existing: old = existing.read()
+        _ios_lines = globals().get('_ios_config_lines')
+        lines, recovery = _ios_lines(pp, old, recover_invalid=True) if _ios_lines else (old.splitlines(), None)
         blocks = _find_mykey_blocks(lines)
         name2block = {b['name']: b for b in blocks if b.get('name')}
 
@@ -385,16 +411,20 @@ def _write_mykey_py_from_dict(incoming):
                 lines.extend(_format_mykey_block(var, cfg))
                 used_vars.add(var)
         _write_mykey_file(pp, old, lines)
+        return recovery
 
-def _write_mykey_patch(items=None, delete_names=None):
+def _write_mykey_patch(items=None, delete_names=None, recover_invalid=False):
     """Patch mykey.py by cfg.name without full-sync deletion: update matched blocks, append new blocks, optionally delete explicit names."""
     items = items or []
     delete_names = set(delete_names or [])
     incoming_mixin = any(isinstance(c, dict) and isinstance(c.get('llm_nos'), list) for _, c in items)
     with _mykey_lock:
         pp = _mykey_py_path()
-        old = open(pp, encoding='utf-8').read() if os.path.exists(pp) else ''
-        lines = old.splitlines()
+        old = ''
+        if os.path.exists(pp):
+            with open(pp, encoding='utf-8') as existing: old = existing.read()
+        _ios_lines = globals().get('_ios_config_lines')
+        lines, recovery = _ios_lines(pp, old, recover_invalid=recover_invalid) if _ios_lines else (old.splitlines(), None)
         # 删除: 按导出身份(ename) 命中; 写入新 mixin 时连带删掉所有旧 mixin → 单一故障转移链不变量
         blocks = _find_mykey_blocks(lines)
         for b in reversed(blocks):
@@ -438,6 +468,7 @@ def _write_mykey_patch(items=None, delete_names=None):
                     lines.extend(block)
                 used_vars.add(var)
         _write_mykey_file(pp, old, lines)
+        return recovery
 
 def _provider_save(payload):
     """Save one provider block into mykey.py by name; models add/delete/default are just saving this block's models/model fields."""
@@ -462,8 +493,12 @@ def _provider_save(payload):
             hint = 'mixin_config_auto'
         else:
             hint = f"native_{_cfg_type('', cfg)}_config"
-        _write_mykey_patch([(hint, cfg)], [])
-        return json.dumps({'ok': True, 'name': cfg.get('name')}, ensure_ascii=False)
+        recovered = _write_mykey_patch([(hint, cfg)], [], recover_invalid=True)
+        out = {'ok': True, 'name': cfg.get('name')}
+        if recovered or getattr(globals().get('sys'), 'platform', None) == 'ios':
+            out.update(recoveredBackup=recovered or '',
+                       recoveryNote='旧不兼容脚本已原样备份，仅保存本次明确配置；其他服务商请从旧文件逐项重新配置' if recovered else '')
+        return json.dumps(out, ensure_ascii=False)
     except Exception as e:
         return json.dumps({'ok': False, 'error': str(e)[:300]}, ensure_ascii=False)
 
@@ -497,16 +532,19 @@ def _provider_delete(payload):
 
 
 
-def init(ga_dir):
+def init(ga_dir, *, ios_host=False):
     global GA_DIR
     GA_DIR = ga_dir
     os.environ['GA_DIR'] = ga_dir                  # 进程级真相固化: 模块被清缓存重导入时, 顶部 GA_DIR 推导直接命中此值
     os.environ.setdefault('GA_LANG', _LANG)        # 不强行覆盖: 让 agentmain 的 locale 默认 / UI 的 /lang 生效
-    if ga_dir not in sys.path: sys.path.insert(0, ga_dir)
+    if not ios_host and ga_dir not in sys.path: sys.path.insert(0, ga_dir)
     os.makedirs(os.path.join(ga_dir, 'temp/model_responses'), exist_ok=True)
     _safe(_migrate_old_convos)                        # 热更新适配: v2.1 convos/ → v2.2 temp/model_responses/session_*(老用户对话零丢失)
     _files_migrate_legacy(ga_dir)                     # v2.20: 旧内部文件(agent_events/webcdp_pin)迁入点前缀内部命名空间
-    from kernel_adapter import install
+    if ios_host:
+        from kernel_adapter.ios_host import install
+    else:
+        from kernel_adapter import install
     install(ga_dir)
     _apply_proxy()                                   # 启动即应用已保存的全局代理(+猴补丁会话代理兜底)
     _safe(patches.patch_usage)                        # 猴补丁 token 用量采集 → poll 上报
@@ -534,8 +572,8 @@ def has_key():
 
 def set_key(text):
     data = json.loads(text)
-    _write_mykey_py_from_dict(data)
-    return 'mykey.py 已保存'
+    recovered = _write_mykey_py_from_dict(data)
+    return 'mykey.py 已保存' + ('；旧不兼容配置原样保留于 ' + recovered if recovered else '')
 
 _MODEL_ID_BAD = re.compile(r'[*?\s]')          # glob 元字符 / 空白
 
@@ -574,6 +612,10 @@ def _list_models(cfg_json):
     except Exception: return json.dumps({'ok': False, 'error': '配置解析失败'})
     base = (cfg.get('apibase') or '').rstrip('/')
     if not base: return json.dumps({'ok': False, 'error': '缺少 API Base URL'})
+    if sys.platform == 'ios':
+        from ios_policy import _endpoint
+        try: base = _endpoint(base)
+        except ValueError as e: return _err_json(e, 200)
     key = cfg.get('apikey') or ''
     is_anthropic = cfg.get('type') == 'claude' or 'anthropic' in base
     if key.startswith('sk-ant-'):                                  # 真·Anthropic 原生 key 才用 x-api-key
@@ -587,8 +629,14 @@ def _list_models(cfg_json):
     elif re.search(r'/v\d+(/|$)', mbase): url = mbase + '/models'  # 已含 /v1、/v1beta、/v2… → 直接接 /models
     else: url = mbase + '/v1/models'                               # 仅到端口/根域 → 补 /v1/models
     px = cfg.get('proxy'); proxies = {'http': px, 'https': px} if px else None
+    if sys.platform == 'ios':
+        from kernel_adapter.ios_proxy import request_proxies
+        proxies = request_proxies(url)
     try:
-        r = requests.get(url, headers=headers, proxies=proxies, timeout=(10, 25))
+        r = requests.get(url, headers=headers, proxies=proxies, timeout=(10, 25),
+                         **({'allow_redirects': False} if sys.platform == 'ios' else {}))
+        if sys.platform == 'ios' and 300 <= r.status_code < 400:
+            return json.dumps({'ok': False, 'error': 'iOS 不向重定向端点发送 API 密钥；请在服务商设置填写实际 HTTPS 地址'}, ensure_ascii=False)
         try: j = r.json()
         except Exception: return json.dumps({'ok': False, 'error': f'HTTP {r.status_code}: {r.text[:160]}'}, ensure_ascii=False)
         data = j.get('data', j) if isinstance(j, dict) else j
@@ -707,7 +755,7 @@ def _extract_ask(text):
         except Exception: return None
     if not isinstance(obj, dict): return None
     q = str(obj.get('question') or '').strip()
-    cs = [str(c).strip() for c in (obj.get('candidates') or []) if str(c).strip()][:12]
+    cs = [str(c) if sys.platform == 'ios' else str(c).strip() for c in (obj.get('candidates') or []) if str(c).strip()][:12]
     return {'question': q, 'candidates': cs} if (q or cs) else None
 
 def _kv_path(key):
@@ -717,11 +765,20 @@ def _kv_path(key):
 
 _kv_lock = threading.Lock()
 
-def _detect_proxy():
+_PROXY_PORTS = (10809, 10808, 7890, 7891, 1082, 1087, 1080, 8889, 8118, 2080, 8080)   # 1082 = Shadowrocket HTTP 模式
+
+def _detect_proxy(hint=''):
     """探测本机常见「本地 HTTP 代理」端口(v2rayNG/Clash/Sing-box/Shadowrocket 等都在 127.0.0.1 起本地监听)。
-    返回首个可连通的 http://127.0.0.1:port, 否则 ''。仅做 TCP 连通性探测, 不发请求。"""
+    返回首个可用的 http://127.0.0.1:port, 否则 ''。Android 仅做 TCP 连通性探测; iOS 另需 CONNECT 握手成功。
+    hint: 前端从系统设置读到的代理地址(iOS 原生 networkProxy), 先于端口表验证, 验证方式同平台规则。"""
     import socket
-    for p in (10809, 10808, 7890, 7891, 1087, 1080, 8889, 8118, 2080, 8080):
+    m = re.match(r'https?://([\w.\-]+):(\d{1,5})/?$', (hint or '').strip())
+    if m and 0 < int(m.group(2)) < 65536 and _answers_http_connect(int(m.group(2)), m.group(1)):
+        return 'http://%s:%s' % (m.group(1), m.group(2))
+    for p in _PROXY_PORTS:
+        if sys.platform == 'ios':
+            if _answers_http_connect(p): return 'http://127.0.0.1:%d' % p
+            continue
         s = None
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.settimeout(0.25)
@@ -733,6 +790,18 @@ def _detect_proxy():
                 try: s.close()
                 except Exception: pass
     return ''
+
+def _answers_http_connect(port, host='127.0.0.1'):
+    """端口开着不等于 HTTP 代理: iPhone 上其他 App 也会在这些端口挂 SOCKS 等服务, 误存为全局代理会让
+    所有模型调用失败(真机实测 127.0.0.1:1080)。只认 CONNECT 返回 200。"""
+    import socket
+    try:
+        with socket.create_connection((host, port), timeout=1.5) as s:
+            s.sendall(b'CONNECT www.apple.com:443 HTTP/1.1\r\nHost: www.apple.com:443\r\n\r\n')
+            head = s.recv(64)
+    except OSError:
+        return False
+    return re.match(rb'HTTP/1\.[01] 200', head) is not None
 
 _IMG_EXT = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic', '.heif')
 
@@ -817,7 +886,9 @@ def _storage_info():
             {'key': 'evobak', 'size': evobak[0], 'count': evobak[1]},
             {'key': 'system', 'size': syst[0], 'count': syst[1]},
             {'key': 'logs', 'size': logs[0], 'count': logs[1]}]
-    _cd = _cache_dir()
+    if sys.platform == 'ios':
+        cats = [category for category in cats if category['key'] != 'evobak']
+    _cd = _cache_dir() if sys.platform != 'ios' else None
     if _cd:   # 仅 Kotlin 端已写 .cache_path 时才追加此类别: webui(t('cat_updcache')/showCatDetail)尚未配套前, 存储页不会冒出无法交互的字面量灰行
         updcache = _path_stat(os.path.join(_cd, 'ota'))   # 历史更新 apk(已装/已弃), 独立于 GA_DIR, /clearupdcache 可清
         cats.append({'key': 'updcache', 'size': updcache[0], 'count': updcache[1], 'clearable': True})
@@ -1130,18 +1201,31 @@ _PRESET_FAIL_RE = r'未找到\s*LLM|命令执行失败|配置.*?(失败|错误)|
 
 def _select_agent_model(sess, name, model=''):
     """Android UI control: call the upstream API, never enqueue a chat task."""
+    try:
+        from llmcore import MixinSession, mykeys_store
+    except ModuleNotFoundError:
+        MixinSession, mykeys_store = (), None
+
     a = sess.agent
     with sess.lock, a._model_lock:
         if sess.retired or sess.state.get('running') or a.is_running or not a.task_queue.empty():
             raise RuntimeError('Agent is busy; model was not changed')
         a.load_llm_sessions()
-        matches = [i for i, c in enumerate(a.llmclients)
-                   if getattr(c.backend, 'name', None) == name]
+        configs = mykeys_store.snapshot()[0] if mykeys_store is not None else {}
+        matches = []
+        for index, client in enumerate(a.llmclients):
+            backend = getattr(client, 'backend', None)
+            runtime_name = getattr(backend, 'name', None)
+            configured_name = runtime_name
+            if isinstance(backend, MixinSession):
+                configured_name = configs.get(a._llm_config_keys[index], {}).get('name') or runtime_name
+            if name in (runtime_name, configured_name):
+                matches.append(index)
         if len(matches) != 1:
             raise ValueError('Provider name must match exactly one configured provider')
         target = a.llmclients[matches[0]].backend
         # Mixin.model is derived from its members, not a writable UI setting.
-        if model and isinstance(getattr(type(target), 'model', None), property):
+        if model and isinstance(target, MixinSession):
             raise ValueError('Select a concrete provider to override its model')
         a.next_llm(matches[0])
         if model:
@@ -1260,7 +1344,7 @@ def _sess_boot(s):
             return a.run()
         finally:
             try:
-                patches.bind_sess(None)
+                patches.unbind_sess(s)
             except Exception as e:
                 _swallow('_sess_boot.unbind_sess', e)
     t = threading.Thread(target=_run_bound, daemon=True)
@@ -1328,6 +1412,7 @@ def _retire_sess(cid, persist=True, force=False, focus_ok=False):
         _safe(lambda: _snap_sess_vars(s))
         _safe(lambda: _persist_convo(_pub_cid(s.cid), _backend_history(s.agent), getattr(s.agent, 'history', None)))
     _stop_sess_agent(s)
+    _safe(lambda: patches.unbind_sess(s))
     return True
 
 def _drop_queued_tasks(a):
@@ -1408,9 +1493,10 @@ def _st():
     s = _focus_sess()
     return s.state if s is not None else _state
 
-def _push_cmd_error(msg):
-    with _lock:
-        _state['cmd_error'] = (_state['cmd_error'] + '\n' + msg).strip() if _state.get('cmd_error') else msg
+def _push_cmd_error(msg, sess=None):
+    with sess.lock if sess is not None else _lock:
+        st = sess.state if sess is not None else _state
+        st['cmd_error'] = (st['cmd_error'] + '\n' + msg).strip() if st.get('cmd_error') else msg
 
 def _quiesce_agent(a, timeout=3.0):
     """切会话/清空前真正停住在飞 worker(abort 只是异步信号): 置 stop_sig + close 在飞流(解阻塞 socket 读), 再等 is_running 落 False。
@@ -1750,7 +1836,11 @@ _MEM_EXT = ('.md', '.txt', '.json')
 _MEM_GLOBAL = ('global_mem.txt', 'global_mem_insight.txt')
 
 def _mem_root(): return os.path.join(GA_DIR, 'memory')
-def _mem_baseline(rel): return os.path.join(GA_DIR, '.evolution', 'baseline', 'memory', rel)
+def _mem_baseline(rel):
+    if sys.platform == 'ios':
+        from ios_policy import code_root
+        return str(code_root() / 'memory' / rel)
+    return os.path.join(GA_DIR, '.evolution', 'baseline', 'memory', rel)
 
 def _mem_safe(rel):
     """list/read/reset 共用白名单守卫: 非纯文件名/越界/非白名单类型 → None。
@@ -2097,7 +2187,7 @@ def _cmd_kv_del(text):
         with _kv_lock: os.remove(_kv_path(text[8:].strip()))
     except Exception as e: _swallow('_cmd_kv_del', e)
     return 'ok'
-def _cmd_detectproxy(text): return json.dumps({'proxy': _detect_proxy()})  # 一键识别本机代理: 探常见本地代理端口
+def _cmd_detectproxy(text): return json.dumps({'proxy': _detect_proxy(text[12:])})  # 一键识别本机代理: 先验前端给的系统代理, 再探常见本地端口
 def _cmd_storageinfo(text): return json.dumps(_storage_info())             # 存储路径 + 占用 + 可用
 def _cmd_cleartemp(text): return json.dumps({'removed': _clear_temp()})    # 一键清理临时文件
 def _cmd_clearupdcache(text):                                          # 一键清「应用占用」可清部分: 历史更新 apk 缓存 + __pycache__
@@ -2168,9 +2258,9 @@ def _cmd_proxy(text):                                          # 全局代理: �
     try:
         if url in ('', 'clear', 'off'):
             try: os.remove(_proxy_path())
-            except Exception: pass
+            except FileNotFoundError: pass
         else:
-            open(_proxy_path(), 'w', encoding='utf-8').write(url)
+            _atomic_write(_proxy_path(), url)
     except Exception as e:
         return '代理保存失败: ' + str(e)
     cur = _apply_proxy()
@@ -2225,6 +2315,13 @@ def _cmd_clear(text):                                          # UI "清空全�
         try: os.remove(_f)
         except Exception as e: _swallow('_cmd_clear', e)
     _safe(lambda: _purge_llm_debris(os.path.dirname(_convo_dir())))   # 顶层 LLM 日志 model_responses_*.txt + ../user_prompt_*.md([Peer]/resume 回灌源): 与 _rollback 对齐, 清空全部会话须一并清, 否则内容仍可被挖回
+    if sys.platform == 'ios':
+        from ios_policy import clear_history_screenshots
+        try:
+            clear_history_screenshots()
+        except OSError as error:
+            print('[history] screenshot cleanup failed: ' + type(error).__name__)
+            return 'cleanup_failed'
     return 'cleared'
 def _cmd_ganet_devices(text):
     try:
@@ -2306,7 +2403,7 @@ _CMDS = [                        # 斜杠命令注册表: (matcher, handler); ma
     (lambda text: text.startswith('/kv.set '), _cmd_kv_set),
     (lambda text: text.startswith('/kv.get '), _cmd_kv_get),
     (lambda text: text.startswith('/kv.del '), _cmd_kv_del),
-    (lambda text: text == '/detectproxy', _cmd_detectproxy),
+    (lambda text: text == '/detectproxy' or text.startswith('/detectproxy '), _cmd_detectproxy),
     (lambda text: text == '/storageinfo', _cmd_storageinfo),
     (lambda text: text == '/cleartemp', _cmd_cleartemp),
     (lambda text: text == '/clearupdcache', _cmd_clearupdcache),
@@ -2357,12 +2454,13 @@ def _unknown_bridge_cmd(text):
     return (_BRIDGE_NS_RE.match(text) is not None
             and re.fullmatch(_PRESET_SESSION_RE, text) is None)
 
-def _send_for(sess, text):
-    text = text.strip()
-    hit, result = _dispatch_cmds(text, _CMDS_PRE)
-    if hit: return result
-    if _unknown_bridge_cmd(text):                      # 桥命名空间未知子命令: 就地失败, 不进 agent(见 _BRIDGE_NS_RE)
-        return json.dumps({'ok': False, 'error': 'unknown_cmd', 'cmd': text.split(' ')[0][:48]}, ensure_ascii=False)
+def _send_for(sess, text, literal=False):
+    if not literal:
+        text = text.strip()
+        hit, result = _dispatch_cmds(text, _CMDS_PRE)
+        if hit: return result
+        if _unknown_bridge_cmd(text):                      # 桥命名空间未知子命令: 就地失败, 不进 agent(见 _BRIDGE_NS_RE)
+            return json.dumps({'ok': False, 'error': 'unknown_cmd', 'cmd': text.split(' ')[0][:48]}, ensure_ascii=False)
     if not has_key(): return _L(f'未配置key: 发送 /key {{json}} 或放置 mykey.py 到 {GA_DIR}', 'No key configured. Send /key {json} or place mykey.py.')
     try:
         if sess is None or sess.retired:
@@ -2371,9 +2469,10 @@ def _send_for(sess, text):
         if sess.agent is None: _sess_agent(sess)
         a = sess.agent
     except Exception: return traceback.format_exc()
-    hit, result = _dispatch_cmds(text, _CMDS_POST)
-    if hit: return result
-    if re.match(r'/session\.\w+=', text):   # 控制命令(切模型/推理/服务商): 入队即返回, 不阻塞 UI; 失败经 poll.cmd_error 上报
+    if not literal:
+        hit, result = _dispatch_cmds(text, _CMDS_POST)
+        if hit: return result
+    if not literal and re.match(r'/session\.\w+=', text):   # 控制命令(切模型/推理/服务商): 入队即返回, 不阻塞 UI; 失败经 poll.cmd_error 上报
         q = a.put_task(text)
         undo = None
         try: undo = _record_preset(text)
@@ -2398,21 +2497,34 @@ def _send_for(sess, text):
     mygen = None
     mycid = None
     dq = None
+    target_cid = sess.cid
+
+    def retry_sess(build=False):
+        target = _ensure_sess(target_cid)
+        if build: _sess_agent(target)
+        with _reg_lock:
+            if _REG.get(target_cid) is target and _focus_cid == target_cid and not target.retired:
+                _bind_focus_names(target)
+        return target
+
     for _try in range(2):
         with sess.lock:
             if not sess.retired:
+                previous_gen = sess.state['gen']
                 sess.state.update(running=True, t0=time.time(), status=_L('思考中', 'Thinking…'), steps=[], final='', prompt=text, gen=_next_gen(), tok_in=0, tok_out=0, cache_read=0, cache_write=0, ask=None, ask_open=None, end='')   # t0=本任务起点(秒): 供悬浮窗竖丸按真实运行时长加深颜色(比 FloatService 自计更准, 浮窗中途打开也对)
                 patches._ROUTE['cur'] = None                      # 新任务: 清空上一轮的故障转移路由, 由探针在本轮实际路由时重写
                 mygen = sess.state['gen']                         # 本次任务的代号, 用于作废 /clear 或新任务后的陈旧 drain
                 mycid = _pub_cid(sess.cid)
-                dq = a.put_task(text)
+                dq = a.put_task(text, source='answer') if literal else a.put_task(text)
+                if sys.platform == 'ios': sess.state['reply_to_gen'] = previous_gen
         if mygen is not None: break
         try:
-            sess = _focus_live(True)
+            sess = retry_sess(True)
             a = sess.agent
         except Exception: return traceback.format_exc()
     if mygen is None:
-        _push_cmd_error(_L('会话正在回收, 请重发', 'Session is being recycled, please resend'))
+        _push_cmd_error(_L('会话正在回收, 请重发', 'Session is being recycled, please resend'),
+                        retry_sess())
         return ''
     sess.last_active = time.time()
     threading.Thread(target=_drain, args=(dq, mygen, sess, mycid), daemon=True).start()
@@ -2508,6 +2620,7 @@ def _poll_for(sess, since='0', summary=False, legacy=False):
     with sess.lock:
         d = {k: st[k] for k in ('running', 'status', 'gen', 'final', 'prompt')}
         d['cid'] = _pub_cid(sess.cid)
+        if sys.platform == 'ios': d['reply_to_gen'] = st.get('reply_to_gen')
         d['nsteps'] = len(st['steps'])
         d['steps'] = [] if summary else (st['steps'][i:] if i else list(st['steps']))
         d['tool_events'] = [] if summary else list(st.get('tool_events') or [])   # 浅拷贝防序列化期并发改; 归属由 event.gen 字段保证(参观层数据源, 见 plugins/tool_events_hook.py)
@@ -2572,19 +2685,70 @@ def _resolve_cid(cid, explicit=False, build=False):
     except Exception as e:
         return None, str(e)
 
+def _ios_command(text):
+    if sys.platform != "ios": return None
+    import ios_policy
+    try:
+        if text == '/ios.proxy.status':
+            from kernel_adapter.ios_proxy import configured_proxy
+            return json.dumps({'proxy': configured_proxy()})
+        if text.startswith('/ios.proxy.probe '):
+            from kernel_adapter.ios_proxy import probe
+            hint = json.loads(text.partition(' ')[2]).get('hint', '')
+            if not isinstance(hint, str):
+                raise ValueError('Invalid proxy hint')
+            return json.dumps({'job': _run_job(lambda _: json.dumps(probe(hint, _PROXY_PORTS)), '')})
+        if text == '/ios.consent.refresh' or text.startswith('/ios.consent.refresh '):
+            options = json.loads(text.partition(' ')[2] or '{}')
+            ids = options.get('providerIds')
+            if ids is not None and (not isinstance(ids, list) or not all(isinstance(x, str) for x in ids)):
+                raise ValueError('providerIds 必须为字符串数组')
+            return json.dumps({'job': _run_job(lambda _: json.dumps(ios_policy.consent_status(refresh=True, provider_ids=ids), ensure_ascii=False), '')})
+        result = ios_policy.consent_command(text)
+        if result is not None: return result
+        if text.startswith(('/safemode', '/evo.', '/detector.', '/ganet.', '/sense.')) or text == '/clearupdcache':
+            return json.dumps({'ok': False, 'error': 'unsupported_on_ios', 'cmd': text.split()[0]})
+    except Exception as e:
+        return str(e) if isinstance(e, ios_policy.ConsentRequired) else json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
+    return None
+
 def send(text):
     # PRE 命令(/kv.* 等)不依赖 agent: 先分发, 避免 _resolve_cid(build) 建 agent 失败/阻塞时
     # 隐私同意等启动期写 kv 被整段吞掉 → 前端「同意并继续」点了没通。
     # build=has_key(): keyless 不预热 agent(空配置构造必炸), 业务消息由 _send_for 的
     # has_key() 门给配置引导而非裸异常串; 配 key 后 build 恢复。
     text = (text or '').strip()
+    ios_result = _ios_command(text)
+    if ios_result is not None: return ios_result
     hit, result = _dispatch_cmds(text, _CMDS_PRE)
     if hit: return result
     s, err = _resolve_cid(None, build=has_key())
     return err or _send_for(s, text)
 
-def send2(cid, text):
+def _ios_question_token(sess):
+    """Read under sess.lock: only the current, still answerable question has a token."""
+    if sys.platform != 'ios' or sess is None or sess.retired: return None
+    st, a = sess.state, sess.agent
+    if (a is None or st.get('running') or getattr(a, 'is_running', False) or getattr(a, 'stop_sig', False)
+            or getattr(sess, '_phone_pause_token', None)
+            or getattr(sess, '_ios_cancelled_question_gen', None) == st.get('gen')):
+        return None
+    steps = st.get('steps') or []
+    if steps and _extract_ask(steps[-1].get('text') or ''):
+        return f'{_IOS_REPLY_EPOCH}:{st["gen"]}'
+    return None
+
+def send2(cid, text, reply_token=None):
+    if sys.platform == 'ios' and reply_token is not None:
+        with _reg_lock: s = _REG.get(cid or _focus_cid)
+        if s is not None:
+            with s.lock:
+                if reply_token and reply_token == _ios_question_token(s):
+                    return _send_for(s, text or '', literal=True)
+        return _L('问题已过期或已停止，请在聊天中查看当前状态', 'Question expired or stopped; check the current chat')
     text = (text or '').strip()
+    ios_result = _ios_command(text)
+    if ios_result is not None: return ios_result
     hit, result = _dispatch_cmds(text, _CMDS_PRE)
     if hit: return result
     s, err = _resolve_cid(cid, explicit=True, build=has_key())
@@ -2605,6 +2769,8 @@ def poll_all(since='0'):
 def abort2(cid):
     s, err = _resolve_cid(cid, explicit=True)
     if err: return err
+    if sys.platform == 'ios':
+        with s.lock: s._ios_cancelled_question_gen = s.state['gen']
     a = s.agent
     with s.lock:
         if s.state.get('running'): s.state['end'] = 'stopped'   # 先记中止意图, _drain 收尾据此标「已停止」而非「完成」

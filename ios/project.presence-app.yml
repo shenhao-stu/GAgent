@@ -1,0 +1,5 @@
+# GAgent with Presence in-app strip and notifications, without the extra WidgetKit extension bundle
+# (useful for free Apple Personal Team accounts with limited App ID slots).
+#   xcodegen generate -s project.presence-app.yml ->  GAgentWithPresence.xcodeproj, scheme GAgent
+include: [project.yml, Presence/app.yml]
+name: GAgentWithPresence

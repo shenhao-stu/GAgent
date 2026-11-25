@@ -1,0 +1,345 @@
+/* iOS presentation only. Semantic surfaces follow BoardSetupView; effects live in the control layer. */
+.iosApp{--ios-ease:cubic-bezier(.32,.72,0,1);--ios-sheet-top:calc(max(env(safe-area-inset-top),20px) + 10px);
+  --ios-settings-bg:#f2f2f7;--ios-settings-card:#fff;--ios-separator:rgba(60,60,67,.12);--ios-glass:rgba(250,250,252,.76);
+  --ios-glass-edge:rgba(255,255,255,.8);--ios-control-shadow:0 2px 8px rgba(0,0,0,.06),inset 0 0 0 .5px var(--ios-glass-edge)}
+.iosApp[data-theme=dark]{--ios-settings-bg:#000;--ios-settings-card:#1c1c1e;--ios-separator:rgba(235,235,245,.13);--ios-glass:rgba(38,38,40,.78);--ios-glass-edge:rgba(255,255,255,.12)}
+.iosApp .shareBtnHi{display:none!important}
+.iosApp #setv,.iosApp #modelv,.iosApp .authOverlay,.iosApp .sheet{font-size:17px}
+.iosApp #setv,.iosApp #modelv{top:calc(var(--ios-viewport-top,0px) + var(--ios-sheet-top));bottom:auto;height:calc(var(--ios-viewport-height,100dvh) - var(--ios-sheet-top));
+  background:var(--ios-settings-bg);border-radius:28px 28px 0 0;overflow:hidden;box-shadow:0 -8px 40px rgba(0,0,0,.1)}
+.iosApp #setv{transform:translate3d(0,100%,0);transition:transform .5s var(--ios-ease)}
+.iosApp #setv.iosClosing{transition-duration:.36s}
+.iosApp #setv.on{transform:none}
+.iosApp #modelv{transform:translate3d(0,100%,0);transition:transform .42s var(--ios-ease)}
+.iosApp #modelv.on{transform:none}
+.iosApp #setv.iosClosing,.iosApp #modelv.iosClosing,.iosApp .sheet.iosClosing{visibility:visible;pointer-events:none}
+#iosSheetDim{position:fixed;inset:0;z-index:63;background:rgba(0,0,0,.3);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .45s var(--ios-ease),visibility 0s .45s}
+html.iosSheetUp #iosSheetDim{opacity:1;visibility:visible;pointer-events:auto;transition:opacity .45s var(--ios-ease),visibility 0s}
+:root[data-theme=dark] #iosSheetDim{background:rgba(0,0,0,.55)}
+.iosApp #setv .setbody{position:relative}
+.iosApp #setv .setbar,.iosApp #modelv .setbar,.iosApp #failoverSheet .foHd{position:relative;display:grid;grid-template-columns:minmax(64px,1fr) minmax(0,4fr) minmax(64px,1fr);gap:4px;align-items:center;padding:18px max(16px,env(safe-area-inset-right)) 10px max(16px,env(safe-area-inset-left));background:var(--ios-settings-bg)}
+.iosApp #setv .setbar::before,.iosApp #modelv .setbar::before,.iosApp #failoverSheet .foHd::before{content:"";position:absolute;top:5px;left:50%;width:36px;height:5px;margin-left:-18px;border-radius:3px;background:var(--md-sys-color-outline-variant)}
+.iosApp .setbar>.iconbtn:first-child,.iosApp #failoverSheet .foBack{grid-column:1;grid-row:1;justify-self:start;width:44px;height:44px;margin-left:0}
+.iosApp .setbar>.iconbtn:first-child svg,.iosApp #failoverSheet .foBack svg{width:21px;height:21px}
+.iosApp .setbar>.iconbtn:first-child[hidden]{display:none}
+.iosApp .setbar .ttl,.iosApp #failoverSheet .foHd h3{margin:0;padding:0;grid-column:2;grid-row:1;text-align:center;font-size:clamp(17px,1.06em,23px);line-height:1.3;overflow-wrap:anywhere;outline:none}
+.iosApp .setbarBrand{display:none!important}
+/* Trailing controls are glass capsules like the native page's 关闭: the sheet closes from here, not from a leading X. */
+.iosApp .iosBarTrailing{grid-column:3;grid-row:1;justify-self:end;display:flex;align-items:center;gap:8px;margin-right:2px}
+.iosApp .iosBarDone,.iosApp .setbar>.iconbtn:first-child,.iosApp #failoverSheet .foBack{border:0;border-radius:999px;background:var(--ios-glass);-webkit-backdrop-filter:var(--ios-bar-filter);backdrop-filter:var(--ios-bar-filter);
+  box-shadow:var(--ios-control-shadow);color:var(--fut);transition:opacity .15s,transform .15s}
+.iosApp .iosBarDone{flex:none;white-space:nowrap;min-height:44px;padding:0 15px;font:inherit;font-size:clamp(15px,.94em,20px);font-weight:600;line-height:1;letter-spacing:.01em}
+.iosApp .iosBarDone:active,.iosApp .setbar>.iconbtn:first-child:active,.iosApp #failoverSheet .foBack:active{opacity:.7;transform:scale(.96)}
+.iosApp #mlFetch{grid-column:3;grid-row:1;justify-self:end;min-height:44px}
+.iosApp #setv>.setbody,.iosApp #modelv>.setbody{width:100%;max-width:720px;margin-inline:auto;min-height:0;padding:12px max(16px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));scroll-padding-block:16px}
+/* Content scrolls under a glass navigation bar; the material and hairline appear once scrolled. */
+.iosApp{--ios-bar-bg:var(--ios-glass);--ios-bar-filter:saturate(180%) blur(20px)}
+.iosApp #setv>.setbar{position:absolute;top:0;left:0;right:0;z-index:4;background:var(--ios-bar-bg);-webkit-backdrop-filter:var(--ios-bar-filter);backdrop-filter:var(--ios-bar-filter);transition:background-color .2s ease,box-shadow .2s ease}
+.iosApp #setv.iosScrolled>.setbar{background:var(--ios-bar-bg);-webkit-backdrop-filter:var(--ios-bar-filter);backdrop-filter:var(--ios-bar-filter);box-shadow:inset 0 -.5px 0 var(--lineUi)}
+.iosApp #setv>.setbody{overflow-x:hidden;padding-top:calc(var(--ios-setbar-h,66px) + 8px);scroll-padding-top:calc(var(--ios-setbar-h,66px) + 16px)}
+.iosApp #setv.iosNavBusy>.setbody,.iosApp #setv.iosNavBusy>.setbar button,.iosApp #modelv.iosNavBusy{pointer-events:none}
+.iosApp #setv .secLbl{padding:0;font-size:.76em;line-height:1.4;letter-spacing:.01em;margin:22px 16px 8px;color:var(--txt2)}
+.iosApp #setv [id$="Panel"]>.secLbl:first-child{margin-top:6px}
+.iosApp #iosConnections>.secLbl{margin-top:22px}
+.iosApp #setv .card{border:0;border-radius:24px;background:var(--ios-settings-card);box-shadow:none;overflow:hidden}
+.iosApp #setv .row{min-height:58px;padding:12px 16px;gap:12px}
+/* The account card leads the sheet, as in iOS Settings: avatar, name, e-mail, no section label above it. */
+.iosApp #setv .iosAccountCard{margin-top:2px}
+.iosApp #setv .iosAccountHero{min-height:86px;padding:15px 16px;gap:14px}
+.iosApp #setv .iosAccountHero .v{flex:none}
+.iosApp .iosHomeAvatar{width:56px;height:56px;box-shadow:inset 0 0 0 1px var(--line)}
+.iosApp .iosHomeAvatar svg{width:30px;height:30px}.iosApp .iosHomeAvatar .em{font-size:30px}
+.iosApp .iosAccountCopy{display:flex;flex:1;min-width:0;flex-direction:column;gap:3px;text-align:left}
+.iosApp .iosAccountCopy b{font-size:1.12em;font-weight:600;line-height:1.3;color:var(--txt);overflow-wrap:anywhere}
+.iosApp .iosAccountCopy>span{font-size:.8em;line-height:1.4;color:var(--txt2);overflow-wrap:anywhere}
+.iosApp #setv .row .k{font-size:.94em;line-height:1.4;white-space:normal;overflow-wrap:anywhere;overflow:visible;text-overflow:clip}
+.iosApp #setv .row .v{font-size:.86em;line-height:1.45;overflow-wrap:anywhere}
+.iosApp #setv .hint{font-size:.78em;line-height:1.6;color:var(--txt2);margin:8px 16px 0;overflow-wrap:anywhere}
+.iosApp #setv .field label{font-size:.78em;line-height:1.4;color:var(--txt2)}
+.iosApp #setv input,.iosApp #setv textarea,.iosApp #modelv input,.iosApp .sheet input,.iosApp .authCard input{font-size:max(16px,1em)!important}
+.iosApp #setv .inputwrap{border:0;border-radius:14px;box-shadow:none}
+.iosApp #setv .inputwrap:focus-within{outline:2px solid color-mix(in srgb,var(--fut) 55%,transparent);outline-offset:1px}
+.iosApp #setv .inputwrap input{padding-block:15px;min-height:50px}
+.iosApp #setv .eye,.iosApp #setv .advHead,.iosApp #setv .linkBtn,.iosApp #setv .chip{min-height:44px}
+.iosApp #setv .eye{width:44px}
+.iosApp #provSaveBar,.iosApp #modelv .mlAddBar{position:static;flex:none;width:100%;padding:12px max(16px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
+  background:var(--ios-bar-bg);-webkit-backdrop-filter:var(--ios-bar-filter);backdrop-filter:var(--ios-bar-filter);border-top:0;box-shadow:inset 0 .5px 0 var(--ios-separator);transform:none}
+.iosApp #setv .btnPrimary,.iosApp #setv .btnGhost,.iosApp #setv .addProv{min-height:50px;font-size:1em;border-radius:999px;box-shadow:none}
+.iosApp #userPanel .rowIco{display:none}
+.iosApp #userPanel .icoCard .row+.row::before{left:16px}
+.iosApp #userPanel .iosAccountActions .row{justify-content:flex-start}
+.iosApp #userPanel .iosAccountActions .row .k{color:var(--fut)}
+.iosApp #userPanel .iosAccountActions .row .k.danger{color:var(--err)}
+.iosApp #userPanel .iosAccountActions .row .v{display:none}
+.iosApp #userPanel .userHero{padding:20px 16px;flex-wrap:wrap}
+.iosApp #userPanel .userHeroName{font-size:1em;white-space:normal;overflow-wrap:anywhere}
+.iosApp #userPanel .userHeroText{flex:1;min-width:150px}
+.iosApp #userPanel .userHeroSub{font-size:.78em;line-height:1.45;color:var(--txt2)}
+.iosApp #userPanel .userHeroSignIn{min-height:44px;font-size:.88em;background:var(--fut);color:#fff}
+.iosApp #feedbackPanel>.card{padding:16px}
+.iosApp #feedbackPanel textarea{min-height:160px!important}
+
+.iosApp .sheet{bottom:max(0px,calc(100% - var(--ios-viewport-top,0px) - var(--ios-viewport-height,100dvh)));max-height:calc(var(--ios-viewport-height,100dvh) - max(12px,env(safe-area-inset-top)));transition:transform .42s var(--ios-ease),visibility 0s .42s;border-radius:28px 28px 0 0}
+.iosApp .sheet .shBody{min-height:0}
+.iosApp .sheet.on{transition-delay:0s}
+.iosApp #failoverSheet{top:calc(var(--ios-viewport-top,0px) + var(--ios-sheet-top));height:calc(var(--ios-viewport-height,100dvh) - var(--ios-sheet-top));max-height:calc(var(--ios-viewport-height,100dvh) - var(--ios-sheet-top));background:var(--ios-settings-bg);border-radius:28px 28px 0 0;overflow:hidden}
+.iosApp #failoverSheet .foBack{padding:0}
+/* A grouped settings form; editing controls appear only while arranging the chain. */
+.iosApp #failoverSheet>.shBody{width:100%;max-width:720px;align-self:center;padding:12px 16px calc(24px + env(safe-area-inset-bottom));overflow-x:hidden;scroll-padding:16px}
+.iosApp #failoverSheet .iosFoCard,.iosApp #foChain{background:var(--ios-settings-card);border:0;border-radius:24px;box-shadow:none}
+.iosApp #failoverSheet .iosFoMaster{padding:16px;gap:12px;border:0;min-height:80px}
+.iosApp #failoverSheet .iosFoIcon{width:36px;height:36px;flex:none;display:flex;align-items:center;justify-content:center}
+.iosApp #failoverSheet .iosFoIcon .glyph{width:36px;height:36px}
+.iosApp #failoverSheet .foRow .nm{font-size:1em;line-height:1.35;font-weight:500;white-space:normal;overflow-wrap:anywhere}
+.iosApp #failoverSheet .foRow .sub{font-size:.76em;line-height:1.4;color:var(--txt2);margin-top:4px;white-space:normal;overflow-wrap:anywhere}
+.iosApp #failoverSheet .iosFoHint{margin:8px 16px 0;font-size:.76em;line-height:1.55;color:var(--txt2);overflow-wrap:anywhere}
+.iosApp #failoverSheet .iosFoSection{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:16px 16px 4px;color:var(--txt2);font-size:.76em}
+.iosApp #failoverSheet .iosFoTextButton,.iosApp #failoverSheet .iosFoMove{border:0;background:none;color:var(--fut);font:inherit;font-size:.88em;min-width:44px;min-height:44px;padding:0;text-align:center}
+.iosApp #failoverSheet .iosFoTextButton:disabled,.iosApp #failoverSheet .iosFoMove:disabled{opacity:.35}
+.iosApp #failoverSheet .iosFoSection .iosFoTextButton{font-size:1.15em}
+.iosApp #failoverSheet .iosFoUse{display:block;width:100%;border:0;border-top:.5px solid var(--ios-separator);background:none;color:var(--fut);font:inherit;font-size:.94em;min-height:50px;padding:12px 16px;text-align:left;border-radius:0 0 24px 24px}
+.iosApp #failoverSheet .iosFoUse[hidden]{display:none}
+.iosApp #foChain.foDimmed,.iosApp #foChain .foRow.off{opacity:1}
+.iosApp #foChain .foRow{position:relative;min-height:82px;padding:16px;gap:12px;border:0}
+.iosApp #foChain .foRow+.foRow::before{content:"";position:absolute;top:0;left:64px;right:0;height:.5px;background:var(--ios-separator)}
+.iosApp #foChain .foRow .glyph{width:36px;height:36px;border-radius:10px}
+.iosApp #foChain .foRow.off .glyph{opacity:.45}
+.iosApp #foChain .foRow.off .nm{color:var(--txt2)}
+.iosApp #foChain .foGrip,.iosApp #foChain .iosFoMove{display:none}
+.iosApp #failoverSheet.iosFoEditing #foChain .sw{display:none}
+.iosApp #failoverSheet.iosFoEditing .foGrip{display:flex;width:44px;height:44px;margin-right:-8px;color:var(--txt2)}
+.iosApp #failoverSheet.iosFoEditing .iosFoMove{display:block;flex:none;font-size:.76em}
+.iosApp #failoverSheet #foAdv{margin-top:24px;overflow:hidden}
+.iosApp #foAdv:not(.open)+.iosFoHint{display:none}
+.iosApp #foAdv .advHead{min-height:62px;padding:16px;gap:8px;color:var(--txt);font:inherit;font-size:.94em;font-weight:500;flex-wrap:wrap}
+.iosApp #foAdv .advHead>svg{order:3;flex:none;width:16px;height:16px;color:var(--txt2)}
+.iosApp #foAdv .advHead>span:first-of-type{flex:1}
+.iosApp #iosFoRetrySummary{color:var(--txt2);font-size:.82em;font-weight:400;white-space:nowrap}
+.iosApp #foAdv .advBody{padding:0 16px 8px;border-top:.5px solid var(--ios-separator)}
+.iosApp #foAdv .field{display:flex;align-items:center;gap:16px;margin:0;padding:8px 0;min-height:62px}
+.iosApp #foAdv .field+.field{border-top:.5px solid var(--ios-separator)}
+.iosApp #foAdv .field label{flex:1;min-width:0;color:var(--txt);font-size:.88em;font-weight:400;line-height:1.45;margin:0}
+.iosApp #foAdv .inputwrap{flex:0 0 88px;border:0;background:var(--ios-settings-bg);border-radius:12px;box-shadow:none;min-width:0}
+.iosApp #foAdv input{min-height:44px;padding:10px 12px;text-align:right;width:100%;font-variant-numeric:tabular-nums}
+.iosApp #foAdv .inputwrap:focus-within{outline:2px solid var(--fut);outline-offset:2px}
+.iosApp #foAdv .iosFoRestore{display:block;margin-left:auto}
+.iosApp #failoverSheet button:focus-visible{outline:2px solid var(--fut);outline-offset:2px}
+.iosApp #failoverSheet .iosFoUse:active{background:color-mix(in srgb,var(--txt) 5%,transparent)}
+@media(prefers-reduced-motion:reduce){.iosApp #foAdv .advHead svg{transition:none}}
+.iosApp .authOverlay,.iosApp #filePrev{top:var(--ios-viewport-top,0px);bottom:auto;height:var(--ios-viewport-height,100dvh);padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));overflow:hidden}
+.iosApp .authCard{max-height:100%;overflow-y:auto;overscroll-behavior:contain;padding:24px 20px;border-radius:22px;animation-duration:.18s}
+.iosApp .authTitle{font-size:1.4em;line-height:1.25;font-weight:650}
+.iosApp .authSub,.iosApp .authHint{font-size:.82em;line-height:1.55}
+.iosApp .authField input{min-height:50px;flex-shrink:0}
+.iosApp .authBtn{font-size:.94em;font-weight:600;min-height:48px}
+.iosApp .fpCard,.iosApp .fpCard.fpFull{max-height:100%;border-radius:20px}
+.iosApp .fpBody{min-height:0}
+.iosApp .fpClose,.iosApp .fpAct{min-width:44px;min-height:44px;align-items:center;justify-content:center}
+.iosApp .fpName{font-size:.94em}
+.iosApp .modalCard .modalBody input{font-size:max(16px,1em);min-height:46px;max-width:100%;margin-block:10px}
+.iosApp #iosDeleteMode,.iosApp #iosDeleteSendCode{min-height:44px;border:0;background:var(--surface3);color:var(--fut);border-radius:12px;padding:10px 12px;font:inherit}
+.iosApp .authOverlay.on{animation:iosFadeIn .24s ease-out}
+@keyframes iosFadeIn{from{opacity:0}}
+@media(prefers-reduced-motion:reduce){.iosApp #setv,.iosApp #modelv,.iosApp .sheet,#iosSheetDim,.iosApp #app #scrollNav{transition:none}.iosApp .authCard,.iosApp .fpCard,.iosApp .authOverlay.on,.iosHint{animation:none}}
+@media(prefers-reduced-transparency:reduce){.iosApp .authOverlay,.iosApp #modalMask,.iosApp #filePrev{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--surface3)}.iosApp .sheet,.iosApp #pcFab,.iosApp .setbar,.iosApp .savebar{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--surface)}
+  .iosApp{--ios-bar-bg:var(--surface3);--ios-bar-filter:none}
+  .iosApp .heroChip,.iosApp .iosPhoneCard{background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none}}
+
+.iosApp .sw,.iosApp .foRow .sw{height:44px;transform:none;background:transparent;box-shadow:none}
+.iosApp .sw::before{content:"";position:absolute;top:50%;left:0;right:0;height:31px;border-radius:999px;transform:translateY(-50%);background:color-mix(in srgb,var(--txt) 14%,transparent);box-shadow:none;transition:background .2s ease}
+.iosApp .sw::after{left:2px;transition:transform .24s cubic-bezier(.22,.8,.25,1)}
+.iosApp .sw.on::before{background:#34c759;box-shadow:none}
+.iosApp .sw.on::after{left:2px;transform:translate(20px,-50%)}
+.iosApp .sw:focus-visible{outline:2px solid var(--fut);outline-offset:3px}
+.iosApp #setv .provRow .nm,.iosApp #setv .fNm,.iosApp #modelv .mname{font-size:.94em}
+.iosApp #setv .provRow .sub,.iosApp #setv .fMeta,.iosApp #setv .memDesc{font-size:.76em;line-height:1.4}
+
+
+/* Forms share the same rhythm and material; only the active field gets an accent. */
+.iosApp #setv .rowIco{box-shadow:none;border-radius:9px;width:30px;height:30px;flex:none}
+.iosApp #setv .row+.row::before{background:var(--ios-separator);height:.5px}
+.iosApp #setv .rowBtn:active{background:color-mix(in srgb,var(--txt) 7%,transparent)}
+.iosApp #setv .inputwrap{background:var(--ios-settings-card);border-radius:16px}
+.iosApp #setv .field{margin:22px 0 0}
+.iosApp #setv .field label{margin:0 16px 8px;font-weight:400}
+.iosApp #setv .seg{background:color-mix(in srgb,var(--txt) 7%,transparent);border-radius:12px;padding:3px;min-height:44px}
+.iosApp #setv .seg button{border-radius:9px;min-height:38px;white-space:normal;line-height:1.25;font-size:.87em}
+.iosApp #setv .seg button.on{background:var(--ios-settings-card);box-shadow:0 1px 4px rgba(0,0,0,.12);color:var(--txt)}
+/* Provider editor actions: delete · test · save. One height and shape; weight follows importance.
+   A narrow screen or large text wraps save onto its own full-width row. */
+.iosApp{--ios-ok:#248a3d}.iosApp[data-theme=dark]{--ios-ok:#30d158}
+.iosApp #provSaveBar{gap:10px;flex-wrap:wrap;align-items:stretch}
+.iosApp #provSaveBar>button{min-height:50px;margin:0;padding:0 18px;border:0;border-radius:999px;box-shadow:none;font:inherit;font-size:1em;font-weight:600;
+  line-height:1.2;letter-spacing:.01em;white-space:nowrap;-webkit-tap-highlight-color:transparent;transition:opacity .15s,transform .15s,background-color .2s,color .2s}
+.iosApp #provSaveBar>button:active{transform:scale(.97);opacity:.75}
+.iosApp #provSaveBar>.btnPrimary{order:3;flex:1.5 1 0;min-width:112px}
+/* `.spin` marks a running test for the shared code. Its generic loader rule would rotate this whole button, so the
+   animation is switched off here and the busy state draws its own ring. */
+.iosApp #setvTest{order:2;flex:1 1 0;min-width:min-content;align-items:center;justify-content:center;gap:7px;animation:none;color:var(--fut);background:color-mix(in srgb,var(--fut) 11%,var(--ios-settings-card))}
+.iosApp #setvTest svg{flex:none;width:1.12em;height:1.12em}
+.iosApp #setvTest.dim{color:var(--txt2);background:color-mix(in srgb,var(--txt) 6%,var(--ios-settings-card))}
+.iosApp #setvTest[data-state=testing]{pointer-events:none}
+.iosApp #setvTest[data-state=testing] svg{display:none}
+.iosApp #setvTest[data-state=testing]::before{content:"";flex:none;width:1em;height:1em;box-sizing:border-box;border-radius:50%;
+  border:2px solid color-mix(in srgb,currentColor 26%,transparent);border-top-color:currentColor;animation:spin .8s linear infinite}
+.iosApp #setvTest[data-state=ok]{color:var(--ios-ok);background:color-mix(in srgb,var(--ios-ok) 12%,var(--ios-settings-card))}
+.iosApp #setvTest[data-state=failed]{color:var(--err);background:color-mix(in srgb,var(--err) 11%,var(--ios-settings-card))}
+.iosApp #provSaveBar>#provDelBtn{order:1;flex:none;width:50px;padding:0;color:var(--err);background:color-mix(in srgb,var(--err) 10%,var(--ios-settings-card))}
+.iosApp .iosDeleteIcon{display:flex;width:100%;height:100%;align-items:center;justify-content:center}
+.iosApp .iosDeleteIcon svg{width:20px;height:20px}
+@media(prefers-reduced-motion:reduce){.iosApp #setvTest[data-state=testing]::before{animation-duration:2.4s}}
+.iosApp #setv .provRow{border-radius:20px;border:0}
+.iosApp #setv .provRowInner{border-radius:20px;background:var(--ios-settings-card);border:0;box-shadow:none;padding:16px;min-height:72px}
+.iosApp #setv .provRow+.provRow{margin-top:12px}
+.iosApp #setv .addProv{background:color-mix(in srgb,var(--fut) 10%,var(--ios-settings-card));color:var(--fut);border:0}
+.iosApp #setv .btnGhost{background:var(--ios-settings-card);border:0}
+.iosApp #modelv .mlSearchWrap{padding:8px 16px}
+.iosApp #modelv .mrow{border-radius:18px;background:var(--ios-settings-card);margin-bottom:8px;padding:12px;min-height:64px}
+.iosApp #modelv .mact{width:44px;height:44px;flex:none}
+/* The 1M context switch is a small capsule, not a third round button: it stays quiet until it is on.
+   Its touch area still reaches 44 pt through the transparent margin around it. */
+.iosApp #modelv .mact.m1mBtn{position:relative;width:auto;height:26px;margin:0 4px 0 2px;padding:0 9px;border:0;border-radius:999px;
+  font-size:.68em;font-weight:700;line-height:1;letter-spacing:.03em;color:var(--txt2);background:color-mix(in srgb,var(--txt) 7%,transparent);
+  transition:background-color .2s,color .2s}
+.iosApp #modelv .mact.m1mBtn::after{content:"";position:absolute;inset:-9px -5px}
+.iosApp #modelv .mact.m1mBtn.on{color:#fff;background:var(--fut)}
+.iosApp #modelv .mid{overflow-wrap:anywhere;white-space:normal}
+.iosApp .sheet .grab{margin-top:9px;background:color-mix(in srgb,var(--txt) 18%,transparent)}
+.iosApp .sheet h3{font-size:1.06em;text-align:center;padding:8px 44px;line-height:1.3}
+.iosApp #failoverSheet .foHd{background:var(--ios-bar-bg);-webkit-backdrop-filter:var(--ios-bar-filter);backdrop-filter:var(--ios-bar-filter)}
+.iosApp #setv .row .v{flex:0 1 auto;margin-left:auto;min-width:0;max-width:55%;white-space:normal;text-align:right}
+.iosApp #setv .iosAccountHero .v{max-width:24px}
+.iosApp #setv .row .k{min-width:0}
+.iosApp #setv .row .v .seg{flex-shrink:0}
+@media(max-width:380px){.iosApp .setbar .ttl,.iosApp #failoverSheet .foHd h3{margin:0;padding:0;font-size:clamp(17px,1em,21px)}.iosApp .iosBarDone{padding-inline:12px}.iosApp #setv .row{gap:10px}.iosApp #setv .row .v{max-width:48%}}
+.iosApp .iosBrandIcon{background:var(--txt);color:var(--bg)}
+.iosApp #iosAppVersion .k{min-width:0}.iosApp #iosAppVersion .v{overflow-wrap:anywhere;white-space:normal}
+@media(prefers-reduced-motion:reduce){.iosApp .sw::before,.iosApp .sw::after,.iosApp .iosBarDone,.iosApp .setbar>.iconbtn:first-child,.iosApp #failoverSheet .foBack{transition:none}}
+@media(prefers-reduced-transparency:reduce){.iosApp{--ios-glass:var(--ios-settings-card);--ios-bar-bg:var(--ios-settings-bg);--ios-bar-filter:none;--ios-control-shadow:inset 0 0 0 .5px var(--ios-separator)}}
+@media(prefers-contrast:more){.iosApp{--ios-separator:currentColor;--ios-glass:var(--ios-settings-card);--ios-bar-bg:var(--ios-settings-bg);--ios-bar-filter:none}.iosApp #setv .hint,.iosApp #setv .field label{color:var(--txt)}}
+
+/* Account flows rise from the same bottom edge. Confirmations keep their smaller alert hierarchy. */
+.iosApp .authOverlay{align-items:flex-end;padding:var(--ios-sheet-top) 0 0;background:rgba(0,0,0,.3);backdrop-filter:none;-webkit-backdrop-filter:none}
+.iosApp .authOverlay.iosClosing{display:flex;pointer-events:none}
+.iosApp .authCard{width:100%;max-width:620px;max-height:100%;padding:30px 24px max(24px,env(safe-area-inset-bottom));border-radius:28px 28px 0 0;background:var(--ios-settings-bg);box-shadow:0 -8px 40px rgba(0,0,0,.12)}
+.iosApp .authOverlay.on .authCard{animation:iosSettingsRise .42s var(--ios-ease) both}
+.iosApp .authTitle{text-align:center;font-size:1.1em}
+.iosApp .authSub{margin:12px 0 24px;color:var(--txt2)}
+.iosApp .authHint{color:var(--txt2)}
+.iosApp .authField input::placeholder{color:var(--txt2);opacity:1}
+.iosApp .authField>input{background:var(--ios-settings-card);border:0;border-radius:16px}
+.iosApp .codeField{height:auto;min-height:50px;padding:2px 6px 2px 15px;border-radius:16px;background:var(--ios-settings-card)}
+.iosApp .codeField input{padding:0;height:auto;min-height:46px;align-self:stretch;border-radius:0}
+.iosApp .codeSend{min-height:44px;height:auto;min-width:44px;max-width:48%;padding:6px 10px;color:var(--fut);font-size:.82em;white-space:normal;overflow-wrap:anywhere}
+.iosApp .codeSend:disabled{color:var(--txt2)}
+.iosApp #iosProxyState{color:var(--txt2);font-size:.76em;line-height:1.4;overflow-wrap:anywhere}
+.iosApp .authSeg .segBtn{min-height:44px;color:var(--txt2)}
+.iosApp .authSeg .segBtn.on{color:var(--onAcc)}
+.iosApp .authBtn{border-radius:999px;box-shadow:none;background:var(--fut);color:#fff;height:auto;min-height:50px;padding:12px 16px}
+.iosApp .authBtn.secondary{background:var(--ios-settings-card);color:var(--fut)}
+@keyframes iosSettingsRise{from{transform:translateY(100%)}to{transform:none}}
+@media(prefers-reduced-motion:reduce){.iosApp .authOverlay.on .authCard{animation:none}}
+
+/* WebKit semantic fonts track Dynamic Type within settings, without resizing chat or core UI. */
+@supports(font:-apple-system-body){.iosApp #setv,.iosApp #modelv,.iosApp .authOverlay,.iosApp .sheet{font:-apple-system-body}}
+
+/* Long account values stay readable at accessibility sizes instead of fragmenting in a narrow column. */
+@media(max-width:640px){
+  .iosApp #userPanel .card:not(.iosAccountActions)>.row{flex-direction:column;align-items:flex-start;gap:5px}
+  .iosApp #userPanel .card:not(.iosAccountActions)>.row .v{max-width:100%;margin-left:0;text-align:left;justify-content:flex-start}
+}
+
+/* Privacy: readable grouped content, with a compact decision bar always in reach. */
+.iosApp #modalMask:has(.privacyCard){align-items:flex-end;padding:var(--ios-sheet-top) 0 0;transition:opacity .24s,visibility .24s}
+.iosApp .privacyCard{max-width:560px;width:100%;height:100%;max-height:52rem;padding:0;border-radius:28px 28px 0 0;background:var(--ios-settings-bg);transform:translate3d(0,100%,0);transition:transform .42s var(--ios-ease)}
+.iosApp .privacyCard .pcHead{display:grid;grid-template-columns:36px minmax(0,1fr);column-gap:12px;row-gap:6px;align-items:center;padding:24px 24px 18px;border:0}
+.iosApp .iosPrivacySymbol{grid-row:1/3;align-self:start;width:36px;height:36px;color:var(--fut);padding-top:2px}
+.iosApp .iosPrivacySymbol svg{width:32px;height:32px}
+.iosApp .privacyCard h4{margin:0;font-size:1.06rem;font-weight:600;line-height:1.4;letter-spacing:0}
+.iosApp .privacyCard .pcSub{grid-column:2;margin:0;font-size:.8rem;line-height:1.5;color:var(--txt2)}
+.iosApp .privacyCard .pcBody{flex:1 1 auto;min-height:0;padding:0 16px 20px;font-size:.86rem;line-height:1.65;overscroll-behavior:contain;overflow-wrap:anywhere;color:var(--txt2)}
+.iosApp .iosDisclosureSection{padding:16px;background:var(--ios-settings-card);border-radius:20px}
+.iosApp .iosDisclosureSection+.iosDisclosureSection{margin-top:12px}
+.iosApp .iosDisclosureSection h5{margin:0 0 8px;font-size:.9rem;font-weight:600;line-height:1.4;color:var(--txt)}
+.iosApp .privacyCard .pcBody p{margin:0}.iosApp .privacyCard .pcBody p+p{margin-top:10px}
+.iosApp .iosRecipientCard{font-size:.84rem;line-height:1.6}
+.iosApp .iosRecipientCard strong{display:block;margin-bottom:4px;color:var(--txt);font-weight:500}
+.iosApp .iosRecipientCard+.iosRecipientCard{margin-top:12px;padding-top:12px;border-top:.5px solid var(--ios-separator)}
+.iosApp .privacyCard .iosConsentLink{display:block;width:100%;min-height:48px;padding:12px 16px;border:0;background:var(--ios-settings-card);border-radius:16px;text-align:left;color:var(--fut);font:inherit;font-size:.86rem;line-height:1.4;margin-top:12px}
+.iosApp .privacyCard #iosPrivacyPolicy::after{content:'↗';float:right;margin-left:8px}
+.iosApp .privacyCard .iosConsentLink.danger{color:var(--err)}
+.iosApp .privacyCard .pcFoot{display:flex;flex-direction:row;gap:10px;padding:12px 20px max(16px,env(safe-area-inset-bottom));border-top:.5px solid var(--ios-separator);background:var(--ios-glass);-webkit-backdrop-filter:var(--ios-bar-filter);backdrop-filter:var(--ios-bar-filter)}
+.iosApp .privacyCard .pcFoot button{flex:1;min-width:0;min-height:48px;margin:0;padding:12px;border:0;border-radius:999px;box-shadow:none;font:inherit;font-size:.9rem;line-height:1.35;font-weight:500;touch-action:manipulation}
+.iosApp .privacyCard .pcFoot .cancel{order:-1;background:var(--ios-settings-card);color:var(--txt)}
+.iosApp .privacyCard .pcFoot .pcAgree{background:var(--fut);color:#fff;font-weight:600}
+.iosApp .privacyCard .pcFoot .pcAgree:disabled{opacity:.5}
+.iosApp .privacyCard button:active{opacity:.7}
+.iosApp .privacyCard button[hidden]{display:none}
+
+/* Statistics: comparable values and quiet marks, never decorative or invented trends. */
+.iosApp #setv #statsPanel .secLbl{display:flex;align-items:center;justify-content:flex-start;gap:7px;margin:22px 4px 10px;font-size:.82rem;font-weight:600;color:var(--txt);letter-spacing:0}
+.iosApp #setv #statsPanel>.secLbl:first-child{margin-top:4px}
+.iosApp #statsPanel .secLbl>svg{width:18px;height:18px;color:var(--fut);flex:none}
+.iosApp #statsPanel .secLbl .heatYearSel{margin-left:auto;font-weight:400}
+.iosApp #statsPanel .statRanges{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 12px;padding:4px;background:color-mix(in srgb,var(--txt) 5%,transparent);border-radius:16px;overflow:visible}
+.iosApp #statsPanel .statRange{flex:1 0 auto;min-height:44px;padding:9px 10px;border:0;border-radius:12px;font-size:.78rem;line-height:1.3;color:var(--txt2);text-align:center}
+.iosApp #statsPanel .statRange.on{background:var(--ios-settings-card);color:var(--txt);box-shadow:0 1px 4px rgba(0,0,0,.06);font-weight:600}
+.iosApp #statsPanel .statGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:0;margin:0;padding:4px 16px 10px;border-radius:22px;background:var(--ios-settings-card)}
+.iosApp #statsPanel .statCard{border:0;border-radius:0;background:none;padding:14px 0 16px;gap:8px;min-width:0}
+.iosApp #statsPanel .statCard:nth-child(odd){padding-right:12px}
+.iosApp #statsPanel .statCard:nth-child(even){padding-left:12px}
+.iosApp #statsPanel .statCard:nth-child(n+3){border-top:.5px solid var(--ios-separator)}
+.iosApp #statsPanel .statLbl{display:flex;gap:6px;align-items:center;color:var(--txt2);font-size:.76rem;font-weight:400;line-height:1.45;white-space:normal;overflow-wrap:anywhere}
+.iosApp #statsPanel .statLbl svg{width:16px;height:16px;flex:none;color:var(--fut)}
+.iosApp #statsPanel .statNum{font-size:1.25rem;font-weight:600;line-height:1.25;letter-spacing:-.02em;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.iosApp #statsPanel .statDetail{grid-column:1/-1;display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:11px 0;border-top:.5px solid var(--ios-separator)}
+.iosApp #statsPanel .statDetail .statNum{font-size:.86rem;font-weight:500;letter-spacing:0;text-align:right}
+.iosApp #setv #statsPanel .hint{font-size:.72rem;line-height:1.55;margin:8px 12px 12px;color:var(--txt2)}
+.iosApp #statsPanel .heatCard{padding:16px 12px 12px;border-radius:22px}
+.iosApp #statsPanel .heatYearBtn{min-height:44px;font-size:.76rem;padding:7px 10px;color:var(--fut);background:var(--ios-settings-card);border:0;box-shadow:none}
+.iosApp #statsPanel .heatCell.l1{background:color-mix(in srgb,var(--fut) 24%,var(--ios-settings-card))}
+.iosApp #statsPanel .heatCell.l2{background:color-mix(in srgb,var(--fut) 44%,var(--ios-settings-card))}
+.iosApp #statsPanel .heatCell.l3{background:color-mix(in srgb,var(--fut) 70%,var(--ios-settings-card))}
+.iosApp #statsPanel .heatCell.l4{background:var(--fut)}
+.iosApp #statsPanel .heatLegend{font-size:.7rem;color:var(--txt2)}
+.iosApp #statsPanel #modelStats{border-radius:22px}
+.iosApp .iosModelUsage{padding:16px}.iosApp .iosModelUsage+.iosModelUsage{border-top:.5px solid var(--ios-separator)}
+.iosApp .iosModelHead{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.iosApp .iosModelGlyph{display:flex}.iosApp .iosModelGlyph .glyph{width:24px;height:24px;font-size:10px;border-radius:7px}
+.iosApp .iosModelName{flex:1;min-width:100px;font-size:.84rem;font-weight:500;overflow-wrap:anywhere}
+.iosApp .iosModelTotal{font-size:.78rem;color:var(--txt2);font-variant-numeric:tabular-nums;margin-left:auto}
+.iosApp .iosModelTrack{height:7px;background:color-mix(in srgb,var(--txt) 5%,transparent);border-radius:4px;overflow:hidden}
+.iosApp .iosModelBar{display:flex;height:100%;border-radius:4px;overflow:hidden}
+.iosApp .iosModelBar span{flex-basis:0;min-width:0}.iosApp .iosModelInput{background:var(--fut)}
+.iosApp .iosModelOutput{background:color-mix(in srgb,var(--fut) 36%,var(--ios-settings-card));border-left:1px solid var(--ios-settings-card)}
+.iosApp .iosModelValues{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;margin-top:9px;font-size:.74rem;color:var(--txt2);font-variant-numeric:tabular-nums}
+.iosApp .iosModelMeta{margin-top:6px;color:var(--txt2);font-size:.7rem;line-height:1.4}
+.iosApp .iosStatsEmpty{display:flex;flex-direction:column;align-items:center;padding:28px 20px;text-align:center;gap:8px;color:var(--txt2)}
+.iosApp .iosStatsEmpty svg{width:28px;height:28px;color:var(--fut);margin-bottom:4px}
+.iosApp .iosStatsEmpty strong{font-size:.88rem;font-weight:500;color:var(--txt)}
+.iosApp .iosStatsEmpty p{font-size:.78rem;line-height:1.5;margin:0}
+@media(prefers-reduced-motion:reduce){.iosApp .privacyCard{transition:none}}
+@media(prefers-reduced-transparency:reduce){.iosApp .privacyCard .pcFoot{background:var(--ios-settings-bg);backdrop-filter:none;-webkit-backdrop-filter:none}}
+
+.iosApp #statsPanel .heatMonths>span,.iosApp #statsPanel .heatDows>span{color:var(--txt2)}
+.iosApp #statsPanel .heatCell:not(.l1):not(.l2):not(.l3):not(.l4){background:color-mix(in srgb,var(--txt) 7%,var(--ios-settings-card))}
+
+/* File names are primary content, not metadata. Keep them readable and let long titles wrap. */
+.iosApp #setv .fileRow{font:inherit;padding:16px;gap:13px;min-height:76px;align-items:center}
+.iosApp #setv .fileRow .fIco{width:34px;height:38px;color:var(--fut);display:flex;align-items:center;justify-content:center}
+.iosApp #setv .fileRow .fIco svg{width:28px;height:28px}
+.iosApp #setv .fileRow .fMid{gap:5px}
+.iosApp #setv .fileRow .fNm{font-size:max(17px,1rem);font-weight:500;line-height:1.4;white-space:normal;overflow:visible;overflow-wrap:anywhere;letter-spacing:0}
+.iosApp #setv .fileRow .memDesc{display:block;-webkit-line-clamp:unset;font-size:max(15px,.88rem);line-height:1.5;white-space:normal;overflow:visible;overflow-wrap:anywhere;color:var(--txt2)}
+.iosApp #setv .fileRow .fMeta{font-size:max(13px,.78rem);line-height:1.4;color:var(--txt2);white-space:normal;overflow-wrap:anywhere}
+.iosApp #filePrev .fpPre,.iosApp #filePrev .fpMd{font-size:1rem;line-height:1.65}
+.iosApp #filePrev .fpPre{white-space:pre-wrap;overflow-wrap:anywhere}
+.iosApp #filePrev .fpActs{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px max(16px,env(safe-area-inset-bottom));background:var(--ios-settings-card)}
+.iosApp #filePrev .fpActs button{min-height:44px;font-size:.88rem;line-height:1.4}
+
+.iosApp .iosModelIssue h4{font-size:17px;line-height:1.4;margin:0 0 8px;font-weight:600}
+.iosApp .iosModelIssue p{font-size:15px;line-height:1.6;margin:0 0 16px;color:var(--txt2)}
+.iosApp .iosModelIssue button{font:inherit;font-size:15px;min-height:44px;padding:10px 18px;border:0;border-radius:999px;background:var(--fut);color:#fff}
+.iosApp .iosModelIssue details{margin-top:16px;color:var(--txt2);font-size:14px}
+.iosApp .iosModelIssue summary{min-height:44px;padding-block:12px;cursor:pointer}
+.iosApp .iosModelIssue pre{font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto}

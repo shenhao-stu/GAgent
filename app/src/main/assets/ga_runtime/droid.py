@@ -17,7 +17,7 @@
     droid.find('好评优先')           # 按 t/d 子串找节点(exact=True 全等; clickable=True 只要可点), 每项带中心 x,y —— 别再手写列表推导
     droid.tap_text('好评优先')       # find→唯一命中→tap; 多命中抛 ValueError 列候选(用 exact/idx), 0 命中抛 LookupError(转 look())
     dets = droid.look()             # 视觉一步: shot+ui_detect, 每项带中心 x,y/label/cls; dump 为空(自绘/敏感)时用它, 不要 print 整个图像数组
-    droid.look(roi='top')           # 只检测上 1/3 屏(排序条/搜索框在上面时): 耗时随面积降; roi 也可 'upper'|'middle'|'lower'|'bottom' 或 (x1,y1,x2,y2); 屏幕没变时自动返回缓存('cached':True)
+    droid.look(roi='top')           # 只检测上 1/3 屏(排序条/搜索框在上面时): 耗时随面积降; roi 也可 'upper'|'middle'|'lower'|'bottom' 或 (x1,y1,x2,y2); 每次重新截图并识别
     w, h = droid.screen()           # 当前朝向屏幕尺寸; 位置判断用比例(顶栏 <0.12h, 底栏 >0.9h), 绝不把绝对坐标写进记忆
     droid.tap(x, y); droid.swipe(x1,y1,x2,y2,dur=300)  # 长按=swipe同点dur>=800(已验:弹快捷菜单); swipe端点已自动夹进安全带避开系统手势区
     droid.scroll_view('down')       # 安全滚动, 参数=浏览方向('down' 看下方内容/'up' 看上方); 必须检查 scrolled/evidence/uncertain; uncertain=True=观察不可用/结论不确定, 不是已验证未滚动, 禁盲目重试 (旧 scroll() 参数是手指方向, 与此相反)
@@ -27,7 +27,7 @@
     droid.paste('文本')             # 剪贴板输入; hit=True=已确认上屏; hit=False, uncertain=True 时禁止重复输入或盲目降级
     droid.key('ENTER')              # 对聚焦输入框触发IME动作(搜索/发送/换行); droid.launch('包名') 启动app
     img = droid.shot()              # BGR ndarray; droid.shot('/sdcard/a.png') 存文件
-    els = droid.ui_detect(img)      # Android专调YOLO(21类)+OCR [{bbox,type:'icon'|'text',label,cls,confidence}]; cls=控件语义(Icon/Image/EditText/Switch/TextButton/Toolbar/Bottom_Navigation/Card...), 无文字图标的label回退为cls
+    els = droid.ui_detect(img)      # Android专调YOLO(21类)+OCR [{bbox,type:'icon'|'text',label,cls,confidence}]; cls=控件语义(Icon/Image/EditText/Switch/TextButton/Toolbar/Bottom_Navigation/Card...), 符号图标label为search/plus/close/menu等名, 认不出回退为cls
     res = droid.ocr(img)            # [(box4x2, text, score), ...]
     droid.sensitive_status()        # 微信 act="gui": 截图/识别/手势，无固定次数预算；不得读节点、节点输入或快捷回复
     droid.sensitive_unlock(pkg, actions=20, reason="...")  # 仅兼容旧 locked 策略；微信 GUI 无需调用
@@ -455,7 +455,7 @@ def tap_text(text, exact=False, idx=None, clickable=None, **tap_kw):
     return tap(h["x"], h["y"], **tap_kw)
 
 
-_LOOK_CACHE = {"thumb": None, "roi": None, "dets": None}
+_LOOK_PREV = {"roi": None, "dets": None}  # 仅用于前后结果比较，不复用识别结果
 
 
 class LookResult(list):
@@ -498,12 +498,12 @@ def _matching_labels(detections, label):
     return detections if not label else [d for d in detections if label in d["label"]]
 
 
-def look(conf=0.25, path=None, roi=None, cache=True, *, label=None):
+def look(conf=0.25, path=None, roi=None, cache=None, *, label=None):
     """视觉路径一步到位: shot()+ui_detect(). 返回检测列表, 每项附中心 x,y(整屏坐标, 可直接 tap), label=OCR 文字, cls=控件语义.
     label: 可选 OCR 文字子串筛选，返回全部匹配项；多命中仍需消歧，不自动选择或点击。
     roi: 只检测屏幕的一部分 —— 'top'|'upper'|'middle'|'lower'|'bottom', 或 (x1,y1,x2,y2)(像素, 或 0~1 的比例). 知道目标在哪(排序条在上半屏/底栏在下方)
          就传 roi, 耗时按面积成比例下降(整屏 OCR 是主要成本, 自绘 App 整屏 look 约 6-8s).
-    cache: 屏幕与上一次 look 几乎没变(缩略图差异 <0.3%) 且 roi 相同 → 直接返回上次结果(附 'cached': True), 不再跑模型. 刚做完动作想确认变化时它就是证据.
+    每次重新截图并运行识别。cache 参数仅兼容旧调用，取任何值都不复用旧结果。
     排序: 与上一次 look 对比(roi 不同则只比重叠区), new=True(新出现/文字变了)的排最前, 其余在后, 组内从上到下; .gone=消失的元素. 动作后 look 首几项就是该动作的效果.
     self=True: 元素落在 GA 自己的悬浮窗/面板上(不是目标 App 的内容, 别点也别读).
     path 给出则同时把截图存文件(给用户看/复核). dump 为空(自绘/SurfaceView/敏感置空)时用这个, 不要先 print 整个 ndarray."""
@@ -516,8 +516,7 @@ def look(conf=0.25, path=None, roi=None, cache=True, *, label=None):
     if not 0 <= conf <= 1:
         raise ValueError('look conf must be between 0 and 1')
     import cv2
-    import numpy as np
-    img = shot()
+    img = shot(q=99)   # JPEG: 复杂画面 PNG 编码要 1.2-1.7s, q99 约 0.3s, OCR 结果一致
     H, W = img.shape[:2]
     if isinstance(roi, str):
         roi = _ROI_NAMES[roi]
@@ -528,15 +527,7 @@ def look(conf=0.25, path=None, roi=None, cache=True, *, label=None):
         x1, y1, x2, y2 = int(max(0, x1)), int(max(0, y1)), int(min(W, x2)), int(min(H, y2))
     else:
         x1, y1, x2, y2 = 0, 0, W, H
-    thumb = cv2.resize(cv2.cvtColor(img[y1:y2, x1:x2], cv2.COLOR_BGR2GRAY), (36, 80), interpolation=cv2.INTER_AREA)
-    c = _LOOK_CACHE
-    if cache and c["dets"] is not None and c["roi"] == (x1, y1, x2, y2) and c["thumb"] is not None:
-        diff = float((cv2.absdiff(thumb, c["thumb"]) > 16).mean())
-        if diff < 0.003:
-            import copy
-            dets = copy.deepcopy(c["dets"])
-            for d in dets: d["cached"] = True; d["new"] = False
-            return LookResult(sorted(_matching_labels(dets, label), key=lambda d: (d["y"], d["x"])))   # 屏幕没变: 全部未变, gone 为空
+    c = _LOOK_PREV
     dets = ui_detect(img[y1:y2, x1:x2], conf=conf)
     for d in dets:
         d["label"] = str(d.get("label") or "")
@@ -553,7 +544,7 @@ def look(conf=0.25, path=None, roi=None, cache=True, *, label=None):
     except Exception:
         selfs = []
     dets = _diff_order(dets, prev, H, area, selfs)
-    c.update(thumb=thumb, roi=(x1, y1, x2, y2), dets=[dict(d) for d in dets])
+    c.update(roi=(x1, y1, x2, y2), dets=[dict(d) for d in dets])
     if path:
         cv2.imwrite(path, img)
     return _matching_labels(dets, label)
@@ -1145,7 +1136,7 @@ def _bundle():
 def ui_detect(img, conf=0.25):
     """img: BGR ndarray 或 路径 → [{'bbox':[x1,y1,x2,y2],'type':'icon'|'text','label','cls','confidence'}]
     检测器=Android专调YOLOv8n(21类语义)+PP-OCR空间匹配。cls给出控件语义(即便纯图标无文字),
-    label=框内OCR文字; 无文字时图标/控件回退为cls语义名, 文字类回退None。"""
+    label=框内OCR文字; 无文字时符号图标给出search/plus/close等名, 认不出回退为cls语义名, 文字类回退None。"""
     _bundle()
     import ui_detect_lite
     return ui_detect_lite.detect(img, conf=conf)

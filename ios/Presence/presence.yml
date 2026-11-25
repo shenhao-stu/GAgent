@@ -1,0 +1,3 @@
+# All of Presence. Merged into the app's spec by ../project.presence.yml.
+# Adding  include: [Presence/presence.yml]  to ../project.yml makes Presence part of the default project.
+include: [app.yml, island.yml]

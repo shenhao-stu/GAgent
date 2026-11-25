@@ -26,6 +26,8 @@ import asyncio
 import base64
 import json
 import os
+import re
+import sys
 import tempfile
 import threading
 import time
@@ -34,6 +36,8 @@ from urllib.parse import urlsplit, unquote
 from concurrent.futures import TimeoutError as FutureTimeoutError
 
 import service_config
+
+IS_IOS = sys.platform == 'ios'
 
 NAME = 'pc'                                       # rooms 文件里的本机命名槽位
 GA_DIR = os.environ.get('GA_DIR') or os.path.dirname(os.path.abspath(__file__))
@@ -104,7 +108,7 @@ async def _replace_group(config):
 
         async def ignore(socket, peer):  # hub 只主叫 hub:, 不会呼叫 customer
             pass
-        group = p2p.Group(saved['signal_url'], room, 'cust:android-' + uuid.uuid4().hex[:8],
+        group = p2p.Group(saved['signal_url'], room, ('cust:ios-' if IS_IOS else 'cust:android-') + uuid.uuid4().hex[:8],
                           ignore, union.use, auto=('hub:',), access_key=config['token'])
         _group[1:] = [asyncio.ensure_future(group.run()), union]
     return bool(room)
@@ -130,6 +134,9 @@ def _ensure_loop():
         return _loop
 
 
+_beat = [0.0]          # keeper 心跳时刻: 事件循环被 iOS 冻结的时长 = now - _beat, 见下
+
+
 async def _keeper():
     """断线自动重连: 已配对且无连接时 connect_saved, 指数退避封顶 15s(回前台不久等).
     断线由 _wake 事件立即唤醒; 退避带随机抖动, 避免服务器重启后千台同时冲."""
@@ -137,7 +144,20 @@ async def _keeper():
     import p2p_ws_client as p2p
     ev = _wake[0] = asyncio.Event()
     backoff = 3
+    _beat[0] = time.time()
     while True:
+        now = time.time()
+        if IS_IOS:
+            from ios_policy import has_consent
+            if not has_consent():
+                if _group[1] or _sock or _connection_task:
+                    await _disconnect()
+                await asyncio.sleep(2)
+                continue
+        if IS_IOS and _sock is not None and now - _beat[0] > 15:
+            asyncio.ensure_future(_drop(_sock))
+            await asyncio.sleep(0)
+        _beat[0] = now
         ev.clear()
         delay = 2
         try:
@@ -148,6 +168,8 @@ async def _keeper():
                 for _ in range(15):
                     if _hubs(): break
                     await asyncio.sleep(0.1)
+            if IS_IOS and not has_consent():
+                continue
             if _hubs():
                 if _sock is not None and _connection_task is None:
                     await _drop(_sock)
@@ -170,6 +192,11 @@ async def _keeper():
 
 def _attach(s, config):
     global _sock, _sock_config
+    if IS_IOS:
+        from ios_policy import has_consent
+        if not has_consent():
+            asyncio.ensure_future(s.close())
+            raise PermissionError('ios_consent_required')
     _sock = s
     _sock_config = dict(config)
     _err[0] = ''
@@ -239,6 +266,9 @@ async def _finish_cleanup(task):
 
 async def _api(method, target, body, timeout=22, *, count_timeout=True):
     """默认 22s: 必须罩住 hub 侧 ask 的 15s 上限 + P2P 往返, 手机比 PC 晚放弃才能等到结构化错误."""
+    if IS_IOS:
+        from ios_policy import require_consent
+        require_consent()
     config = _config()
     if _group[0] and _group[0][1:] != (config['url'], config['token']):
         raise RuntimeError('PC Link configuration changed; reconnect first')
@@ -294,27 +324,27 @@ async def _resume():
             _wake[0].set()              # 只唤醒现有 keeper，不创建并发拨号
         return
     now = time.monotonic()
-    if _resume_busy[0] or now - _resume_at[0] < 30 or now - _last_rx[0] < 8:
+    if _resume_busy[0] or now - _resume_at[0] < (8 if IS_IOS else 30) or now - _last_rx[0] < 8:
         return
     _resume_at[0] = now
     _resume_busy[0] = True
     seen = _last_rx[0]
     try:
-        for _ in range(2):
+        for _ in range(1 if IS_IOS else 2):
             if _sock is not s or _last_rx[0] != seen:
                 return
             try:
                 # Exporter 对白名单外路径直接回 403；不调用 hub 业务，但中继仍有转发成本。
                 # 外层期限覆盖 send，避免探活先在发送阶段额外等待。
                 await asyncio.wait_for(
-                    _api('GET', '/__ping', '', count_timeout=False), 4)
+                    _api('GET', '/__ping', '', count_timeout=False), 3 if IS_IOS else 4)
                 return
             except asyncio.TimeoutError:
                 pass
             except Exception:
                 return                 # send 失败由 _api 弃线，不重复建立连接
         if _sock is s and _last_rx[0] == seen:
-            await _drop(s)              # 两次探活失败，且期间没有任何有效业务响应
+            await _drop(s)              # 探活失败(Android 两次/iOS 一次)，且期间没有任何有效业务响应
     finally:
         _resume_busy[0] = False
 
@@ -362,6 +392,13 @@ async def _pair(code):
     await _sync_group(config)
 
 
+async def _disconnect():
+    await _sync_group(None)
+    async def detached():
+        return None
+    await _change_connection(detached)
+
+
 async def _unpair():
     await _change_connection(_forget_room)
 
@@ -396,15 +433,48 @@ def _call(coro, timeout):
         raise
 
 
+_HUB_PEER = r'[^/?#%\\\x00-\x20]+'
+_HUB_READ = re.compile(rf'/api/(?:peers|hubs|{_HUB_PEER}/(?:messages|llms|model_settings|seg/-?\d+/-?\d+))')
+_HUB_WRITE = re.compile(rf'/api/(?:sessions|{_HUB_PEER}/(?:put|intervene|keyinfo|abort|llm|model_settings))')
+
+
+def ios_request(method, path, body=None):
+    """Fixed signed-bundle tool: one hub request, never an arbitrary URL or a local script."""
+    if method not in ('GET', 'POST') or not isinstance(path, str) or not path.startswith('/api/'):
+        raise ValueError('pc_link requires GET or POST and a relative /api/ route')
+    parts = urlsplit(path)
+    segments = [unquote(x) for x in parts.path.split('/')]
+    if (parts.fragment or any(not c.isprintable() or c.isspace() for c in path)
+            or any(x in ('.', '..') or '/' in x for x in segments)
+            or not (_HUB_READ if method == 'GET' else _HUB_WRITE).fullmatch('/'.join(segments))):
+        raise ValueError('unsupported PC Link route')
+    if body is not None and (method != 'POST' or not isinstance(body, dict)):
+        raise ValueError('pc_link body must be a POST object')
+    payload = json.dumps(body, separators=(',', ':'), ensure_ascii=False) if body is not None else ''
+    result = handle('/pclink.api ' + method + ' ' + path + (' ' + payload if payload else ''))
+    try:
+        reply = json.loads(result)
+    except ValueError:
+        return result
+    if method == 'POST' and isinstance(reply, dict) and reply.get('error'):
+        reply['safe_to_retry'] = False
+    return reply
+
+
 def handle(text):
     """同步入口(android_entry 后台 job 线程里调用). text 形如:
     /pclink.status | /pclink.pair 123456789 | /pclink.unpair
     /pclink.api GET /api/peers | /pclink.api POST /api/x/put {"text":"hi"}"""
     try:
         cmd = text[len('/pclink.'):].strip()
+        if IS_IOS and cmd not in ('status', 'resume', 'unpair'):
+            from ios_policy import require_consent
+            require_consent()
         if cmd in ('status', 'resume'):
             config = service_config.pclink_config()
-            if config and _paired():
+            if IS_IOS:
+                from ios_policy import has_consent
+            if config and _paired() and (not IS_IOS or has_consent()):
                 _ensure_loop()                    # 冷启动时顺手踢 keeper 开始重连
                 if cmd == 'resume':
                     asyncio.run_coroutine_threadsafe(_resume(), _loop)

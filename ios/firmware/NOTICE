@@ -1,0 +1,11 @@
+ESP32-S3 BLE/USB HID Firmware for GAgent iOS
+
+Derived from ESP32 iPhone Agent by Henry Yuan:
+  https://github.com/onehumanbeing/esp32-iphone-agent
+  License: MIT (see LICENSE in this directory)
+
+This firmware contains only the pure MIT-licensed BLE/USB HID bridge and GATT
+control service (6e400001-a9e8-4b1b-9c39-6d6f8a3c0000). All GPL-licensed AirPlay
+receiver components from the upstream hardware directory are excluded; screen
+capture on iOS is performed locally on the iPhone via Apple's ReplayKit Broadcast
+Upload Extension.

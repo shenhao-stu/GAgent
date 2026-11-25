@@ -20,10 +20,8 @@ import onnxruntime as ort
 _DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
 
 # ---------------- 默认参数 (= rapidocr config.yaml) ----------------
-MAX_SIDE_LEN = 1280      # det 输入最长边上限(手机截图 1080x2424 → 570x1280): 文字检测在此分辩率足够, 像素量比 2000 少 2.4 倍;
-                         # rec 切片从**原图**取(见 __call__), 不受这里的缩放影响 → 小字识别精度不掉。r28 实测 淘宝闪购首页 74 行: 11.8s → 见 look_bench
-MIN_SIDE_LEN = 30        # 整图最短边下限
-DET_LIMIT_SIDE = 736     # det: 最短边目标 (limit_type=min)
+DET_SIDE = 736           # det 唯一缩放设置: 原图短边**直接**缩放到 736(取整到 32 倍数), 大图缩小、小图放大, 只缩放一次。
+                         # 手机竖屏 1080x2424 → 736x1664。框映射回原图, rec 切片也从原图取 → 小字识别精度不受 det 缩放影响。
 DET_THRESH = 0.3         # det: 概率图二值化阈值
 DET_BOX_THRESH = 0.5     # det: 框平均得分阈值
 DET_UNCLIP_RATIO = 1.6   # det: 框外扩系数
@@ -57,11 +55,10 @@ class TextDetector:
     def __call__(self, img):
         """img: BGR HxWx3 → boxes: Nx4x2 float (原图坐标, TL TR BR BL)"""
         src_h, src_w = img.shape[:2]
-        # --- 预处理: 最短边缩放到>=736, 且边长取整到32倍数 ---
-        h, w = src_h, src_w
-        ratio = float(DET_LIMIT_SIDE) / min(h, w) if min(h, w) < DET_LIMIT_SIDE else 1.0
-        resize_h = max(int(round(int(h * ratio) / 32) * 32), 32)
-        resize_w = max(int(round(int(w * ratio) / 32) * 32), 32)
+        # --- 预处理: 短边缩放到 DET_SIDE, 边长取整到32倍数 ---
+        ratio = float(DET_SIDE) / min(src_h, src_w)
+        resize_h = max(int(round(src_h * ratio / 32) * 32), 32)
+        resize_w = max(int(round(src_w * ratio / 32) * 32), 32)
         resized = cv2.resize(img, (resize_w, resize_h))
         # 归一化 (x/255 - 0.5)/0.5, HWC→CHW→NCHW float32
         x = (resized.astype(np.float32) / 255.0 - 0.5) / 0.5
@@ -288,7 +285,7 @@ class PPOCR:
 
     def region(self, img):
         h, w = img.shape[:2]
-        side = DET_LIMIT_SIDE
+        side = DET_SIDE
         pb, pr = max(0, side - h), max(0, side - w)
         padded = cv2.copyMakeBorder(
             img, 0, pb, 0, pr, cv2.BORDER_CONSTANT, value=(0, 0, 0)
@@ -302,52 +299,28 @@ class PPOCR:
 
     def __call__(self, img):
         """img: BGR ndarray → [(box 4x2 int(原图坐标), text, score), ...]"""
-        src = img
-        src_h, src_w = img.shape[:2]
-        # --- 整图尺寸规整 (与rapidocr一致): 最长边<=MAX_SIDE_LEN(只用于 det), 最短边>=30 ---
-        rh = rw = 1.0
-        h, w = img.shape[:2]
-        if max(h, w) > MAX_SIDE_LEN:
-            img, rh, rw = self._resize32(img, float(MAX_SIDE_LEN) / max(h, w))
-        h, w = img.shape[:2]
-        if min(h, w) < MIN_SIDE_LEN:
-            img, rh2, rw2 = self._resize32(img, float(MIN_SIDE_LEN) / min(h, w))
-            rh, rw = rh * rh2, rw * rw2
-        # --- det (缩放图) ---
+        # --- det: 内部按 DET_SIDE 缩放, 输出框已是原图坐标 ---
         boxes = self.det(img)
         if not boxes:
             return []
         boxes = self._sort_boxes(boxes)
-        # --- crop: 框映射回**原图**再切(透视校正; 高/宽>=1.5 视为竖排转90) → det 降分辩率不影响 rec 精度 ---
-        src_boxes = [np.stack([np.clip(b[:, 0] * rw, 0, src_w), np.clip(b[:, 1] * rh, 0, src_h)], axis=1) for b in boxes]
-        keep = [i for i, b in enumerate(src_boxes) if (b[:, 1].max() - b[:, 1].min()) >= MIN_TEXT_H]
-        boxes = [boxes[i] for i in keep]; src_boxes = [src_boxes[i] for i in keep]
+        # --- crop: 从原图按框切(透视校正; 高/宽>=1.5 视为竖排转90) → det 缩放不影响 rec 精度 ---
+        boxes = [b for b in boxes if (b[:, 1].max() - b[:, 1].min()) >= MIN_TEXT_H]
         if not boxes:
             return []
-        crops = [self._rotate_crop(src, b) for b in src_boxes]
+        crops = [self._rotate_crop(img, b) for b in boxes]
         # --- cls 方向修正 ---
         if self.cls:
             crops = self.cls(crops)
         # --- rec ---
         rec_res = self.rec(crops)
-        # --- 过滤 + 坐标还原到原图 ---
+        # --- 过滤低分 ---
         out = []
         for box, (text, score) in zip(boxes, rec_res):
             if score < TEXT_SCORE:
                 continue
-            box = box.copy()
-            box[:, 0] = np.clip(box[:, 0] * rw, 0, src_w)
-            box[:, 1] = np.clip(box[:, 1] * rh, 0, src_h)
             out.append((box.round().astype(int), text, score))
         return out
-
-    @staticmethod
-    def _resize32(img, ratio):
-        h, w = img.shape[:2]
-        nh = int(round(int(h * ratio) / 32) * 32)
-        nw = int(round(int(w * ratio) / 32) * 32)
-        img = cv2.resize(img, (nw, nh))
-        return img, h / nh, w / nw   # 返回还原系数
 
     @staticmethod
     def _sort_boxes(boxes):

@@ -86,6 +86,7 @@ function _privacyRaw(v){if(v==null)return '';let s=String(v).trim();if(!s)return
   if(s.charAt(0)==='"'||s.charAt(0)==="'"){try{const j=JSON.parse(s);if(typeof j==='string')s=j}catch(e){}}
   return String(s).trim()}
 function hasPrivacyConsent(){
+  if(typeof isIOSClient==='function'&&isIOSClient())return _iosNoticeSeen||!!iosConsentState().pcAccepted;
   if(_privacyOk)return true;
   try{if(_privacyRaw(GA.send('/kv.get privacyConsent'))===PRIVACY_VERSION)return true}catch(e){}
   try{if(_privacyRaw(GA.send('/kv.get ga.privacyConsent'))===PRIVACY_VERSION)return true}catch(e){}
@@ -116,17 +117,20 @@ function applyI18n(){
   document.querySelectorAll('[data-i18n-aria]').forEach(e=>e.setAttribute('aria-label',t(e.getAttribute('data-i18n-aria'))));
   document.querySelectorAll('#langSeg button').forEach(b=>b.classList.toggle('on',b.getAttribute('data-l')===lang));
   document.documentElement.lang=lang;
+  if(typeof isIOSClient==='function'&&isIOSClient())iosSyncSidebarPreferences();
 }
 function setLang(l){lang=l;LS.set('lang',l);try{GA.send('/lang '+l)}catch(e){}
   applyI18n();refreshModelUI();renderDrawer();if(typeof refreshTip==='function')refreshTip();
   if(window.PCLINK&&PCLINK.reI18n)try{PCLINK.reI18n()}catch(e){}   // PC 互联页的侧栏/首页文案是 t() 直写 textContent, 全局 applyI18n 扫不到
+  if(window.GAIOS)GAIOS.refresh();
   if(emptyEl)renderHeroChips();   // chips 文案是 JS 填充(远程数据无 data-i18n), 切语言须显式重渲
   if($('setv').classList.contains('on')&&setStack.length){const top=setStack[setStack.length-1];   // 设置页内切语言: 同步顶栏标题 + JS 填充的值(themeVal/provCount), 它们不带 data-i18n
-    if(top.key)top.title=t(top.key);$('setvTitle').textContent=top.title;if(top.panel==='homePanel')refreshHome();else if(top.panel==='statsPanel')renderStats();else if(top.panel==='a11yPersistPanel')renderA11yPersistPage()}   // 统计页切语言: 重渲标签; 账户页: 重渲 #userPwdVal/状态/有效期等 JS 填充值(非 data-i18n)
-  if(curConvo&&!running)renderConvo(curConvo);    // 重渲当前会话, 让已渲消息(步骤/工具条/代码块)也切语言
+    if(top.key)top.title=t(top.key);$('setvTitle').textContent=top.title;if(top.panel==='homePanel')refreshHome();else if(top.panel==='statsPanel')renderStats();else if(top.panel==='a11yPersistPanel')renderA11yPersistPage()}   // 统计页切语言: 重渲标签
+  const ios=typeof isIOSClient==='function'&&isIOSClient();
+  if(curConvo&&!running)renderConvo(curConvo,ios);    // 重渲当前会话, 让已渲消息(步骤/工具条/代码块)也切语言
   else if(curConvo)setHeaderTitle();else if(!running)setStatus(modelLabel(),false);
   toast(l==='en'?'Language: English':'语言：中文');
-  if(curConvo&&!running){stick=true;requestAnimationFrame(()=>scroll(1));setTimeout(()=>scroll(1),80)}}   // 切语言重渲后多帧重锚到底: renderConvo 的同步 scroll(1) 早于安卓异步回流→停在中间; rAF+延时再钉, 回到最新消息
+  if(!ios&&curConvo&&!running){stick=true;requestAnimationFrame(()=>scroll(1));setTimeout(()=>scroll(1),80)}}   // 切语言重渲后多帧重锚到底: renderConvo 的同步 scroll(1) 早于安卓异步回流→停在中间; rAF+延时再钉, 回到最新消息
 function effName(v){return t((EFFS.find(e=>e.v===v)||EFFS[0]).k)}
 
 let providers=[], active=LS.get('active',null), favs=LS.get('favs',[]),
@@ -135,7 +139,7 @@ let userAv=LS.get('userAvatar','person'), soundOn=LS.get('soundDone',true);   //
 let keepAwake=LS.get('keepAwake',true);   // 模型运行时阻止系统息屏(默认开): setRunning 据此调 GA.keepAwake, 仅运行中且开关开才保持亮屏
 let showThinking=LS.get('showThinking',true);window.GA_THINKING_ON=showThinking;   // F1.3: 思考过程折叠块显示开关(默认开, KV 持久化); render.js 的 thinking 挂点按此渲染/跳过
 let floatAlwaysOn=LS.get('floatAlwaysOn',false);   // 悬浮窗常开(默认关): 开启后悬浮球常驻不随回前台收起, 由 GA.setFloatAlwaysOn 落原生 SharedPreferences + 前台服务保活
-let safeMode=LS.get('safeMode',true);   // 安全模式(默认开): 手机操作只走截图不读控件树; 真值在后端 droid.SAFE_MODE, 启动时与切换时经 /safemode 同步
+let safeMode=(typeof isIOSClient==='function'&&isIOSClient()) || LS.get('safeMode',true);
 let theme=LS.get('theme','system'), floatOpacity=LS.get('floatOpacity',0.9);   // 颜色模式(system/light/dark) + 悬浮窗透明度(0.3~1)
 let sendReady=false;   // 发送按钮启用态单一真值: boot/ready/input/附件/模型切换/停止键均经 applySendEnabled 收口，避免 WebView 初始 disabled 灰住
 let mkMixins=[];   // /config.items 中 type==='mixin' 的项(按 mykey.py 原始顺序), 供模型列表渲染
@@ -174,7 +178,9 @@ function _brandMatch(s){
   if(/claude|anthropic/.test(s))return 'claude';
   return null}
 function brandKey(name,model,type){
-  return _brandMatch((model||'').toLowerCase()) || _brandMatch((name||'').toLowerCase())
+  const m=(model||'').toLowerCase(),n=(name||'').toLowerCase();
+  if(typeof isIOSClient==='function'&&isIOSClient())return _brandMatch(m)||(/^step/.test(m)?'step':null)||(/^(claude|gpt)-native$/.test(n)?null:_brandMatch(n))||'unknown';
+  return _brandMatch(m) || _brandMatch(n)
     || (type==='claude'?'claude':(type==='oai'?'openai':'generic'))}
 const _dark=()=>document.documentElement.getAttribute('data-theme')==='dark'||(!document.documentElement.getAttribute('data-theme')&&matchMedia('(prefers-color-scheme:dark)').matches);
 let _svgIdN=0;
@@ -188,7 +194,7 @@ function brandTile(key,cls){const b=BRAND[key]||BRAND.generic;   // 彩色 logo 
   return `<span class="glyph ${cls||''}" style="background:${b.tile||'#fff'};${col};box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)">${inner}</span>`}
 function provGlyph(p){const t=typeof p==='string'?p:'';const name=typeof p==='object'?p.name:'';const model=typeof p==='object'?p.model:'';
   return brandTile(brandKey(name,model,typeof p==='object'?p.type:t))}
-function modelGlyph(modelId,type){return brandTile(brandKey('',modelId,type))}
+function modelGlyph(modelId,type,provider){return brandTile(brandKey((typeof isIOSClient==='function'&&isIOSClient())?provider:'',modelId,type))}
 function uid(){return 'p'+Math.abs((Date.now()^(performance.now()*1e6|0))).toString(36)}
 const ICON_SEND='<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="6 11 12 5 18 11"/></svg>';
 const ICON_STOP='<svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>';
@@ -269,13 +275,13 @@ chat.addEventListener('scroll',()=>{const nb=nearBottom();
   if(pinned&&Date.now()-_lastPin>800&&!pinElAtTop())pinned=false;   // 仅锚点离开顶带(=用户拖走)才退出阅读态; 短内容 nb 不再误伤
   stick=nb&&!pinned;$('hdr').classList.toggle('scrolled',chat.scrollTop>2);updateScrollNav()});
 const _snav=$('scrollNav'),_snUp=$('snUp'),_snDown=$('snDown');   // 滚动导航: 双阈值(600px)按位置显隐; up=回顶 down=回底
-function updateScrollNav(){if(!_snav)return;const up=chat.scrollTop>600,down=chat.scrollHeight-chat.clientHeight>600&&!nearBottom();
+function updateScrollNav(){if(!_snav)return;const ios=typeof isIOSClient==='function'&&isIOSClient(),up=!ios&&chat.scrollTop>600,down=(ios||chat.scrollHeight-chat.clientHeight>600)&&!nearBottom()&&!(ios&&emptyEl);
   _snUp.hidden=!up;_snDown.hidden=!down;_snav.classList.toggle('on',up||down);if(!down)_snDown.classList.remove('done');_snDown.classList.toggle('pin',pinned&&down)}
 if(_snUp)_snUp.onclick=()=>{stick=false;chat.scrollTop=0};
 if(_snDown)_snDown.onclick=()=>{stick=true;_snDown.classList.remove('done');pinBottom()};   // 即时跳+多帧重钉(content-visibility 下 smooth 会失准, 与仓库范式一致)
 const _isAnd=/Android/i.test(navigator.userAgent);   // Android 走 manifest adjustResize, 系统布局收缩消化键盘, --kb 平移机制只保留给 iOS/浏览器
 try{const _comp=$('comp');if(_comp&&window.ResizeObserver)new ResizeObserver(()=>{document.documentElement.style.setProperty('--compH',_comp.offsetHeight+'px');scroll()}).observe(_comp)}catch(e){}   // #scrollNav 底部跟随输入区实高(多行/附件时不遮挡拦截 composer); scroll() 补钉贴底跟随态(pinned 由其内部条件自动拦下)
-let _vvQ=false;function _vvApply(){_vvQ=false;if(!_isAnd&&window.visualViewport){const vv=window.visualViewport,o=Math.max(0,innerHeight-vv.height-vv.offsetTop);document.documentElement.style.setProperty('--kb',o+'px')}scroll()}function _vvMark(){if(_vvQ)return;_vvQ=true;requestAnimationFrame(_vvApply)}
+let _vvQ=false;function _vvApply(){_vvQ=false;if(!_isAnd&&window.visualViewport){const vv=window.visualViewport,o=Math.max(0,innerHeight-vv.height-vv.offsetTop);document.documentElement.style.setProperty('--kb',o+'px')}scroll()}function _vvMark(){if((typeof isIOSClient==='function'&&isIOSClient())||_vvQ)return;_vvQ=true;requestAnimationFrame(_vvApply)}
 if(window.visualViewport){const vv=window.visualViewport;vv.addEventListener('resize',_vvMark);vv.addEventListener('scroll',_vvMark)}   // 输入框吸附键盘上沿: 仅 iOS/浏览器平移(Android adjustResize 不平移, --kb 恒 0px); rAF 合帧防中文候选栏展开/收起动画帧抖动
 window.addEventListener('resize',_vvMark);
 /* 从悬浮窗/后台返回前台: WebView 挂起期间布局/scrollHeight 变化会把列表停在中部。
@@ -283,7 +289,7 @@ window.addEventListener('resize',_vvMark);
    多帧重钉(覆盖恢复时的 visualViewport/字体/键盘二次重排, 并压过期间 scroll 事件把 stick 翻成 false);
    仅在原本贴底(stick)或任务运行中(看 agent 跑)才回底 → 用户主动上滑看历史时不打扰。 */
 window.gaOnResume=function(){
-  try{if(window.PCLINK)PCLINK.resume()}catch(e){}   // 原生前台通知也恢复 PC 互联，不能只靠 WebView 可见性事件
+  try{if(window.PCLINK)PCLINK.resume();if(window.GAIOS)GAIOS.refresh()}catch(e){}   // 原生前台通知也恢复 PC 互联，不能只靠 WebView 可见性事件
   try{_vvQ=false;_vvMark()}catch(e){}   // 防 ROM 差异(未复现): 理论上挂起期 pending rAF 会补发, 此行仅幂等重算一帧, 不得视为必然逻辑(R4)
   try{const k=kvGet('convoStore');if(Array.isArray(k)&&k.length){   // 后台 call_once/notif 可能已写 kv: 回前台合并进抽屉
     const have=new Set(convos.map(c=>c.id));let ch=false;
@@ -297,8 +303,8 @@ window.gaOnResume=function(){
   pinBottom();
 };
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)gaOnResume()});   // 兜底: 部分 ROM 仍会触发
-function scroll(f){if(_host!==chat)return;if(f){pinned=false;_pinEl=null}if(f||(stick&&!pinned)){chat.scrollTop=chat.scrollHeight;stick=true}}   // PCLINK v2.2: 远程回放窗口内不碰主聊天滚动
-function pinBottom(){pinned=false;_pinEl=null;let n=0;const pin=()=>{chat.scrollTop=chat.scrollHeight;stick=true;if(++n<8)requestAnimationFrame(pin)};   // 8 帧重钉+两拍延时: 抵消安卓 WebView 异步回流(content-visibility 高度重估/图片晚到)后底部后移
+function scroll(f){if(_host!==chat)return;if((typeof isIOSClient==='function'&&isIOSClient())&&emptyEl)return;if(f){pinned=false;_pinEl=null}if(f||(stick&&!pinned)){chat.scrollTop=chat.scrollHeight;stick=true}}   // PCLINK v2.2: 远程回放窗口内不碰主聊天滚动
+function pinBottom(){if((typeof isIOSClient==='function'&&isIOSClient())&&emptyEl)return;pinned=false;_pinEl=null;let n=0;const pin=()=>{chat.scrollTop=chat.scrollHeight;stick=true;if(++n<8)requestAnimationFrame(pin)};   // 8 帧重钉+两拍延时: 抵消安卓 WebView 异步回流(content-visibility 高度重估/图片晚到)后底部后移
   pin();setTimeout(pin,200);setTimeout(pin,420)}
 function alignTop(scroller,el,pad){   // 把 el 顶对齐到滚动容器可视区顶端(pad 像素留白); 用 rect 差量, 不依赖 offsetParent 链
   if(!scroller||!el)return;pad=pad||0;
@@ -311,9 +317,9 @@ function pinReplyTop(el,scroller){   // 新 turn: 用户气泡顶锚 + 关 stick
 function el(tag,cls,p){const e=document.createElement(tag);if(cls)e.className=cls;(p||_host).appendChild(e);return e}   // PCLINK v2.2: 缺省父由 chat 改 _host(常态恒=chat, 零行为差异)
 function bubble(cls,text){const b=el('div',cls);b.textContent=text;scroll(1);return b}
 function nowHM(){const d=new Date(),p=n=>(n<10?'0':'')+n;return p(d.getHours())+':'+p(d.getMinutes())}
-function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),2200)}
+function toast(m,ms){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),ms||2200)}
 /* 通用弹窗: Android WebView 默认禁用 window.prompt/confirm(返回 null/false)→ 代理编辑/清空对话/重命名全失效, 用自绘弹窗替代 */
-function gaModal(o){const mask=$('modalMask'),card=$('modalCard');const hasInput=!!o.input;
+function gaModal(o){const mask=$('modalMask'),card=$('modalCard');const hasInput=!!o.input;if(typeof iosPrepareModal==='function')iosPrepareModal();
   card.innerHTML='<h4></h4>'+(o.html?'<div class="modalBody"></div>':(o.msg?'<p class="msg"></p>':''))+(hasInput?'<input type="text" autocomplete="off">':'')+
     '<div class="modalBtns"><button class="cancel"></button><button class="ok'+(o.danger?' danger':'')+'"></button></div>';
   card.querySelector('h4').textContent=o.title||'';
@@ -326,10 +332,11 @@ function gaModal(o){const mask=$('modalMask'),card=$('modalCard');const hasInput
   mask.onclick=e=>{if(e.target===mask)close()};mask._dismiss=close;   // 返回=同遮罩点击: 关闭但不触发 onCancel(onCancel 可能是独立动作, 如手动配对)
   mask.classList.add('on');
   if(window.gaSpringModalOpen)gaSpringModalOpen(card);   // M3: 弹层入场弹簧(关态零内联样式 → CSS scale 过渡回退不变)
-  if(ipt){setTimeout(()=>{try{ipt.focus();ipt.select()}catch(e){}},60);ipt.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();ok.click()}}}}
+  if(ipt){setTimeout(()=>{if((typeof isIOSClient==='function'&&isIOSClient())&&(!mask.classList.contains('on')||card.querySelector('input')!==ipt))return;try{ipt.focus();ipt.select()}catch(e){}},60);ipt.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();ok.click()}}}}
 function gaPrompt(title,value,onOk,ph){gaModal({title,input:ph||true,value,onOk})}
 function gaConfirm(title,msg,onOk,danger){gaModal({title,msg,danger,okText:danger?t('del'):t('ok'),onOk:()=>onOk&&onOk()})}
 function showPrivacyConsent(onAgree){
+  if(typeof isIOSClient==='function'&&isIOSClient())return showIOSDataConsent(onAgree,false,onAgree);
   const mask=$('modalMask'),card=$('modalCard');
   card.className='modalCard privacyCard';
   card.innerHTML='<div class="pcHead"><h4></h4><p class="pcSub"></p></div><div class="pcBody"><p></p></div><div class="pcFoot"><button type="button" class="pcAgree" data-track="privacy_agree"></button></div>';
@@ -352,7 +359,7 @@ function showPrivacyConsent(onAgree){
   try{GAT.emit('privacy_shown',{version:PRIVACY_VERSION})}catch(e){}   // 同意页到达(算 →privacy_accept 转化率/卡同意页流失)
 }
 // 设置 → 关于 → 用户服务协议及隐私政策: 只读查看(可关闭, 不再要求同意)
-function showPrivacyView(){const mask=$('modalMask'),card=$('modalCard');card.className='modalCard privacyCard';
+function showPrivacyView(){if(typeof isIOSClient==='function'&&isIOSClient())return showIOSDataConsent(null,true);const mask=$('modalMask'),card=$('modalCard');card.className='modalCard privacyCard';
   card.innerHTML='<div class="pcHead"><h4></h4></div><div class="pcBody"><p></p></div><div class="pcFoot"><button class="pcAgree"></button></div>';
   card.querySelector('h4').textContent=t('privacyTitle');card.querySelector('.pcBody p').textContent=t('privacyBody');
   const ok=card.querySelector('.pcAgree');ok.textContent=t('ok');
@@ -362,13 +369,17 @@ function showPrivacyView(){const mask=$('modalMask'),card=$('modalCard');card.cl
 
 /* 规范星标(v2.5 单一来源): 4 折对称凹边 sparkle, 几何居中(bbox 12,12), 用于 wordmark/提示行; index.html 的 .welcome/.otaSpark 内联同款 path 须与此同步。根治"多处星形不一致"。 */
 const SPARK_SVG='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 C12.8 4 18 11.2 22 12 C20 12.8 12.8 18 12 22 C11.2 20 6 12.8 2 12 C4 11.2 11.2 6 12 2 Z"/></svg>';
-function syncEmpty(){if(chat.children.length===0&&!emptyEl){emptyEl=el('div',null,chat);emptyEl.id='empty';
+function syncEmpty(){if(chat.children.length===0&&!emptyEl){const ios=typeof isIOSClient==='function'&&isIOSClient();emptyEl=el('div',null,chat);emptyEl.id='empty';
     // .heroCore 包一层: FX 视差帧顺带给文案组写反向 transform(单节点/合成器), 不动各子项布局
     emptyEl.innerHTML='<div class="heroCore"><div class="gaMark"><span class="spark" id="gaSpark" role="button" tabindex="0" aria-label="GenericAgent">'+SPARK_SVG+'</span><span class="gaWordmark">Generic Agent</span></div>'+
-      '<h2 data-i18n="emptyH"></h2><p data-i18n="emptyP"></p><div class="tipLine" id="tipLine"></div>'+
+      '<h2 data-i18n="'+(ios?'iosAssistantTitle':'emptyH')+'"></h2><p data-i18n="'+(ios?'iosAssistantHint':'emptyP')+'"></p><div class="tipLine" id="tipLine"></div>'+
       '<div id="heroChips" role="group" aria-label="suggestions"></div></div>';
-    emptyEl.querySelector('h2').textContent=t('emptyH');emptyEl.querySelector('p').textContent=t('emptyP');
-    refreshTip();bindSpark($('gaSpark'));renderHeroChips();FX.mount(emptyEl);}   // FX 生命周期与 emptyEl 完全绑定
+    emptyEl.querySelector('h2').textContent=t(ios?'iosAssistantTitle':'emptyH');emptyEl.querySelector('p').textContent=t(ios?'iosAssistantHint':'emptyP');
+    if(ios){emptyEl.querySelector('.gaWordmark').textContent='GAgent';el('small','iosHeroFoot',emptyEl.querySelector('.heroCore')).dataset.i18n='iosHeroFoot';
+      const device=el('button','iosPhoneCard',emptyEl.querySelector('.heroCore'));device.type='button';
+      device.innerHTML='<span class="iosPhoneGlyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 5h4M11 18h2"/></svg></span><span class="iosPhoneCopy"><b data-i18n="iosPhone"></b><span data-ios-board-state></span></span><span class="iosPhoneArrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></span>';
+      device.onclick=()=>GA.boardSetup();const spark=$('gaSpark');spark.removeAttribute('role');spark.removeAttribute('tabindex');spark.setAttribute('aria-hidden','true');applyI18n();refreshIOSDeviceStatus();}
+    refreshTip();bindSpark($('gaSpark'));renderHeroChips();if(!ios)FX.mount(emptyEl);}   // FX 生命周期与 emptyEl 完全绑定
   else if(chat.children.length>1&&emptyEl)dropEmpty()}
 function dropEmpty(){if(_host!==chat)return;FX.destroy();if(emptyEl){emptyEl.remove();emptyEl=null}
   const sh=$('shareHintTip');if(sh)sh.remove()}   // emptyEl 所有移除路径唯一出口: 先断 FX(监听+rAF)再拆 DOM; 顺带清分享引导气泡(锚点按钮随会话切换消失→气泡悬空)
@@ -381,6 +392,7 @@ function bindSpark(e){if(!e)return;
 /* ════════════ 起始页预置任务 chips(内置默认 + OTA latest.json 远程覆盖) ════════════ */
 // 图标白名单注册表: OTA 只下发图标名, 未知名回退 spark——远程禁注入 SVG(安全面收敛在本地)
 const HERO_ICONS={
+  folder:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
   boba:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12l-1.5 12a2 2 0 0 1-2 1.8h-5A2 2 0 0 1 7.5 20Z"/><path d="M5 8l1.2-3.5A2 2 0 0 1 8.1 3H12l7-1.5"/><circle cx="10" cy="14" r=".9"/><circle cx="13.5" cy="16.5" r=".9"/><circle cx="11" cy="18.5" r=".9"/></svg>',
   mail:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>',
   search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
@@ -400,8 +412,23 @@ const HERO_CHIPS={zh:[
     {icon:'search',label:'Trending on RED', prompt:'Search today’s trending topics on Xiaohongshu and brief me on the top 3'},
     {icon:'cal',  label:'Plan tomorrow',    prompt:'Look at my schedule for tomorrow, plan the commute and set reminders'},
     {icon:'shot', label:'Screenshot to note',prompt:'Take a screenshot, run OCR on it and save the text as a note'}]};
+const IOS_HERO_CHIPS={zh:[
+  {icon:'shot',label:'查看手机画面',prompt:'查看 iPhone 当前画面，说明你看到了什么。先检查连接和画面是否就绪，不点击、不发送消息。'},
+  {icon:'cal',label:'规划任务',prompt:'帮我把一个目标拆成可执行的步骤。先问我目标、时间和约束，再整理任务计划'},
+  {icon:'folder',label:'浏览工作区',prompt:'列出当前任务工作区的文件，说明各文件类型；先不要修改或删除'},
+  {icon:'mail',label:'整理笔记',prompt:'先问我要记录的内容，再用固定文件工具整理成 Markdown 笔记，保存在任务工作区'},
+  {icon:'spark',label:'生成检查清单',prompt:'帮我制作一份出行准备检查清单，按证件、行李和出发前事项分类，并保存为工作区文件'},
+  {icon:'search',label:'查看已配对电脑',prompt:'检查已配对电脑是否在线，并列出可用任务工具；如果尚未配对，请说明配对步骤，不执行电脑任务'}],
+  en:[
+  {icon:'shot',label:'View my iPhone',prompt:'Look at the current iPhone screen and describe it. Check connection and screen readiness first. Do not tap or send messages.'},
+  {icon:'cal',label:'Plan a task',prompt:'Help break a goal into actionable steps. First ask about my goal, time and constraints, then organize a task plan'},
+  {icon:'folder',label:'Browse files',prompt:'List files in the current task workspace and explain their types. Do not modify or delete them'},
+  {icon:'mail',label:'Organize notes',prompt:'Ask what I want to record, then use the fixed file tools to organize a Markdown note and save it in the task workspace'},
+  {icon:'spark',label:'Create a checklist',prompt:'Create a travel preparation checklist grouped into documents, luggage and before-departure tasks, and save it as a workspace file'},
+  {icon:'search',label:'Check paired computer',prompt:'Check whether a paired computer is online and list its available task tools. If none is paired, explain the pairing steps without running a computer task'}]};
 let _chipOfs=0;   // ✦ 彩蛋翻批偏移: >5 条数据源时轮换展示窗口
 function heroChipsData(){
+  if(typeof isIOSClient==='function'&&isIOSClient())return (IOS_HERO_CHIPS[lang]||IOS_HERO_CHIPS.zh).slice(0,4);
   const r=LS.get('chips.remote',null);
   const a=(r&&Array.isArray(r[lang])&&r[lang].length?r[lang]:HERO_CHIPS[lang]||HERO_CHIPS.zh).filter(c=>c&&c.label&&c.prompt);
   if(a.length<=5)return a;
@@ -610,7 +637,7 @@ function switchConvo(c){if(!c)return true;let r;try{r=GA.send('/convo '+c.id)}ca
 function ensureConvo(prompt){if(!curConvo||startNew){
     const c={id:uid(),title:(prompt||t('newChat')).slice(0,60),ts:Date.now(),msgs:[]};
     if(!switchConvo(c))return null;   // 后端在飞任务未停下(busy): 不开新会话, 让调用方中止本次发送(防发进未切的旧上下文); 已 toast 提示
-    curConvo=c;convos.push(c);startNew=false;setHeaderTitle()}   // 新会话: 后端已开空上下文(不再串上个会话)
+    curConvo=c;convos.push(c);startNew=false;rememberView(c);setHeaderTitle()}   // 新会话: 后端已开空上下文(不再串上个会话)
   else if(!switchConvo(curConvo))return null;   // 懒对齐(T5): 预览态消解后后端可能仍停在别会话, 发送咽喉统一收敛; 同 id 后端回 'same' 幂等免费
   return curConvo}
 function userBubble(text,atts,ts,msgRef){
@@ -639,7 +666,7 @@ function newTask(prompt,modelName,ts,stats){
   if(curConvo&&curConvo.id){task.box._cid=curConvo.id;task._cid=curConvo.id}   // P3c: per-run box 归属, render 串台守卫用
   const mdl=modelName||modelLabel();
   const h=el('div','assistHead',task.box);
-  h.innerHTML=modelGlyph(dispModel(mdl),(curProvider()||{}).type)+'<span class="assistName"></span><span class="assistTime"></span><span class="assistState"></span>';
+  h.innerHTML=modelGlyph(dispModel(mdl),(curProvider()||{}).type,(curProvider()||{}).name)+'<span class="assistName"></span><span class="assistTime"></span><span class="assistState"></span>';
   h.querySelector('.assistName').textContent=dispModel(mdl);h.querySelector('.assistTime').textContent=fmtTime(ts);   // 回放也去 [1m]
   task.state=h.querySelector('.assistState');
   task.meta=el('div','runMeta',task.box);task.meta.style.display='none';     // 运行时间 + 输入/输出 token 渲染行
@@ -659,13 +686,15 @@ function renderTaskStats(s){if(!task)return;                                  //
   stripRunSpin();   // 无条件摘 spin(在 hasEl||hasTok 守卫之前): 统计全空完成轮也不残留转圈
   const hasEl=s&&s.el!=null, hasTok=s&&(s.ti||s.to);
   const err=task._err||(s&&s.er);   // 末轮模型请求失败(后端 end=error; 回放取存档 er): 头部不打绿勾
-  if(task.state){task.state.classList.remove('run');task.state.innerHTML=err?'<span class="ck2 err" aria-label="'+t('t_taskErr')+'">'+ICO_X+'</span>':'<span class="ck2" aria-label="'+t('done')+'">'+ICO_CK+'</span>'}
+  if(task.state){task.state.classList.remove('run');task.state.innerHTML=(window.GA&&GA.platform==='ios'&&task._fail)
+    ?'<span class="'+(task._fail===2?'iosTaskFailure':'iosTaskInterrupted')+'">'+t(iosTaskOutcome(task._fail))+'</span>'
+    :(err?'<span class="ck2 err" aria-label="'+t('t_taskErr')+'">'+ICO_X+'</span>':'<span class="ck2" aria-label="'+t('done')+'">'+ICO_CK+'</span>')}
   if(task.meta&&(hasEl||hasTok)){const m=task.meta;m.style.display='flex';m._skel=0;m._sig=null;m._tin=m._tout=m._ger=m._el=null;   // R7 去噪: 默认只留用时, token(含缓存)收进点按展开的详情; 归档 el/ti/to/cr/cw 格式零改动(纯显示层)
     let dt=hasTok?tokChips((s&&s.ti)||0,(s&&s.to)||0):'';
     if(s&&(s.cr||s.cw))dt+='<span class="tok" title="cache">⟲'+humanTok(s.cr||0)+(s.cw?('+'+humanTok(s.cw)):'')+'</span>';
     m.innerHTML=(hasEl?'<span class="muL">'+fmtElapsed(s.el)+'</span>':'')+(dt?'<span class="mChev" aria-hidden="true">›</span><span class="mtok">'+dt+'</span>':'');
     if(dt){m.classList.add('mx');if(!hasEl)m.classList.add('open');m.onclick=e=>{e.stopPropagation();m.classList.toggle('open')}}else{m.classList.remove('mx','open');m.onclick=null}}}
-function setHeaderTitle(){const tt=$('hdrTitleTxt');   // 主页不再显示"GenericAgent"(与左侧 GA 字标重复); 仅会话内显示会话标题
+function setHeaderTitle(){if(typeof syncIOSNewConversation==='function')syncIOSNewConversation();const tt=$('hdrTitleTxt');   // 主页不再显示"GenericAgent"(与左侧 GA 字标重复); 仅会话内显示会话标题
   if(curConvo){tt.textContent=convoTitle(curConvo).slice(0,60);tt.style.display='';fitHeaderTitle()}
   else{tt.textContent='';tt.style.display='none'}}
 function fitHeaderTitle(){const tt=$('hdrTitleTxt');if(!tt||tt.style.display==='none'||!tt.textContent)return;   // #1: 标题字号收缩到适配可用宽度(下限 13px)→ 长标题(任意语言)尽量多显, github 等关键词不被过早遮挡; 余下再 ellipsis 兜底
@@ -714,18 +743,23 @@ function stopRun(){  // 切换会话/清空前: multi 只停焦点会话(不杀�
   if(running){const id=runConvo&&runConvo.id;bridgeAbort(id);_abortWaitCid=id;setRunning(false)}task=null}   // 切换会话/清空前: 中止在飞任务, 防 poll 空引用; _abortWaitCid=id → 后端收敛前 idle poll 不复活(T7)
 function runLocked(){if(!anyRunning())return false;toast(t('t_taskBusy'));return true}   // 运行中冻结突变入口的统一谓词(T1): multi 下仍冻结全局危险操作(切 LLM/清库); 新建会话另开
 function stopRunClean(){  // 用户主动/被迫中止并收尾: multi 只收焦点 cid
-  if(multi){const id=(curConvo&&curConvo.id)||(runConvo&&runConvo.id)||activeCid;const rr=id&&runs.get(id);if(!rr||!rr.running)return;try{bridgeAbort(id)}catch(e){}_abortWaitCid=id;if(task&&!task.done){task._fail=1;finish()}setRunning(false,id);setStatus(modelLabel(),false);return}
-  if(!running)return;const id=runConvo&&runConvo.id;try{bridgeAbort(id)}catch(e){}_abortWaitCid=id;if(task&&!task.done){task._fail=1;finish()}setRunning(false);setStatus(modelLabel(),false)}   // _fail: 中止轮不算"成功完成", 不触发分享引导气泡; _abortWaitCid=id → 防 idle poll 在后端收敛前复活(T7)
+  const ios=typeof isIOSClient==='function'&&isIOSClient();
+  if(multi){const id=(curConvo&&curConvo.id)||(runConvo&&runConvo.id)||activeCid;const rr=id&&runs.get(id);if(!rr||!rr.running)return;try{bridgeAbort(id)}catch(e){}_abortWaitCid=id;if(task&&!task.done){task._fail=1;finish()}setRunning(false,id);setStatus(ios?t('iosTaskInterrupted'):modelLabel(),false);return}
+  if(!running)return;const id=runConvo&&runConvo.id;try{bridgeAbort(id)}catch(e){}_abortWaitCid=id;if(task&&!task.done){task._fail=1;finish()}setRunning(false);setStatus(ios?t('iosTaskInterrupted'):modelLabel(),false)}   // _fail: 中止轮不算"成功完成", 不触发分享引导气泡; _abortWaitCid=id → 防 idle poll 在后端收敛前复活(T7)
 function newConversation(){if(multi){/* P3b: 允许多路并存时新建空会话, 不中止后台 run */}else if(running){toast(t('t_taskBusy'));return}   // legacy 单任务: 有在飞任务时不新建
+  globalThis.GAVoice?.stop();
   if(multi){task=null}else stopRun();exitGoalMode();   // multi: 只解绑本视图 task, 不 bridgeAbort 后台; legacy: stopRun 全停
-  startNew=true;curConvo=null;activeCid=null;deviceState={current:null,devices:deviceState.devices||[]};refreshDeviceChip();chat.innerHTML='';dropEmpty();
-  closeDrawer();setHeaderTitle();syncEmpty();renderDrawer();setStatus(modelLabel(),false);updateScrollNav();inp.focus()}   // 清空 chat 后无 scroll 事件, 手动收起滚动导航
+  startNew=true;curConvo=null;activeCid=null;rememberView(null);deviceState={current:null,devices:deviceState.devices||[]};refreshDeviceChip();chat.innerHTML='';dropEmpty();
+  const ios=typeof isIOSClient==='function'&&isIOSClient();
+  closeDrawer();setHeaderTitle();syncEmpty();if(ios)chat.scrollTop=0;renderDrawer();setStatus(modelLabel(),false);updateScrollNav();
+  if(ios)inp.focus({preventScroll:true});else inp.focus()}   // 清空 chat 后无 scroll 事件, 手动收起滚动导航
 function renderMsgsInto(host,msgs,opts){opts=opts||{};   // PCLINK v2.2(#031-F3): 参数化回放体 — 主链 renderMsgs=全副作用包装零变化; pclink 传 host+noActions+detachTask ⇒ 不写 curConvo/不挂操作行/不碰主滚动与空态; _host 切换仅同步窗口, finally 必还原(异步回调外逃不到)
   const ph=_host,pr=replaying,pn=_noActs,pt=task;
   _host=host||chat;replaying=true;_noActs=!!opts.noActions;
   try{(msgs||[]).forEach(m=>{if(opts.skip&&m===opts.skip)return;
     if(m.role==='user')userBubble(m.text,m.atts,m.ts,m);
-    else{newTask(m.prompt,m.model,m.ts,{el:m.el,ti:m.ti,to:m.to,cr:m.cr,cw:m.cw,er:m.er});task._arts=m.artifacts||[];task._citeArc=m.cites||[];try{if(m.fa)task._fail=1}catch(e){}   // 回放(D2: cites 透给 task, 同 _arts 既有范式): 产物行取存档; STEP_FOLD §2.4.3: 存档 fa → 恢复 _fail, finish 的 _fail 分支自动走中断形态(场景F, 不冒充完成态)
+    else{newTask(m.prompt,m.model,m.ts,{el:m.el,ti:m.ti,to:m.to,cr:m.cr,cw:m.cw,er:m.er});task._arts=m.artifacts||[];task._citeArc=m.cites||[];try{if(m.fa)task._fail=(window.GA&&GA.platform==='ios'&&m.fa===2)?2:1;
+      if(window.GA&&GA.platform==='ios'&&!task._fail&&iosFinalFailed(m.final))task._fail=2}catch(e){}
       const steps=(m.steps&&m.steps.length)?m.steps:(m.final?[{n:1,summary:(m.final||'').slice(0,80),text:m.final}]:[]);
       steps.forEach(setStep);
       if(m.live){if(task.state){task.state.innerHTML='';task.state.classList.add('run')}   // PCLINK 快照重渲(#031-F5): 运行中 task 不 finish(不折叠不打勾), 头=脉冲点+末步展开; 归档 msgs 永无 live 字段, 主链不受影响
@@ -740,31 +774,55 @@ function patchReplaySteps(box,steps){   // PCLINK 流式增量桥: 临时把既�
   replaying=true;_noActs=true;_host=box.parentNode||ph;
   try{(steps||[]).forEach(setStep);return true}finally{task=pt;replaying=pr;_noActs=pn;_host=ph}}
 let _lastViewId=null;
+function rememberView(c){const id=c?c.id:'';if(id!==_lastViewId){_lastViewId=id;kvSet('lastView',{id:id})}}
 function renderMsgs(c,skip){                                // 纯回放公共体: 只画归档数据, 不碰 running/timer/后端; skip=在飞轮的 task.msg(resumeRun 用活体重挂替代回放)
-  chat.innerHTML='';dropEmpty();curConvo=c;startNew=false;if(c&&c.id&&c.id!==_lastViewId){_lastViewId=c.id;kvSet('lastView',{id:c.id})}   // 记住前台会话, 冷启动恢复用
+  const keepPosition=!!arguments[2],readingTop=keepPosition?chat.scrollTop:null;
+  chat.innerHTML='';dropEmpty();curConvo=c;startNew=false;rememberView(c);   // 记住前台会话, 冷启动恢复用
   renderMsgsInto(chat,c.msgs,{skip:skip});
-  setHeaderTitle();syncEmpty();scroll(1);requestAnimationFrame(()=>scroll(1));setTimeout(()=>{scroll(1);updateScrollNav()},80)}   // 进会话即达底: 同步 scroll(1) 早于安卓异步回流→补两拍重钉(照抄切语言已验证范式), 根治"长对话进入要滑多次才到底"
-function renderConvo(c){if(!multi)stopRun();else{/* P3b: 多路不因重渲杀掉其他 run; 仅解绑本视图 task 引用由调用方处理 */}renderMsgs(c);setStatus(modelLabel(),false)}   // 空闲路径(抽屉点击/启动/回滚重渲)
+  const restore=()=>{if(curConvo!==c)return;if(readingTop===null)scroll(1);else chat.scrollTop=readingTop};
+  setHeaderTitle();syncEmpty();restore();requestAnimationFrame(restore);setTimeout(()=>{restore();updateScrollNav()},80)}   // 进会话即达底: 同步 scroll(1) 早于安卓异步回流→补两拍重钉(照抄切语言已验证范式), 根治"长对话进入要滑多次才到底"
+function renderConvo(c,keepPosition=false){if(!multi)stopRun();else{/* P3b: 多路不因重渲杀掉其他 run; 仅解绑本视图 task 引用由调用方处理 */}renderMsgs(c,undefined,keepPosition);const last=(c.msgs||[]).slice(-1)[0],outcome=(typeof isIOSClient==='function'&&isIOSClient())&&last&&last.role!=='user'?iosTaskOutcome(last.fa,last.final):'';setStatus(outcome?t(outcome):modelLabel(),false)}   // 空闲路径(抽屉点击/启动/回滚重渲)
 function previewConvo(c){const lt=task;renderMsgs(c);task=lt}   // 运行中只读预览(T3/T4): 全局 task 借出即还(JS 单线程保证回放原子), 活体 DOM 继续在 detached box 累积
 function resumeRun(){if(!runConvo)return;const lt=task;renderMsgs(runConvo,lt&&lt.msg);task=lt;   // 回到运行中会话: 归档轮回放(跳过在飞轮), 重挂仍在累积的活体 box, 流式状态零丢失; 判空防竞态(点击瞬间任务恰好结束→runConvo 已清)
   if(lt&&lt.box)chat.appendChild(lt.box);stick=true;scroll(1)}
 function restoreAsk(c){let j;try{const _raw=(multi&&c&&c.id&&typeof GA.pollC==='function')?GA.pollC(c.id,'0'):GA.poll(0);j=parseBridge(_raw)||{}}catch(e){return}   // P3c: multi 用 pollC(cid); 预览期错过的 ask_user 后端是持久真相
   if(j.cmd_error)bubble('sys',j.cmd_error);   // poll(0) 会消费 cmd_error, 兜底显示(与冷启一致)
-  if(!j.running&&j.active_convo===c.id&&j.ask&&(j.ask.question||(j.ask.candidates&&j.ask.candidates.length)))renderAskPicker(j.ask)}
-function openConvo(c){if(!c||c===curConvo){closeDrawer();return}closeDrawer();   // 判空: 调用方引用可能在任务结束竞态中变 null
+  if(!j.running&&j.active_convo===c.id&&j.ask&&(j.ask.question||(j.ask.candidates&&j.ask.candidates.length)))renderAskPicker(j.ask,j.gen)}
+function openConvo(c){if(!c||c===curConvo){closeDrawer();return}globalThis.GAVoice?.stop();closeDrawer();   // 判空: 调用方引用可能在任务结束竞态中变 null
   if(multi){const rr=runs.get(c.id);curConvo=c;activeCid=c.id;startNew=false;setHeaderTitle();
     if(rr&&rr.running){runConvo=c;if(rr.task)task=rr.task;resumeRun();renderDrawer();return}   // 该会话在飞: 重挂活体
     if(anyRunning()){previewConvo(c);renderDrawer();return}   // 别的会话在飞: 只读预览, 不发 /convo 不打断
-    if(switchConvo(c)){renderConvo(c);readDeviceState();restoreAsk(c);if(pendingAsk&&pendingAsk.cid===c.id)renderAskPicker(pendingAsk.ask)}renderDrawer();return}
+    if(switchConvo(c)){renderConvo(c);readDeviceState();restoreAsk(c);if(pendingAsk&&pendingAsk.cid===c.id)renderAskPicker(pendingAsk.ask,pendingAsk.gen)}renderDrawer();return}
   if(running){if(c===runConvo)resumeRun();else previewConvo(c);return}   // legacy 运行中(T3)
   if(switchConvo(c)){renderConvo(c);readDeviceState();restoreAsk(c);
-    if(pendingAsk&&pendingAsk.cid===c.id)renderAskPicker(pendingAsk.ask)}}   // 空闲: 切后端上下文再重渲
-function clearAllConvos(){if(anyRunning()){toast(t('t_taskBusy'));return}gaConfirm(t('clearAll'),t('confirmClear'),()=>{
-  try{GAT.emit('clear_convos',{n:convos.filter(c=>!c.deleted).length})}catch(e){}   // 埋点: 清空全部对话(确认后; 仅会话数, 与 clear_cache 缓存清理区分)
-  try{GA.send('/clear')}catch(e){}convos=[];LS.del('convoStore');kvDel('convoStore');stopRun();newConversation();renderDrawer();toast(t('t_clearedAll'))},true)}   // /clear 清后端(chat.json+kv+会话快照+LLM日志+上下文); 前端对称删 convoStore 写入的每一处: LS.del(localStorage 快取 + kv 'ga.'前缀)+kvDel(saveConvos 经 kvSet 写的无前缀 kv) → 删除集≡写入集, 重开不再从快取读回(修"清空后重启全回来")
+    if(pendingAsk&&pendingAsk.cid===c.id)renderAskPicker(pendingAsk.ask,pendingAsk.gen)}}   // 空闲: 切后端上下文再重渲
+function clearAllConvos(){
+  if(anyRunning()){toast(t('t_taskBusy'));return}
+  const ios=typeof isIOSClient==='function'&&isIOSClient();
+  gaConfirm(t('clearAll'),t(ios?'iosConfirmClearHistory':'confirmClear'),()=>{
+    let result;
+    try{result=GA.send('/clear')}catch(e){}
+    if(ios&&result!=='cleared'&&result!=='cleanup_failed'){
+      toast(t(result==='busy'?'t_taskBusy':'t_checkFail'));
+      return;
+    }
+    try{GAT.emit('clear_convos',{n:convos.filter(c=>!c.deleted).length})}catch(e){}
+    if(ios){
+      for(const key of Object.keys(localStorage)){
+        if(/^ga\.(?:u[\w-]+\.)?convoStore$/i.test(key))localStorage.removeItem(key);
+      }
+    }
+    convos=[];LS.del('convoStore');kvDel('convoStore');stopRun();newConversation();renderDrawer();
+    toast(t(result==='cleanup_failed'?'iosClearMediaFailed':'t_clearedAll'));
+  },true)
+}
 function convoState(c){if(multi){const rr=c&&runs.get(c.id);if(rr&&rr.running)return 'run'}else if(c===runConvo&&running)return 'run';   // 进行中: multi 跟 runs; legacy 跟 runConvo
   const m=c.msgs||[],last=m[m.length-1];
   if(!last||last.role==='user')return 'wait';                   // 空会话 / 末条是用户消息(还没回复) → 等待用户交互
+  if(typeof isIOSClient==='function'&&isIOSClient()){
+    if(last.fa===1)return 'interrupted';
+    if(last.fa===2||(!last.fa&&iosFinalFailed(last.final)))return 'failed';
+  }
   return 'done'}                                                // 末条是 assistant 回复 → 已完成
 function renderDrawer(){
   const list=$('dwList'),q=($('dwSearchIn')?.value||'').trim().toLowerCase();list.innerHTML='';
@@ -775,7 +833,7 @@ function renderDrawer(){
         sysArr=q?[]:items.filter(c=>!c.pinned&&isSysConvo(c)).reverse();                                  // 搜索时不分组(直接可命中找回); 置顶的系统会话保留在置顶区(防误伤)
   const add=(arr,label)=>{if(!arr.length)return;if(label){const s=document.createElement('div');s.className='dwSec';s.textContent=label;list.appendChild(s)}
     arr.forEach(c=>{const it=el('div','dwItem'+(c===curConvo?' cur':''),list);it.tabIndex=0;it.setAttribute('role','button');   // 可 Tab 聚焦 → 配合既有 Enter/Space keydown
-      const st=convoState(c),lbl=(lang==='en'?{run:'In progress',wait:'Awaiting you',done:'Completed'}:{run:'进行中',wait:'等待交互',done:'已完成'})[st];
+      const st=convoState(c),lbl=(lang==='en'?{run:'In progress',wait:'Awaiting you',done:'Completed',failed:'Not completed',interrupted:'Stopped'}:{run:'进行中',wait:'等待交互',done:'已完成',failed:'未完成',interrupted:'已中断'})[st];
       it.innerHTML='<span class="cst '+st+'" role="img" aria-label="'+lbl+'" title="'+lbl+'"><i></i></span><span class="t"></span>'+(c.pinned?'<span class="pinBadge" aria-hidden="true">'+ICO_PIN+'</span>':'');
       it.querySelector('.t').textContent=convoTitle(c);
       const mb=document.createElement('button');mb.className='more';mb.setAttribute('aria-label',t('sessOps'));mb.innerHTML=ICO_MORE;
@@ -912,6 +970,12 @@ function openFilePreview(enc){
   if(/(^|\/)\.\.(\/|$)/.test(rel)){toast(t('fileOpenFail'));return}   // I2: 直显通道同样锁 temp 沙盒(diff 卡路径来自原始 agent 文本, 不可信)
   const k=fileKind(rel);
   try{GAT.emit('file_preview',{kind:k})}catch(e){}   // 埋点: 仅 kind, 不含路径/内容(脱敏铁律)
+  if((typeof isIOSClient==='function'&&isIOSClient())&&window.GA&&GA.previewFile&&(/\.(pdf|pptx?|docx?|xlsx?|key|pages|numbers|rtf|mp3|m4a|aac|wav|aiff?|flac|mp4|m4v|mov|usdz)$/i.test(rel))){
+    const result=GA.previewFile(rel);
+    if(result==='ok')return;
+    if(result==='err:not-found'){toast(t('fileOpenFail'));return}
+    if(result==='err:unavailable'){toast(t('t_checkFail'));return}
+  }
   let r=null;try{if(window.GA&&GA.send)r=JSON.parse(GA.send('/files.read '+rel))}catch(e){}   // 统一存在性门禁: /files.read 对直显类只回 meta(I3 不变量), 零成本
   if(r&&!r.ok){toast(t('fileOpenFail'));return}   // 文件已被清理的陈旧 chip/列表项: 早失败一次明确提示(修: 缺文件被 onerror 误报成"编码不支持"卡+外开 not-found 双重困惑)
   if(k==='html')return openHtmlPreview(rel);   // I5(升级): html 产物走独立无桥 WebView, 脚本可跑但摸不到 GA 桥
@@ -992,11 +1056,17 @@ function _newArtifacts(snap){if(!snap)return[];
     return ((r&&r.files)||[]).filter(f=>snap[f.path]!==(f.mtime+':'+f.size)).slice(0,12)
       .map(f=>({path:f.path,name:f.name,kind:fileKind(f.name),size:f.size}))}catch(e){return[]}}
 function renderArtifacts(arts,box){if(!arts||!arts.length||!box)return;
+  const ios=typeof isIOSClient==='function'&&isIOSClient();
   const row=el('div','artRow',box);row.innerHTML='<div class="artLbl">'+t('turnArtifacts')+'</div>';
   const wrap=el('div','artChips',row);
   arts.forEach(a=>{const b=el('button','artChip',wrap);
-    b.innerHTML='<span class="aIco">'+fileIcon(a.kind||fileKind(a.name))+'</span><span class="aNm">'+_escd(a.name)+'</span>';
+    b.innerHTML='<span class="aIco">'+fileIcon(a.kind||fileKind(a.name))+'</span><span class="aNm">'+_escd(ios?shortFileName(a.name):a.name)+'</span>';
+    b.title=a.name;b.setAttribute('aria-label',a.name);
     b.onclick=()=>openFilePreview(_enc(a.path))});
+}
+function shortFileName(name){
+  const dot=name.lastIndexOf('.'),ext=dot>0&&name.length-dot<=6?name.slice(dot):'',stem=ext?name.slice(0,dot):name;
+  return stem.length>10?stem.slice(0,6)+'…'+stem.slice(-3)+ext:name;
 }
 function openFilesPage(){setNav('filesPanel',t('genFiles'),'genFiles')}   // _setShow('filesPanel') 已驱动 renderFilesPage, 不重复(S3)
 function renderFilesPage(){
@@ -1076,6 +1146,7 @@ function renderBody(c){if(!c.classList.contains('open'))return;const sb=c.queryS
   if(c._final&&c._dupFinal){if(sb._rendered)return;if(window.GA_PACE)GA_PACE.drop(sb);   // DUPFINAL: 答案源步卡正文已抽为 .finalMsg(renderFinal), 组内复读全文=Boss 2026-08-03「展开出现重复最后一段」→ 只渲摘要+占位
     sb.className='sb sbDup';sb.textContent=_sbDisplay(c,t('sbDupFinal'));sb._rendered=true;return}
   if(c._final){if(sb._rendered)return;if(window.GA_PACE)GA_PACE.drop(sb);sb.className='sb md';   // M2 硬约束: 终态整块重渲从 c._text 全文直出 → 未释放缓冲即刻弃置, 不许残留继续打字
+    if((typeof isIOSClient==='function'&&isIOSClient())&&window.iosRenderModelIssue&&iosRenderModelIssue(sb,c._text)){sb._rendered=true;return}
     const ex=extractFileDiffs(c._text||'');                                // 先在【原始】文本抽 diff(含 <file_content>), 再清洗其余(cleanReply 会删 <file_content>/工具块)
     const bt=_sbDisplay(c,_twStripText(composeFinal(cleanReply(ex.text),c._text||''),c));   // 仅展开显示追加原始完整summary；既有正文清洗/ask兜底保持不变
     if(!window.GA_RENDER_LEGACY&&window.renderRich){const _tk=window.extractThinking?extractThinking(ex.text,true):null;   // F1.3: cleanReply 之前只读提取(anchored 口径与 cleanReply 剥离一致); cleanReply 本身零改动, 存档 final 不含 thinking 不变
@@ -1221,7 +1292,11 @@ function setStep(s){if(!task||!s)return;const n=Number(s.n);if(!Number.isSafeInt
     if(_chT||_FULL)_dirtyStepMsgs.add(task.msg);
     saveConvosThrottled()}
   stepFoldLive()}
-function finish(){task.done=true;if(!replaying)_flIdx=null;   // 实时轮产物集已变→重建索引; 回放期产物不变, 置空会让长会话每轮空重建(N次同步桥调用)
+function finish(){
+  const ios=typeof isIOSClient==='function'&&isIOSClient();
+  if(ios&&task._fail!==1&&iosFinalFailed((task.steps[task.steps.length-1]||{})._text))task._fail=2;
+  task.done=true;if(!replaying)_flIdx=null;   // 实时轮产物集已变→重建索引; 回放期产物不变, 置空会让长会话每轮空重建(N次同步桥调用)
+  if(replaying&&ios&&task._fail)renderTaskStats({});
   task.steps.forEach(finalizeStep);   // Completed steps keep their rendered Markdown/code nodes.
   const c=task.steps[task.steps.length-1];if(c){c.classList.add('open');renderBody(c)}
   if(!replaying){                                             // 实时完成: 冻结用时+token, 落库供回放
@@ -1235,7 +1310,7 @@ function finish(){task.done=true;if(!replaying)_flIdx=null;   // 实时轮产物
       _dirtyStepMsgs.delete(task.msg);
       if(task.snap)task.msg.artifacts=_newArtifacts(task.snap);   // 成品优先: file_write 产物必出 chip(内部文件已被后端谓词滤除); 无快照(重启接续轮)不写[]防永久掩盖
       try{if(!window.GA_CITE_OFF&&!task._fail){const _cs=citeList(task).slice(0,CITE_KEEP);if(_cs.length)task.msg.cites=_cs}}catch(e){}   // D2 §3.2.3: 引用落库(tool_events 从不落库 ⇒ 不写则换会话/杀进程全丢); 中断轮不写不渲(§3.2.5 H9)
-      if(task._fail)task.msg.fa=1;if(task._err)task.msg.er=1;   // STEP_FOLD §2.4.2: 中断真相持久化(convoStore 存档 UI 侧字段, 非 poll 协议/不回灌模型); 纯数据不受 GA_STEPFOLD_OFF 控制
+      if(task._fail)task.msg.fa=(window.GA&&GA.platform==='ios')?task._fail:1;if(task._err)task.msg.er=1;   // STEP_FOLD §2.4.2: 中断真相持久化
       task.msg.el=elMs;task.msg.ti=ti;task.msg.to=to;task.msg.cr=cr;task.msg.cw=cw;saveConvos()}
     try{   // 渲染层埋点: task_done 只证 Agent 循环结束(不证答案真写进 DOM); 此处量"屏幕实际可见字符 + 清洗后报告正文长度"→补 hanrui 报告盲区/BBS#46 待办2。task_done 数 − render_done 数 = 静默空白案例
       let _sb=null;for(let _i=task.steps.length-1;_i>=0;_i--){const _b=task.steps[_i].querySelector('.sb');if(_b&&(_b.textContent||'').trim()){_sb=_b;break}}   // 末步真实渲染体(取最后一个有可见文本的 .sb)
@@ -1274,7 +1349,7 @@ function foldSteps(tk){   // §2.2: 终态折叠(原子构建: detached 组装�
   const tx=document.createElement('span');tx.className='sft';
   const _full=!tk._fail&&!window.GA_FINALCARD_OFF&&!!_finalSrc(tk);   // D1(UX_R2 §2.2): 完成轮全部步入容器(含原末步), 答案另起 .finalMsg 普通消息体; 中断轮/FINALCARD_OFF 保持 step-fold 原形态(n-1 步 + 末步留外)
   // 全空正文轮(监察#7): 无 composeFinal 非空候选 ⇒ renderFinal 恒返回 null, 若仍全收则屏上只剩「▸ 执行过程(N 步)」一行(可见性回退) ⇒ 与 renderFinal 同一挑选口径(_finalSrc 唯一决策点)判空后退回 _full=false, 末步留容器外
-  tx.textContent=t(tk._fail?'stepFoldAbort':'stepFoldHead').replace('{n}',_full?tk.steps.length:tk.steps.length-1);   // i18n zh/en; textContent 注入无 XSS 面
+  tx.textContent=t(window.GA&&GA.platform==='ios'&&tk._fail===2?'iosTaskFailedSteps':tk._fail?'stepFoldAbort':'stepFoldHead').replace('{n}',_full?tk.steps.length:tk.steps.length-1);   // i18n zh/en; textContent 注入无 XSS 面
   hd.appendChild(ar);hd.appendChild(tx);fold.appendChild(hd);
   const bd=document.createElement('div');bd.className='sfb';fold.appendChild(bd);
   for(let i=0;i<tk.steps.length-1;i++)bd.appendChild(tk.steps[i]);   // appendChild 移动非重建(R1): expando/task.steps[] 引用/.tsr/_twSig 全保, 文档序不变 → renderTools box.querySelectorAll('.step') bins 映射不变
@@ -1930,7 +2005,7 @@ function onTaskDone(show,c,end){playDone();const err=end==='error';   // show=fa
   notifyAway(err?'error':'done',c)}                     // 完成/出错: 轻提示音 + 普通通知(署名任务归属会话)
 function onNeedInput(c){playAsk();notifyAway('ask',c)}  // 需要回答 ask_user: 醒目提示音 + 高优先级通知
 let _askKey=null;
-function renderAskPicker(ask){if(!ask)return;
+function renderAskPicker(ask,gen){if(!ask)return;
   const key=(ask.question||'')+'|'+((ask.candidates||[]).join('|'));
   if(_askKey===key&&document.querySelector('.askBox'))return;          // 同一问题不重复渲染(防 poll/启动重入)
   if(document.querySelector('.askBox:not(.answered)'))return;          // 已有未答的选择框
@@ -1938,6 +2013,7 @@ function renderAskPicker(ask){if(!ask)return;
   const q=ask.question||t('askChoose'),cs=ask.candidates||[];
   const multi=/\[?\s*(?:多选|可多选|多项选择|multi(?:[-_ ]?select)?|multiple|select\s+all)\s*\]?/i.test(q);   // 与核心 _MULTI_RE 对齐(issue#3): [多选]/multi-select/select all 等都触发多选; 核心无 schema 字段, 靠问题文本推断
   const box=el('div','askBox');
+  if(typeof isIOSClient==='function'&&isIOSClient()){box._askCid=curConvo&&curConvo.id;box._askGen=gen}
   box.innerHTML='<div class="askHd"><span></span></div>'+((cs.length&&multi)?'<div class="askHint"></div>':'');   // 去掉左侧悬空小气泡, 卡片本身已表意(第一性原则, issue#2)
   box.querySelector('.askHd span').textContent=q;
   if(cs.length&&multi)box.querySelector('.askHint').textContent=t('askMulti');
@@ -1961,13 +2037,25 @@ function answerAsk(box,ans){if(box.classList.contains('answered'))return;
   box.classList.add('answered');   // 先占位标记: 使发送路径的 :not(.answered) 清理不会误删本框; 下方发送失败再回退
   let ok=false;try{ok=startTask(ans)!==false}catch(e){bubble('sys',String(e))}   // 作为新消息发送 → agent 携完整历史续跑(agentmain: full history in llmclient)
   if(!ok){box.classList.remove('answered');return}   // 运行中/无服务商/后端拒绝 → 未真正发出, 撤回标记, 选择框保持可答, 不误显"已回答"
-  _askKey=null;
+  markAskAnswered(box,ans)}
+function markAskAnswered(box,ans){
+  box.classList.add('answered');_askKey=null;
   box.querySelectorAll('.askOpt').forEach(o=>{o.disabled=true;if(o.querySelector('.ol').textContent===ans)o.classList.add('pick')});
   const cw=box.querySelector('.askCustom');if(cw)cw.remove();
   const d=el('div','askDone',box);d.innerHTML=ICO_CK+'<span></span>';d.querySelector('span').textContent=t('askAnswered')+'：'+ans}
 
+function syncIOSAskAnswer(j){
+  if(!(typeof isIOSClient==='function'&&isIOSClient())||!j.prompt||j.gen==null)return;
+  const cid=j.cid||j.active_convo;
+  document.querySelectorAll('.askBox:not(.answered)').forEach(box=>{
+    if(!box._askCid||String(box._askCid)!==String(cid)||box._askGen==null||j.gen<=box._askGen)return;
+    if(j.reply_to_gen===box._askGen)markAskAnswered(box,j.prompt);
+    else{box.remove();_askKey=null}
+  });
+}
+
 /* ════════════ poll / run ════════════ */
-function setStatus(t,busy){sub.textContent=t||'';sub.classList.toggle('busy',!!busy)}
+function setStatus(value,busy){sub.textContent=(typeof isIOSClient==='function'&&isIOSClient())?iosStatusText(value,lang):(value||'');sub.classList.toggle('busy',!!busy)}
 function sendEnabledState(){try{const r=GA.ready();sendReady=(r==='ok'||r==='nokey')}catch(e){sendReady=false}
   return running||sendReady}   // running 时按钮是停止键必须可点; 空闲时 native ready/nokey 后可发(无 key 由后续流程引导)
 function applySendEnabled(){btn.disabled=!sendEnabledState();btn.setAttribute('aria-disabled',btn.disabled?'true':'false');return !btn.disabled}
@@ -1977,7 +2065,7 @@ function applyRoute(r){if(!task||!task.box||!r||!r.model)return;
   const label=dispModel(r.model)||r.name||'';
   const nm=head.querySelector('.assistName');if(nm&&label&&nm.textContent!==label)nm.textContent=label;
   const g=head.querySelector('.glyph'),sig=(r.model||'')+'|'+(r.type||'');
-  if(g&&g._rsig!==sig){const tmp=document.createElement('div');tmp.innerHTML=modelGlyph(r.model,r.type);const ng=tmp.firstChild;if(ng){ng._rsig=sig;g.replaceWith(ng)}}
+  if(g&&g._rsig!==sig){const tmp=document.createElement('div');tmp.innerHTML=modelGlyph(r.model,r.type,r.name);const ng=tmp.firstChild;if(ng){ng._rsig=sig;g.replaceWith(ng)}}
   if(task.msg&&label)task.msg.model=label;
   if(task&&!task._routed){task._routed=1;GAT.emit('auto_route',{type:r.type||'',n:(foCfg&&foCfg.llm_nos&&foCfg.llm_nos.length)||0})}}
 /* ════════ 工具时间线(参观层, PLAN v3.2 §6 · 监察 #009): render() 无条件消费 tool_events ════════
@@ -2125,8 +2213,25 @@ function _twLiveTick(){   // 挂 liveTick(500ms), 不另起定时器: 钉底 .tl
       const d=r.querySelector('.twdu');if(d)d.textContent=_twDur(e,e===last)})}}catch(e){}}
 /* ════════ F4 浏览器证据链(参观层, PLAN_FRONTEND_CATCHUP v1.2 §3-F4): 只消费 P4 扩展字段(phase/url/title/action/step_i/n/screenshot_id),
    老载荷(无 phase)零动作; 截图走既有产物通道(_fileUrl/openFilePreview), 不新增任何桥/工具; 事件数据只读不回写 ════════ */
-const _BW_PH={navigating:['🧭','bwPhNav'],loaded:['🌐','bwPhLoaded'],acting:['👆','bwPhActing'],verifying:['🔍','bwPhVerify'],done:['✓','bwPhDone'],blocked:['🚧','bwPhBlocked'],error:['✗','bwPhError']};
-const _BW_FAIL={timeout:['⏱️','bwfTimeout'],crash:['💥','bwfCrash'],notfound:['🔍','bwfNotFound'],login:['🔐','bwfLogin'],paywall:['💳','bwfPaywall'],agewall:['🔞','bwfAgeWall']};
+const _BW_SVG=d=>'<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+d+'</svg>';
+const _BW_MODERN=!!(typeof window!=='undefined'&&window.GA&&GA.platform==='ios');
+const _BW_PH=_BW_MODERN?{
+  navigating:[_BW_SVG('<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>'),'bwPhNav'],
+  loaded:[_BW_SVG('<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>'),'bwPhLoaded'],
+  acting:[_BW_SVG('<path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>'),'bwPhActing'],
+  verifying:[_BW_SVG('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'),'bwPhVerify'],
+  done:[_BW_SVG('<polyline points="20 6 9 17 4 12"/>'),'bwPhDone'],
+  blocked:[_BW_SVG('<path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>'),'bwPhBlocked'],
+  error:[_BW_SVG('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'),'bwPhError']}
+ :{navigating:['🧭','bwPhNav'],loaded:['🌐','bwPhLoaded'],acting:['👆','bwPhActing'],verifying:['🔍','bwPhVerify'],done:['✓','bwPhDone'],blocked:['🚧','bwPhBlocked'],error:['✗','bwPhError']};
+const _BW_FAIL=_BW_MODERN?{
+  timeout:[_BW_SVG('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'),'bwfTimeout'],
+  crash:[_BW_SVG('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'),'bwfCrash'],
+  notfound:[_BW_SVG('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8.5" y1="8.5" x2="13.5" y2="13.5"/><line x1="13.5" y1="8.5" x2="8.5" y2="13.5"/>'),'bwfNotFound'],
+  login:[_BW_SVG('<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'),'bwfLogin'],
+  paywall:[_BW_SVG('<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>'),'bwfPaywall'],
+  agewall:[_BW_SVG('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),'bwfAgeWall']}
+ :{timeout:['⏱️','bwfTimeout'],crash:['💥','bwfCrash'],notfound:['🔍','bwfNotFound'],login:['🔐','bwfLogin'],paywall:['💳','bwfPaywall'],agewall:['🔞','bwfAgeWall']};
 function _bwIs(e){return !!(e&&typeof e==='object'&&e.phase!=null&&e.phase!=='')}
 function _bwPh(ph){const m=_BW_PH[String(ph||'').toLowerCase()];return m?{i:m[0],l:t(m[1])}:{i:'·',l:String(ph||'')}}   // 未知 phase 兜底原文, 不阻塞
 function _bwShotRel(p){p=String(p==null?'':p);const i=p.lastIndexOf('/temp/');return i<0?null:(p.slice(i+6)||null)}   // screenshot_id=既有 side-effect png 绝对路径 → temp 相对路径(产物通道契约); 无 /temp/ 段=取不到 → 降级 null
@@ -2189,39 +2294,47 @@ function toolDetail(evs,i,run){                              // D: 详情翻页(
   card.querySelectorAll('.bwhop').forEach(b=>{b.onclick=(ev)=>{ev.stopPropagation();toolDetail(evs,+b.dataset.i,run)}});                       // F4.1: 点跳行=切详情(同翻页语义)
   card.querySelectorAll('.bwshot').forEach(im=>{im.onclick=(ev)=>{ev.stopPropagation();openFilePreview(_enc(im.dataset.rel||''))}})}          // F4.2: 点缩略图=既有产物预览通道开原图
 function render(j){
+  const ios=typeof isIOSClient==='function'&&isIOSClient();
   if(_abortWaitCid!=null){   // T7: 用户已请求中止、等后端收敛的窗口
     const acid=String((j&&(j.active_convo||j.cid))||'');
     if(j&&j.running&&!j.notif_pending&&acid===String(_abortWaitCid)){try{bridgeAbort(_abortWaitCid)}catch(e){}return}   // abort 异步/可能丢包: 后端仍报该会话在跑 → 补刀一次并整拍短路, 绝不让"发现后台任务"分支(下方)复活它/重复补插 user 气泡
     if(!j||!j.running||acid!==String(_abortWaitCid))_abortWaitCid=null;   // 后端已停 / 焦点已切到别会话 → 解除等待, 放行正常渲染
   }
   // P3c 串台三防护之一: multi 时 payload.cid 必须对上焦点/活体 box(notif_pending 先允许进分支以切到专属会话)
-  if(multi&&j&&j.cid!=null&&!j.notif_pending){
+  if((multi||ios)&&j&&j.cid!=null&&!j.notif_pending){
     const expect=(curConvo&&curConvo.id)||(runConvo&&runConvo.id)||activeCid;
     if(expect&&String(j.cid)!==String(expect))return;
     if(task&&task.box&&task.box._cid&&String(j.cid)!==String(task.box._cid))return;
     if(task&&task._cid&&String(j.cid)!==String(task._cid))return;
   }
+  const renderCid=ios?(j.cid||j.active_convo):j.active_convo;
+  const sameIOSTask=ios&&task&&task._gen!=null&&String(renderCid)===String(task._cid);
+  if(sameIOSTask&&j.gen<task._gen)return;
+  const iosNewTurn=sameIOSTask&&j.gen>task._gen;
+  syncIOSAskAnswer(j);
   try{renderTools(j)}catch(e){}   // 工具条: 无条件消费(含空闲 poll 的终态), 失败静默不拖渲染主链
   try{citeCollect(j)}catch(e){}   // D2 §3.2.1: 引用增量累积(独立 try/catch, 不改 renderTools 本体; 归属判据在函数内)
-  // 通知/闹钟触发: 后台命中时自动切换到专属会话(首次自动创建)
+  // 通知/闹钟只登记会话，不选择前台页面。
   if(j.notif_pending){const cid=j.notif_pending.cid,app=j.notif_pending.app||'';let c=convos.find(x=>x.id===cid);
     if(!c){c={id:cid,title:(app==='闹钟'?'⏰ ':'['+t('notif')+'] ')+app+(j.prompt?(' · '+(j.prompt||'').slice(0,40)):''),ts:Date.now(),msgs:[]};convos.push(c);saveConvos()}
-    // P3d: multi 且焦点已在别会话 → 只登记 runs/徽标, 不强制劫持 UI; legacy 仍自动切
-    const focusElse=multi&&curConvo&&String(curConvo.id)!==String(cid);
+    // 空白页也是用户选择；后台任务不能抢焦点。
+    const focusElse=!curConvo||String(curConvo.id)!==String(cid);
     if(focusElse){if(j.running){const rr=ensureRun(cid);rr.running=true;running=anyRunning();try{renderDrawer()}catch(e){}}
       else try{renderDrawer()}catch(e){}}
     else if(j.running){curConvo=c;runConvo=c;startNew=false;renderConvo(c);setHeaderTitle();closeSheets();renderDrawer()}  // 后台已在跑: 勿 /convo(会 busy), 只绑 UI
     else if(switchConvo(c)){curConvo=c;startNew=false;renderConvo(c);restoreAsk(c);setHeaderTitle();closeSheets();renderDrawer()}}
-  // 空闲 UI 发现后台 call_once/notif 已 running: multi 焦点别处 → 只徽标不劫持; 否则接成前台任务视图
-  if(j.running&&!running&&j.active_convo){let c=convos.find(x=>x.id===j.active_convo);
-    if(!c){c={id:j.active_convo,title:(j.prompt||t('newChat')).slice(0,60),ts:Date.now(),msgs:[]};convos.push(c);saveConvos()}
-    const focusElse=multi&&curConvo&&String(curConvo.id)!==String(j.active_convo);
-    if(focusElse){const rr=ensureRun(j.active_convo);rr.running=true;running=anyRunning();try{renderDrawer()}catch(e){}}
+  // 空闲 UI 发现后台 call_once/notif 已 running: 焦点别处 → 只徽标不劫持; 否则接成前台任务视图
+  if(iosNewTurn&&!task.done)finish();
+  if((j.running&&!running||iosNewTurn)&&renderCid){let c=convos.find(x=>x.id===renderCid);
+    if(!c){c={id:renderCid,title:(j.prompt||t('newChat')).slice(0,60),ts:Date.now(),msgs:[]};convos.push(c);saveConvos()}
+    const focusElse=!curConvo||String(curConvo.id)!==String(renderCid);
+    if(focusElse){const rr=ensureRun(renderCid);rr.running=true;running=anyRunning();try{renderDrawer()}catch(e){}}
     else{curConvo=c;runConvo=c;startNew=false;
     const ms=c.msgs||(c.msgs=[]);
     if(!(ms.length&&ms[ms.length-1].role==='user'&&ms[ms.length-1].text===j.prompt)&&j.prompt){const um={role:'user',text:j.prompt,ts:Date.now()};ms.push(um);if(curConvo===c)userBubble(j.prompt,null,um.ts,um)}
     newTask(j.prompt);task.snap=_filesSnap();(j.steps||[]).forEach(setStep);setRunning(true, c&&c.id);setStatus(j.status||'',true);renderDrawer();setHeaderTitle();pinReplyTop(task.box)}}
-  const ownRun=!(running&&runConvo&&j.active_convo&&j.active_convo!==runConvo.id);
+  if(!curConvo||(renderCid&&String(renderCid)!==String(curConvo.id)))return;   // 详情只更新当前页面
+  const ownRun=!(running&&runConvo&&renderCid&&renderCid!==runConvo.id);
   if(ownRun&&!replaying&&j.running&&task&&task.done&&!task._fail&&(!j.cid||!task._cid||String(j.cid)===String(task._cid))){   // 自愈: 后端明说本会话在跑而 task 被误标 done(过期/错位拍误 finish)→ 复活, 否则 startLive 的 done 守卫把 spin/计时永久杀死而步骤照常渲染
     task.done=false;if(task.state){task.state.innerHTML='';task.state.classList.add('run')}
     runConvo=convos.find(x=>x.id===task._cid)||runConvo||curConvo;
@@ -2241,11 +2354,15 @@ function render(j){
   if(ownRun&&typeof j.cache_write==='number')runStats.cacheWrite=j.cache_write;
   if(ownRun&&j.cmd_error){bubble('sys',j.cmd_error);stopRunClean()}  // 切模型失败: 提示 + 干净中止复位(stopRunClean 单一真相源; 否则按钮卡停止态、"切个模型啥都没反应")
   if(!j.running&&running&&(!j.cid||!(task&&task._cid)||String(j.cid)===String(task._cid))){const wasLive=curConvo===runConvo,rc=runConvo;   // 收尾前先记归属(setRunning 会清 runConvo): 预览态下瞬时 DOM 只进运行会话视图(T6); cid 归属守卫: 别会话的 running:false 拍(legacy 后台通知/闹钟切走后端焦点)不得误 finish 本任务
-    if(task&&!task.done){if(ownRun&&j.end==='error'){task._fail=1;task._err=1}if(ownRun&&!task.steps.length&&j.final){setStep({n:1,summary:(j.final||'').slice(0,80),text:j.final});task._fail=1;GAT.emit('task_error',{cat:GAT.errCat(j.final),msg:GAT.errMsg(j.final),hasKey:GAT.hasKey()})}finish();GAT.emit('task_done',{ok:task.steps.length>0,steps:task.steps.length,secs:task.t0?Math.round((Date.now()-task.t0)/1000):-1})}  // 无步骤但有 final(常是报错): 显示出来, 不再"回复为空"; secs=任务时长(webui 口径, 与 agent_task_end.secs 互证)
-    setRunning(false, rc&&rc.id);setStatus(modelLabel(),false);
-    if(ownRun&&j.ask&&(j.ask.question||(j.ask.candidates&&j.ask.candidates.length))){if(wasLive)renderAskPicker(j.ask);else pendingAsk={cid:rc&&rc.id,ask:j.ask};if(!replaying&&!window._gaAnswering)onNeedInput(rc)}   // ask_user 退出 → 选择框(预览中不画进别会话, 存 pendingAsk 兜底——后端 ask 会被后续 /convo 切换清掉) + "需操作"提醒(issue#5)
-    else if(!replaying)onTaskDone(wasLive,rc,j.end)}                                                                                    // 真完成 → 完成提示音 + 普通通知(issue#5)
-  else if(!running)setStatus(j.status,j.running);   // 运行态由 liveTick 接管 header(gerund+计时); 仅非运行态用 poll 状态
+    if(task&&!task.done){const failed=ios&&ownRun&&iosFinalFailed(j.final);
+      if(ownRun&&j.end==='error'){task._fail=1;task._err=1}
+      if(ownRun&&!task.steps.length&&j.final){setStep({n:1,summary:(j.final||'').slice(0,80),text:j.final});task._fail=1;GAT.emit('task_error',{cat:GAT.errCat(j.final),msg:GAT.errMsg(j.final),hasKey:GAT.hasKey()})}
+      if(failed)task._fail=2;
+      finish();GAT.emit('task_done',{ok:task.steps.length>0&&!(ios&&task._fail),steps:task.steps.length,secs:task.t0?Math.round((Date.now()-task.t0)/1000):-1})}
+    setRunning(false, rc&&rc.id);setStatus(ios?iosPollStatus({...j,status:modelLabel()},task&&task._fail):modelLabel(),false);
+    if(ownRun&&j.ask&&(j.ask.question||(j.ask.candidates&&j.ask.candidates.length))){if(wasLive)renderAskPicker(j.ask,j.gen);else pendingAsk={cid:rc&&rc.id,ask:j.ask,gen:j.gen};if(!replaying&&!window._gaAnswering)onNeedInput(rc)}   // ask_user 退出 → 选择框(预览中不画进别会话, 存 pendingAsk 兜底——后端 ask 会被后续 /convo 切换清掉) + "需操作"提醒(issue#5)
+    else if(!replaying&&!(ios&&task&&task._fail))onTaskDone(wasLive,rc,j.end)}                                                                                    // 真完成 → 完成提示音 + 普通通知(issue#5)
+  else if(!running)setStatus(ios?iosPollStatus(j,task&&task.done&&(!j.active_convo||String(j.active_convo)===String(task._cid))?task._fail:0):j.status,j.running);   // 运行态由 liveTick 接管 header(gerund+计时); 仅非运行态用 poll 状态
   if(!running||curConvo===runConvo)scroll()}   // 预览别会话时不钉底: 700ms poll 每 tick 都会走到这, 贴底带内(stick=true)的慢滑用户会被循环拽回(与 gaOnResume 同门控)
 function setRunning(r, cid){   // P3b: multi 时第二参=目标 cid; 全局 running=anyRunning(); 按钮跟焦点
   if(multi){const id=cid||(curConvo&&curConvo.id)||(runConvo&&runConvo.id)||activeCid;
@@ -2264,7 +2381,13 @@ function setRunning(r, cid){   // P3b: multi 时第二参=目标 cid; 全局 run
   if(r)startLive();else stopLive();
   if(r&&!timer)timer=setInterval(poll,700);if(!r&&timer){clearInterval(timer);timer=null}
   applySendEnabled();updateScrollNav()}   // 运行起止内容高度变化→刷新滚动导航显隐
+function pollTask(cid,since){
+  let j=parseBridge(bridgePoll(cid,since));
+  if((typeof isIOSClient==='function'&&isIOSClient())&&since>0&&task&&task._gen!=null&&j&&j.gen>task._gen)j=parseBridge(bridgePoll(cid,0));
+  return j;
+}
 function poll(){
+  if(typeof refreshIOSDeviceStatus==='function')refreshIOSDeviceStatus(false);
   // P3c: multi → pollAll 摘要刷新 runs + 仅 curConvo pollC 详情; legacy → GA.poll
   if(multi){
     try{
@@ -2280,8 +2403,9 @@ function poll(){
           if(was!==rr.running)badgeDirty=true;
           if(was&&!rr.running&&(!curConvo||String(curConvo.id)!==id)){   // P3d: 后台结束 → toast 不切焦点; 清该 run task
             rr.task=null;
-            try{const cc=convos.find(x=>String(x.id)===id);toast(t('t_bgDone')+(cc?(' · '+(cc.name||cc.title||id).slice(0,24)):''))}catch(e){}
-            try{playDone()}catch(e){}
+            const ios=typeof isIOSClient==='function'&&isIOSClient(),failed=ios&&iosFinalFailed(s.final);
+            try{const cc=convos.find(x=>String(x.id)===id);toast(t(failed?'iosTaskFailed':'t_bgDone')+(cc?(' · '+(ios?convoTitle(cc):(cc.name||cc.title||id)).slice(0,24)):''))}catch(e){}
+            if(!failed)try{playDone()}catch(e){}
           }
         }
         running=anyRunning();
@@ -2294,14 +2418,13 @@ function poll(){
         if(badgeDirty)try{renderDrawer()}catch(e){}   // P3d: 徽标状态变 → 刷抽屉
       }
     }catch(e){}
-    const cid=(curConvo&&curConvo.id)||activeCid;if(!cid)return;
+    const cid=curConvo&&curConvo.id;if(!cid)return;
     const rr=ensureRun(cid);
     // 焦点 run 的私有 task 优先(N 活体 box); 否则用全局 task(本会话)
     if(rr.task&&(!task||(task._cid&&String(task._cid)!==String(cid)))){task=rr.task;runConvo=convos.find(x=>x.id===cid)||runConvo}
     else if(task&&curConvo&&String(curConvo.id)===String(cid)&&!rr.task){rr.task=task;if(task.box&&!task.box._cid)task.box._cid=cid;task._cid=cid}
     const since=task&&String((task._cid||(task.box&&task.box._cid)||cid))===String(cid)?Math.max(0,task.steps.length-1):(rr.sinceCursor||0);
-    const raw=bridgePoll(cid, since);if(!raw)return;
-    const j=parseBridge(raw);if(!j)return;
+    const j=pollTask(cid,since);if(!j)return;
     if(j.error)return;   // poll2 未知 cid
     if(j.cid!=null&&String(j.cid)!==String(cid))return;   // 串台防护: 回显 cid 不符即丢
     if(task&&task.box&&task.box._cid&&j.cid!=null&&String(j.cid)!==String(task.box._cid))return;
@@ -2311,13 +2434,13 @@ function poll(){
     running=anyRunning();
     return;
   }
-  const since=task?Math.max(0,task.steps.length-1):0;const raw=GA.poll(since);if(!raw)return;render(JSON.parse(raw))
+  const since=task?Math.max(0,task.steps.length-1):0;const j=pollTask(null,since);if(j)render(j)
 }
 // 空闲也低频 poll: 消费 notif_pending / 发现后台 call_once(否则只有用户发消息才轮询, 闹钟会话永远不进抽屉 UI)
 if(!window._gaIdlePoll)window._gaIdlePoll=setInterval(()=>{if(!timer)try{poll()}catch(e){}},2000);
 let pendingAtts=[];
 /* 重试/编辑: 截断该轮(含其后所有轮)+ /rollback 真正从 LLM 上下文剔除, 而非把新输入 append 到旧上下文(issue#1) */
-function retryTask(taskObj){if(replaying||!taskObj)return;if(anyRunning()){toast(t('t_taskBusy'));return}const prompt=taskObj.prompt,m=taskObj.msg;   // P3d: anyRunning 冻结截断+回滚
+function retryTask(taskObj){if(replaying||!taskObj)return;if(anyRunning()){toast(t('t_taskBusy'));return}if((typeof isIOSClient==='function'&&isIOSClient())&&!iosEnsureDataConsent(()=>retryTask(taskObj)))return;const prompt=taskObj.prompt,m=taskObj.msg;   // P3d: anyRunning 冻结截断+回滚
   try{GAT.emit('chat_action',{act:'regen'})}catch(e){}   // 头条功能(v2.6.x)埋点: 重新执行(从 assistant 气泡, 截断本轮+回滚上下文后原样重发)
   if(curConvo&&m){const idx=curConvo.msgs.indexOf(m);
     if(idx>=0){let start=idx;if(start>0&&curConvo.msgs[start-1].role==='user')start--;   // 连同对应 user 轮一起截断
@@ -2340,7 +2463,7 @@ function editMsg(m){if(replaying)return;if(anyRunning()){toast(t('t_taskBusy'));
       inp.value=text;inp.dispatchEvent(new Event('input'));inp.focus();scroll(1);toast(t('t_edited'));return}}
   if(m&&m.text!=null){pendingAtts=(m.atts||[]).slice();renderAttachRow();inp.value=m.text;inp.dispatchEvent(new Event('input'));inp.focus()}}   // 兜底: 填输入框并恢复附件
 /* 用户气泡「重试」: 与 editMsg 同样截断该轮+回滚, 但不进输入框, 直接把原输入重新发送(issue#4) */
-function retryUserMsg(m){if(replaying||!m||m.text==null)return;if(anyRunning()){toast(t('t_taskBusy'));return}const text=m.text;   // P3d
+function retryUserMsg(m){if(replaying||!m||m.text==null)return;if(anyRunning()){toast(t('t_taskBusy'));return}if((typeof isIOSClient==='function'&&isIOSClient())&&!iosEnsureDataConsent(()=>retryUserMsg(m)))return;const text=m.text;   // P3d
   try{GAT.emit('chat_action',{act:'retry'})}catch(e){}   // 头条功能(v2.6.x)埋点: 用户气泡「重试」(截断该轮+回滚, 不进输入框直接原样重发)
   if(curConvo){const idx=curConvo.msgs.indexOf(m);
     if(idx>=0){const removed=curConvo.msgs.slice(idx).filter(x=>x.role==='user').length;   // 回滚 n=被删用户轮数
@@ -2351,6 +2474,8 @@ function retryUserMsg(m){if(replaying||!m||m.text==null)return;if(anyRunning()){
   pendingAtts=(m.atts||[]).slice();renderAttachRow();   // 重试同样保留该轮附件(issue#3)
   toast(t('t_retried'));startTask(text)}
 function startTask(text,override){   // override!=null: 隐藏 payload(气泡/存储只留 text 简短标签, 实际发 override) — 复用于演化融合等"显示≠payload"场景
+  globalThis.GAVoice?.stop();
+  if((typeof isIOSClient==='function'&&isIOSClient())&&!iosEnsureDataConsent(()=>startTask(text,override)))return false;
   if(multi){const _id=(curConvo&&curConvo.id)||activeCid;if(_id&&runs.get(_id)&&runs.get(_id).running){toast(t('t_taskBusy'));return false}}   // multi: 仅拦「本会话已在飞」; 允许其它 cid 并行
   else if(running){toast(t('t_taskBusy'));return false}   // legacy 单任务不变量收口
   if(override==null&&typeof text==='string'){const lm=text.trim().match(/^\/lang\b\s*(\S*)/i);if(lm){setLang(/^en/i.test(lm[1])?'en':'zh');return false}}   // /lang=纯控制命令(切语言): 所有提交路径(发送/编辑重发/重试)的唯一咽喉, 在此拦截→不入会话存储/气泡/模型上下文/model_responses; 与设置语言开关同走 setLang(单一真相源)。trim 与 _stripLangMsgs 谓词一致
@@ -2378,7 +2503,7 @@ function startTask(text,override){   // override!=null: 隐藏 payload(气泡/�
 function submit(){if(window.GAVoice)GAVoice.stop();   // 发送/中止前先关麦克风: 录音态点发送不该让语音继续开着
   const v=inp.value.trim();if(multi?focusRunning():running){try{const _st=(task&&task.steps)?task.steps.length:0;   // 中止上下文
     GAT.emit('task_aborted',{steps:_st,elapsed_s:task&&task.t0?Math.round((Date.now()-task.t0)/1000):-1,had_output:_st>0||!!(task&&task.msg&&task.msg.final)})}catch(e){};stopRunClean();toast(t('t_stopped'));return}   // multi: 只停焦点; legacy: 全停
-  if(!v&&!pendingAtts.length)return;inp.value='';inp.style.height='auto';startTask(v)}   // /lang 命令在 startTask 唯一咽喉处拦截
+  if(!v&&!pendingAtts.length)return;if((typeof isIOSClient==='function'&&isIOSClient())&&!iosEnsureDataConsent(submit))return;inp.value='';inp.style.height='auto';startTask(v)}   // /lang 命令在 startTask 唯一咽喉处拦截
 btn.onclick=submit;
 inp.addEventListener('input',()=>{inp.style.height='auto';inp.style.height=Math.max(26,Math.min(inp.scrollHeight,140))+'px';applySendEnabled()});
 
@@ -2421,7 +2546,7 @@ function isAuto(){return !!(active&&active.pid==='__auto__'&&providers.length)} 
 function autoLabel(){return t('autoFailover')}
 function modelLabel(){if(!cfgLoaded)return cfgUnconfigured?t('notCfgTap'):(cfgFailed||(_bootT0&&Date.now()-_bootT0>15000))?t('cfgFailShort'):t('booting');if(isAuto())return autoLabel();const p=curProvider();if(!p)return providers.length?t('selectModel'):t('notConfigured');return dispModel((active&&active.model)||p.model)||t('selectModel')}
 function refreshModelUI(){$('modelChipName').textContent=modelLabel();
-  const p=isAuto()?null:curProvider();$('modelChipIcon').innerHTML=isAuto()?AUTO_GLYPH:(p?modelGlyph((active&&active.model)||p.model||'',p.type):'');
+  const p=isAuto()?null:curProvider();$('modelChipIcon').innerHTML=isAuto()?AUTO_GLYPH:(p?modelGlyph((active&&active.model)||p.model||'',p.type,p.name):'');
   $('effChipName').textContent=effName(curEff);
   $('effChip').classList.toggle('on',!!curEff);
   if(!running)setStatus(modelLabel(),false);setHeaderTitle()}
@@ -2430,18 +2555,25 @@ function ensureActiveEnabled(){if(isAuto())return;const a=active&&providers.find
 function testConnection(){const tb=$('setvTest');if(tb.classList.contains('spin'))return;   // 健康检查: 异步跑一次 /models
   const cfg={name:$('pvName').value.trim(),apikey:$('pvKey').value.trim(),apibase:$('pvBase').value.trim(),proxy:$('pvProxy').value.trim()||undefined,type:provType};
   if(!cfg.apikey||!cfg.apibase){toast(t('t_fillKeyBaseFirst'));return}
-  tb.classList.add('spin');toast(t('testing'));
-  asyncModels(cfg,res=>{tb.classList.remove('spin');
+  const ios=typeof isIOSClient==='function'&&isIOSClient(),target=editing;
+  tb.classList.add('spin');
+  if(ios)iosConnectionState('testing');else toast(t('testing'));
+  asyncModels(cfg,res=>{
+    if(ios&&editing!==target)return;
+    tb.classList.remove('spin');
+    if(ios&&!res.ok&&res.error===t('cancel')){iosConnectionState('idle');return}
     GAT.emit('key_test',{ok:!!res.ok,cat:res.ok?null:GAT.errCat(res.error),msg:res.ok?null:GAT.errMsg(res.error),type:cfg.type,where:'editor'}); // key 验证结果(脱敏)
-    toast(res.ok?(t('t_connOk')+(res.models?res.models.length:0)):(t('t_connFail')+(res.error||'?')))})}
+    if(!ios){toast(res.ok?(t('t_connOk')+(res.models?res.models.length:0)):(t('t_connFail')+(res.error||'?')));return}
+    iosConnectionState(res.ok?'ok':'failed');
+    const why=res.ok?'':iosConnectionReason(res.error);if(why)toast(why,IOS_CONNECTION_HOLD.failed)})}
 let _sheets=[];   // 打开顺序, 栈顶=最上层 sheet
 function _sheetZ(){_sheets.forEach((x,i)=>{$(x).style.zIndex=i?String(71+i):''})}   // 视觉层序=栈序(同 z 时 DOM 顺序不可靠)
-function openSheet(id){_sheets=_sheets.filter(x=>x!==id).concat(id);_sheetZ();$('sheetMask').classList.add('on');$(id).classList.add('on')}
-function closeSheets(){_sheets.forEach(x=>{$(x).style.zIndex=''});_sheets=[];$('sheetMask').classList.remove('on');document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('on'))}
-function closeTopSheet(){const id=_sheets.pop();if(id){$(id).classList.remove('on');$(id).style.zIndex=''}if(!_sheets.length)closeSheets()}   // 返回/遮罩/foBack: 只退一层
+function openSheet(id){_sheets=_sheets.filter(x=>x!==id).concat(id);_sheetZ();$('sheetMask').classList.add('on');if(typeof isIOSClient==='function'&&isIOSClient())iosPresentView($(id),true);else $(id).classList.add('on')}
+function closeSheets(){_sheets.forEach(x=>{$(x).style.zIndex=''});_sheets=[];$('sheetMask').classList.remove('on');document.querySelectorAll('.sheet').forEach(s=>{if(typeof isIOSClient==='function'&&isIOSClient())iosPresentView(s,false);else s.classList.remove('on')})}
+function closeTopSheet(){const id=_sheets.pop();if(id){if(typeof isIOSClient==='function'&&isIOSClient())iosPresentView($(id),false);else $(id).classList.remove('on');$(id).style.zIndex=''}if(!_sheets.length)closeSheets()}   // 返回/遮罩/foBack: 只退一层
 
 let deviceState={current:null,devices:[]};
-function deviceName(d){return (d&&(d.displayName||d.hostname||d.deviceId))||'未命名设备'}
+function deviceName(d){return (d&&(d.displayName||d.hostname||((typeof isIOSClient==='function'&&isIOSClient())?'':d.deviceId)))||'未命名设备'}
 function refreshDeviceChip(){const chip=$('deviceChip');if(!chip)return;chip.classList.toggle('on',!!deviceState.current);chip.setAttribute('aria-label',deviceState.current?deviceName(deviceState.current):'选择电脑');chip.title=chip.getAttribute('aria-label')}
 function deviceConvoId(){return curConvo&&curConvo.id||''}
 function readDeviceState(loud){const cid=deviceConvoId();try{const raw=GA.send('/pc status'+(cid?' '+cid:'')),value=JSON.parse(raw||'{}');if(value&&value.ok){deviceState={current:cid?(value.current||null):null,devices:Array.isArray(value.devices)?value.devices:[]};refreshDeviceChip();return true}if(value&&value.need_login){deviceState={current:null,devices:[]};refreshDeviceChip();if(loud)toast(lang==='en'?'Sign in to link a computer':'登录后才能连接电脑');return false}if(loud)toast(value&&value.error||'无法读取设备')}catch(e){if(loud)toast('无法读取设备')}return false}  // 后台刷新(启动/切会话)静默; 仅用户主动打开设备面板才提示, 访客模式不再反复弹 GAuth 错误
@@ -2512,7 +2644,7 @@ function renderModels(){const wrap=$('modelList'),q=($('modelSearch').value||'')
       o.onclick=()=>selectAuto(opt);
     }else{const r=e;const sel=active&&active.pid===r.p.id&&active.model===r.m;
       const o=el('div','opt'+(sel?' sel':''),wrap);
-      o.innerHTML=modelGlyph(r.m,r.p.type)+`<div class="mid"><div class="nm"></div><div class="sub"></div></div>`+
+      o.innerHTML=modelGlyph(r.m,r.p.type,r.p.name)+`<div class="mid"><div class="nm"></div><div class="sub"></div></div>`+
         `<button class="fav${favs.includes(r.key)?' on':''}" aria-label="${t('fav')}">${ICO_HEART}</button><span class="ck">${ICO_CK}</span>`;
       o.querySelector('.nm').textContent=dispModel(r.m);m1mBadge(o.querySelector('.nm'),r.m);
       o.querySelector('.sub').textContent=provName(r.p)+' · '+(r.p.type==='claude'?'Anthropic':'OpenAI');
@@ -2550,50 +2682,55 @@ function openFailoverSheet(){if(runLocked())return;   // 运行中冻结故障�
   if(!en.length){toast(t('failoverNoProvider'));return}                // 无可用服务商: 引导先去配置
   const cur=curProvider();const ord=cur&&en.includes(cur)?[cur,...en.filter(p=>p.id!==cur.id)]:en;
   foChain=ord.map(p=>({id:p.id,name:p.name,model:(p.model||p.models[0]),type:p.type,label:provName(p),on:true}));
-  const savedNos=foNos(foCfg);
-  if(savedNos.length){                                               // 套用已存顺序/启用集
+  const savedNos=foNos(foCfg),ios=typeof isIOSClient==='function'&&isIOSClient();
+  if(savedNos.length||(ios&&foCfg&&(Array.isArray(foCfg.llm_nos)||Array.isArray(foCfg.members)))){
     foChain.sort((a,b)=>{const ia=savedNos.indexOf(a.name),ib=savedNos.indexOf(b.name);return (ia<0?99:ia)-(ib<0?99:ib)});
     foChain.forEach(it=>{if(!savedNos.includes(it.name))it.on=false})}
   $('foRetries').value=(foCfg&&foCfg.max_retries)||10;
   $('foDelay').value=(foCfg&&foCfg.base_delay!=null)?foCfg.base_delay:0.5;
   foEnabled=!!(foCfg&&foCfg.enabled)&&foChain.filter(it=>it.on).length>=1;   // 总开关初值: 取持久化的启用态(而非仅当前是否在 Auto), 这样冷开设置页也能正确回显
+  if(ios)$('failoverSheet').classList.remove('iosFoEditing');
   renderFoChain();openSheet('failoverSheet')}
 let foDragI=null;                                                     // 正在拖拽的行索引(拖拽中高亮)
 function renderFoEnabled(){const sw=$('foEnabledSw');if(!sw)return;   // 渲染总开关状态: 始终可点(开启时自动全开模型, 空链由 foPersist 兜底回弹)
   sw.classList.toggle('on',foEnabled);sw.setAttribute('aria-checked',foEnabled?'true':'false');
-  const ch=$('foChain');if(ch)ch.classList.toggle('foDimmed',!foEnabled)}
+  const ch=$('foChain');if(ch)ch.classList.toggle('foDimmed',!foEnabled);
+  if(typeof isIOSClient==='function'&&isIOSClient())iosUpdateFailover()}
 function renderFoChain(){const w=$('foChain');w.innerHTML='';renderFoEnabled();
   if(foChain.length<1){w.innerHTML='<div class="dwEmpty" style="padding:22px 16px">'+t('failoverNeed1')+'</div>';return}
   foChain.forEach((it,i)=>{const r=el('div','foRow'+(it.on?'':' off')+(foDragI===i?' foDrag':''),w);
     r.innerHTML=`<button class="foGrip" aria-label="${t('dragSort')}">${ICO_GRIP}</button>`+
-      modelGlyph(it.model,it.type)+'<div class="mid"><div class="nm"></div><div class="sub"></div></div>'+
+      modelGlyph(it.model,it.type,it.name)+'<div class="mid"><div class="nm"></div><div class="sub"></div></div>'+
       `<button class="sw${it.on?' on':''}" role="switch" aria-checked="${it.on}" aria-label="${t('enable')}"></button>`;
     r.querySelector('.nm').textContent=dispModel(it.model);m1mBadge(r.querySelector('.nm'),it.model);
     r.querySelector('.sub').textContent=(it.label||it.name)+' · '+(it.type==='claude'?'Anthropic':'OpenAI');
     r.querySelector('.foGrip').addEventListener('pointerdown',e=>foDragStart(e,i));
-    r.querySelector('.sw').onclick=()=>{it.on=!it.on;renderFoChain();foPersist()}})}   // 即时保存
+    r.querySelector('.sw').onclick=()=>{if(runLocked())return;it.on=!it.on;renderFoChain();foPersist()}});
+  if(typeof isIOSClient==='function'&&isIOSClient())iosDecorateFailoverRows()}   // 即时保存
 function foDragStart(e,from){                                          // 跟手拖拽重排: 被拖行随手指位移, 相邻行让位
+  if(runLocked())return;
   e.preventDefault();
   const w=$('foChain'),rows=[...w.children],n=rows.length;
   const drag=rows[from],rects=rows.map(r=>r.getBoundingClientRect());
-  const h=rects[from].height,step=n>1?rects[1].top-rects[0].top:h,startY=e.clientY;
+  const h=rects[from].height,startY=e.clientY;
   const vib=m=>{try{navigator.vibrate&&navigator.vibrate(m)}catch(e){}};vib(12);  // 抓起触感
   let to=from;drag.classList.add('foDrag');
   const move=ev=>{const dy=ev.clientY-startY;
     drag.style.transform='translateY('+dy+'px)';                       // 被拖行紧跟手指
-    const center=rects[from].top+h/2+dy;let nt=0;
-    for(let j=0;j<n;j++){if(center>rects[0].top+step*j+h/2)nt=j}
-    nt=Math.max(0,Math.min(n-1,nt));
+    const center=rects[from].top+h/2+dy;let nt=from;
+    if(dy>0){for(let j=from+1;j<n;j++)if(center>rects[j].top+rects[j].height/2)nt=j}
+    else{for(let j=from-1;j>=0;j--)if(center<rects[j].top+rects[j].height/2)nt=j}
     if(nt!==to){to=nt;vib(8);rows.forEach((r,j)=>{if(r===drag)return;    // 越位轻震 + 其余行平滑让出空位
-      const s=(from<to&&j>from&&j<=to)?-step:(from>to&&j>=to&&j<from)?step:0;
+      const s=(from<to&&j>from&&j<=to)?-h:(from>to&&j>=to&&j<from)?h:0;
       r.style.transition='transform .18s';r.style.transform=s?'translateY('+s+'px)':''})}};
-  const up=()=>{document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',up);document.removeEventListener('pointercancel',up);
-    if(to!==from){vib(10);const[it]=foChain.splice(from,1);foChain.splice(to,0,it);renderFoChain();foPersist()}else renderFoChain()};
+  const up=ev=>{document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',up);document.removeEventListener('pointercancel',up);
+    if(to!==from&&ev.type!=='pointercancel'){vib(10);const[it]=foChain.splice(from,1);foChain.splice(to,0,it);renderFoChain();foPersist()}else renderFoChain()};
   document.addEventListener('pointermove',move);document.addEventListener('pointerup',up);document.addEventListener('pointercancel',up)}
 function foPersist(){const names=foChain.filter(it=>it.on).map(it=>it.name);   // 即时落盘: 写 mykey.py mixin 块
   if(!names.length)foEnabled=false;                                  // 0 个启用项才关闭总开关(允许单模型故障转移)
   const retries=Math.max(1,parseInt($('foRetries').value,10)||10);
-  const delay=Math.max(0,parseFloat($('foDelay').value)||0.5);
+  const parsedDelay=parseFloat($('foDelay').value);
+  const delay=Math.max(0,Number.isFinite(parsedDelay)?parsedDelay:0.5);
   foCfg={name:'auto',enabled:foEnabled,llm_nos:names,max_retries:retries,base_delay:delay,spring_back:300};
   LS.set('foCfg',foCfg);
   GAT.emit('failover_set',{enabled:foEnabled,chain:names.length,retries,delay});
@@ -2614,7 +2751,8 @@ function foDisableNative(){
   GA.send('/provider.delete '+JSON.stringify({name:'auto'}));         // 从 mykey.py 删除 auto mixin
 }
 function toggleFailover(){
-  if(!foEnabled)foChain.forEach(it=>it.on=true);                     // 开启: 默认全开(避免空链; 0 项由 foPersist 兜底关回)
+  if(runLocked())return;
+  if(!foEnabled&&(!(typeof isIOSClient==='function'&&isIOSClient())||!foChain.some(it=>it.on)))foChain.forEach(it=>it.on=true);
   foEnabled=!foEnabled;foPersist()}
 let foPersistTimer=null;
 function foPersistDebounced(){clearTimeout(foPersistTimer);foPersistTimer=setTimeout(foPersist,500)}   // 输入框防抖
@@ -2667,8 +2805,10 @@ function onAvatarPicked(e){cropImageFile(e.target.files&&e.target.files[0])}   /
 function refreshAvatarRow(){const inner=userAvatarInner();
   const v=$('avatarVal');if(v)v.innerHTML=inner;                  // 旧设置行(已移除)兼容: 存在才写
   const dv=$('dwAvatar');if(dv)dv.innerHTML=inner;                // 抽屉头像
+  const pv=$('pcDwAvatar');if(pv)pv.innerHTML=inner;              // pclink 侧栏底部用户条克隆(iOS sideHost 建)
   const up=$('userPageAvatar');if(up)up.innerHTML=inner;          // 账户页顶部大头像随改动即时刷新
-  const dn=$('dwUserName');if(dn)dn.textContent=userDisplayName()}
+  const dn=$('dwUserName');if(dn)dn.textContent=userDisplayName();
+  const pn=$('pcDwUserName');if(pn)pn.textContent=userDisplayName()}
 /* 头像单一真相源(issue#1 v2.4): 写本地(userAv+LS, 失败回滚)→刷新展示→可选 PUT 远程库同步。
    token 形态: 'person'(默认)|emoji|'img:'+dataURL|'file:'(旧兼容)。后端 avatar 列存裸图(dataURL/URL)或 token, _normAvatarToken 归一。 */
 function _avatarBackendRep(token){return token.indexOf('img:')===0?token.slice(4):token}   // 图片存裸 dataURL(兼容历史注册写入); 预设/emoji 存 token 原样
@@ -2771,7 +2911,10 @@ function _settingsBlock(id,render){
   catch(err){failed(err)}
 }
 function _setShow(panel,title){
-  SET_PANELS.forEach(id=>{const e=$(id);if(e)e.style.display=(id===panel)?'block':'none'});
+  const direction=arguments.length>2?arguments[2]:1,ios=typeof isIOSClient==='function'&&isIOSClient();
+  const view=$('setv');let leaving=null;
+  if(ios)leaving=iosSettingsWillShow(view,panel,direction);
+  SET_PANELS.forEach(id=>{const e=$(id);if(e){e.style.display=(id===panel)?'block':'none';if(ios){e.inert=id!==panel;e.setAttribute('aria-hidden',String(id!==panel))}}});
   $('setvTitle').textContent=title||'';
   const isEdit=panel==='provEditPanel';
   $('provSaveBar').style.display=isEdit?'flex':'none';$('setvTest').style.display=isEdit?'flex':'none';
@@ -2787,6 +2930,7 @@ function _setShow(panel,title){
   else if(panel==='statsPanel')return renderStats();
   else if(panel==='a11yPersistPanel')return renderA11yPersistPage();
   });
+  if(ios)iosSettingsDidShow(view,panel,leaving,direction);
 }
 const _setBody=()=>$('setv').querySelector('.setbody');   // 各子页共用的滚动盒: 进子页回顶, 返回还原父页位置
 let _setAnim=null;
@@ -2797,16 +2941,23 @@ function _setEnter(panel,dir){   // 子页 shared-axis X 入场: 一次性动画
   const a=_setAnim=el.animate([{transform:'translate3d('+dx+'px,0,0)',opacity:0},{transform:'none',opacity:1}],{duration:250,easing:'cubic-bezier(.32,.72,0,1)'});
   a.onfinish=a.oncancel=()=>{if(_setAnim===a)_setAnim=null}}
 function setNav(panel,title,key){   // key=可选 i18n 键, 切语言时据此重译标题
+  const ios=typeof isIOSClient==='function'&&isIOSClient();
+  if(ios){if(setStack.length){const view=$('setv');view._iosNav?.end();setStack[setStack.length-1].scrollTop=view.querySelector('.setbody').scrollTop}setStack.push({panel,title,key});_setShow(panel,title);return}
   const top=setStack[setStack.length-1],body=_setBody();if(top&&body)top.scroll=body.scrollTop;
   setStack.push({panel,title,key});_setShow(panel,title);if(body)body.scrollTop=0;_setEnter(panel,1)}
-function setvBack(){if(setStack.length>1){setStack.pop();const top=setStack[setStack.length-1];_setShow(top.panel,top.title);
-  const body=_setBody();if(body)body.scrollTop=top.scroll||0;_setEnter(top.panel,-1);return}closeSettings()}
-function closeSettings(){if(_setAnim){_setAnim.cancel();_setAnim=null}setStack=[];$('setv').classList.remove('on');$('setv').setAttribute('aria-hidden','true')}
+function setvBack(){if(setStack.length>1){setStack.pop();const top=setStack[setStack.length-1];
+  if(typeof isIOSClient==='function'&&isIOSClient()){_setShow(top.panel,top.title,-1);return}
+  _setShow(top.panel,top.title);const body=_setBody();if(body)body.scrollTop=top.scroll||0;_setEnter(top.panel,-1);return}closeSettings()}
+function closeSettings(){if(_setAnim){_setAnim.cancel();_setAnim=null}setStack=[];
+  if(typeof isIOSClient==='function'&&isIOSClient()){iosDismissSettings();return}
+  $('setv').classList.remove('on');$('setv').setAttribute('aria-hidden','true')}
 function openSettings(){try{GAT.emit('view_enter',{view:'settings'})}catch(e){}closeDrawer();
-  if(window.PCLINK&&_isOn('pcView'))PCLINK.closeView();   // PC 视图(z61)盖在设置(z60)之上: 从其中跳转设置(如语音未配置)须先收起, 否则引导开在下面
-  $('setv').classList.add('on');$('setv').setAttribute('aria-hidden','false');
+  const ios=typeof isIOSClient==='function'&&isIOSClient(),view=$('setv');
+  if(!ios&&window.PCLINK&&_isOn('pcView'))PCLINK.closeView();   // PC 视图(z61)盖在设置(z60)之上: 从其中跳转设置(如语音未配置)须先收起, 否则引导开在下面
+  if(ios){view._iosNav?.end();delete view.dataset.panel;iosPresentView(view,true)}
+  else{view.classList.add('on');view.setAttribute('aria-hidden','false')}
   setStack=[{panel:'homePanel',title:t('settings'),key:'settings'}];_setShow('homePanel',t('settings'));
-  try{refreshAdb()}catch(e){}}                       // agent 刚调过 adb_connect 不会经 onResume: 打开设置即重读自连状态
+  if(!ios){try{refreshAdb()}catch(e){}}}                       // agent 刚调过 adb_connect 不会经 onResume: 打开设置即重读自连状态
 
 
 
@@ -2859,6 +3010,7 @@ function openProviders(){refreshProvidersFromLlmc();if(!setStack.length)openSett
 
 function openDataPage(){setNav('dataPanel',t('storageSpace'),'storageSpace')}
 function openStatsPage(){GAT.emit('view_enter',{view:'stats'});setNav('statsPanel',t('stats'),'stats')}
+function openFeedbackPage(){try{GA.openUrl&&GA.openUrl('https://github.com/shenhao-stu/GAgent/issues')}catch(e){}}
 
 function refreshHome(){
   _settingsBlock('swSound',()=>{const sw=$('swSound');if(sw){sw.classList.toggle('on',soundOn);sw.setAttribute('aria-checked',soundOn?'true':'false')}});
@@ -2869,7 +3021,7 @@ function refreshHome(){
   _settingsBlock('swSafeMode',()=>{const swSM=$('swSafeMode');if(swSM){swSM.classList.toggle('on',safeMode);swSM.setAttribute('aria-checked',safeMode?'true':'false')}});
   _settingsBlock('a11yVal',()=>refreshA11y());
   _settingsBlock('dwAvatar',()=>refreshAvatarRow());
-  _settingsBlock('globalProxyVal',()=>refreshProxyVal());
+  if(typeof isIOSClient==='function'&&isIOSClient())refreshIOSProxy();else _settingsBlock('globalProxyVal',()=>refreshProxyVal());
   _settingsBlock('appVerVal',()=>refreshAppVersion());
   _settingsBlock('updateBadge',()=>_reflectUpdateBadge());
   _settingsBlock('themeVal',()=>refreshThemeVal());
@@ -2879,7 +3031,7 @@ function refreshHome(){
   _settingsBlock('opacityVal',()=>{const ov=$('opacityVal');if(ov)ov.textContent=Math.round(floatOpacity*100)+'%';});
   setTimeout(()=>_settingsBlock('stUsageHome',()=>refreshStorage()),20);
 }
-function toggleSafeMode(e){safeMode=e.classList.toggle('on');e.setAttribute('aria-checked',safeMode?'true':'false');LS.set('safeMode',safeMode);try{GA.send('/safemode '+(safeMode?'on':'off'))}catch(err){}}
+function toggleSafeMode(e){if(typeof isIOSClient==='function'&&isIOSClient())return;safeMode=e.classList.toggle('on');e.setAttribute('aria-checked',safeMode?'true':'false');LS.set('safeMode',safeMode);try{GA.send('/safemode '+(safeMode?'on':'off'))}catch(err){}}
 /* 统计子页(#2): 范围筛选 + 聊天热力图(每格可点看当日明细) + 总览 + 按模型消耗, 纯本机聚合, 不上报、不额外存储 */
 let customRange=LS.get('customRange',null);          // #2c: 自定义统计时间段 [startMs,endMs] | null
 let statRange=LS.get('statRange','range_all');if(statRange==='range_custom'&&!customRange)statRange='range_all';
@@ -2899,7 +3051,7 @@ function statsAgg(startTs,endTs){endTs=endTs==null?Infinity:endTs;const live=con
   return {convos:cset.size,msgs,ti,to,steps,cr,cw,byDay,byModel,minTs}}
 function _hitRate(cr,ti){return ti>0?Math.round(cr/ti*100)+'%':'—'}   // #4: 缓存命中率=缓存读取/总输入 token(tok_in 已含 cache_read → 比值=输入中来自缓存的占比)
 function _heatBounds(){const maxY=new Date().getFullYear();const dataMin=(_heatAgg&&_heatAgg.minTs)?new Date(_heatAgg.minTs).getFullYear():maxY;return [Math.min(dataMin,maxY-2), maxY]}   // #4 [可选最早年, 当前年]: 即使仅当年数据也至少回溯到前年 → 年份下拉恒有 ≥3 项(rolling+过去年), 不再退化为静态标签; 用户可选历史年份(空年=空网格, 同 GitHub 贡献图)
-function renderStats(){_heatAgg=statsAgg(0);                                  // 面板打开: 全量聚合一次, 缓存供切窗复用
+function renderStats(){if(typeof isIOSClient==='function'&&isIOSClient())prepareIOSStats();_heatAgg=statsAgg(0);                                  // 面板打开: 全量聚合一次, 缓存供切窗复用
   const [minY,maxY]=_heatBounds();
   if(heatMode!=='rolling'&&(heatMode<minY||heatMode>maxY))heatMode='rolling';  // 陈旧年份越界 → 回退"最近一年"
   renderYearSel(minY,maxY);renderHeatmap(_heatAgg.byDay,heatMode);renderStatRange()}
@@ -2934,6 +3086,7 @@ function renderStatRange(){   // 范围切换: 只重渲染筛选条+总览+按�
     const cb=el('button','statRange statRangeCustom'+(statRange==='range_custom'?' on':''),rg);   // #2c: 自定义时间段(kelivo 风月历选择)
     cb.textContent=(statRange==='range_custom'&&customRange)?_fmtRange(customRange):t('range_custom');
     cb.onclick=()=>openRangePicker()}
+  if(typeof isIOSClient==='function'&&isIOSClient()){renderIOSStatSummary(A);return}
   const g=$('statGrid');if(g){g.innerHTML='';
     [[A.convos,'statConvos'],[A.msgs,'statMsgs'],[humanTok(A.ti),'statTokIn'],[humanTok(A.to),'statTokOut'],[A.steps,'statSteps'],
      [humanTok(A.cr),'statCacheRead'],[humanTok(A.cw),'statCacheWrite'],[_hitRate(A.cr,A.ti),'statCacheHit']].forEach(a=>{   // #4: 增 缓存读取/缓存创建/缓存命中率
@@ -3024,6 +3177,7 @@ const THEMES=[{v:'system',k:'themeSystem'},{v:'light',k:'themeLight'},{v:'dark',
 function _sysDark(){try{if(window.GA&&GA.isDark)return !!GA.isDark()}catch(e){}try{return matchMedia('(prefers-color-scheme:dark)').matches}catch(e){}return false}
 function applyTheme(){const v=theme==='light'?'light':theme==='dark'?'dark':(_sysDark()?'dark':'light');   // 跟随系统: 用 GA.isDark()(权威系统夜间)显式置 data-theme, 不靠 WebView prefers(部分 OEM 不准)
   document.documentElement.setAttribute('data-theme',v);
+  if(typeof isIOSClient==='function'&&isIOSClient())iosSyncSidebarPreferences();
   if(typeof FX!=='undefined'&&FX.alive&&emptyEl){FX.destroy();FX.mount(emptyEl)}   // 重挂刷新 --fxRip 等已读入 JS 的主题令牌(canvas 色值不吃 CSS 变量热切)
   const m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',v==='dark'?'#0a0a0a':'#ffffff')}
 function themeLabel(){return t((THEMES.find(x=>x.v===theme)||THEMES[0]).k)}
@@ -3032,7 +3186,7 @@ function openThemeSheet(){const w=$('themeList');w.innerHTML='';
   THEMES.forEach(o=>{const it=el('div','opt'+(theme===o.v?' sel':''),w);
     it.innerHTML='<div class="mid"><div class="nm"></div></div><span class="ck">'+ICO_CK+'</span>';
     it.querySelector('.nm').textContent=t(o.k);
-    it.onclick=()=>{theme=o.v;LS.set('theme',o.v);applyTheme();refreshThemeVal();closeSheets();if(curConvo&&!running)renderConvo(curConvo)}});
+    it.onclick=()=>{theme=o.v;LS.set('theme',o.v);applyTheme();refreshThemeVal();closeSheets();if(!(typeof isIOSClient==='function'&&isIOSClient())&&curConvo&&!running)renderConvo(curConvo)}});
   openSheet('themeSheet')}
 function onOpacityInput(v){floatOpacity=Math.max(0.3,Math.min(1,(+v||90)/100));LS.set('floatOpacity',floatOpacity);
   const ov=$('opacityVal');if(ov)ov.textContent=Math.round(floatOpacity*100)+'%';
@@ -3046,7 +3200,7 @@ function refreshAppVersion(){const e=$('appVerVal');if(!e)return;   // APK 版�
 function openWebsite(){try{GA.openUrl&&GA.openUrl('https://github.com/shenhao-stu/GAgent')}catch(e){}}
 /* ── 演化融合(issue#1): 把热更新前备份的本地自演化改动, 3-way 合并回当前官方版 ── */
 function evoFileCount(st){return st?(st.files!=null?st.files:(st.latest&&st.latest.count)||0):0}   // 唯一计数源=后端 files(全备份去重, 与聚合融合范围一致); 旧后端无 files 退回最新 zip 计数
-function refreshEvoBadge(){const e=$('evoBakVal');if(!e)return;e.textContent='';
+function refreshEvoBadge(){if(typeof isIOSClient==='function'&&isIOSClient())return;const e=$('evoBakVal');if(!e)return;e.textContent='';
   if(!(window.GA&&GA.send))return;
   try{const n=evoFileCount(JSON.parse(GA.send('/evo.status')));
     if(n)e.textContent=n+' '+t('evoBak1')}catch(_e){}}
@@ -3058,7 +3212,7 @@ function evoMergeFlow(){   // 演化融合(LLM, v2.3): 确认模型 → 跳转�
   const bks=(st&&st.backups)||[],oldVer=(bks[bks.length-1]||{}).oldVer;   // backups 按 ts 降序 → 末位=最旧, 与聚合融合的 base 来源一致
   const esc=_escd;
   const p=curProvider&&curProvider(),mdl=modelLabel();
-  const glyph=isAuto()?AUTO_GLYPH:modelGlyph((active&&active.model)||(p&&p.model)||'',p&&p.type);
+  const glyph=isAuto()?AUTO_GLYPH:modelGlyph((active&&active.model)||(p&&p.model)||'',p&&p.type,p&&p.name);
   const pv=p?provName(p)||'':'',sub=(!isAuto()&&pv&&pv!==mdl)?esc(pv):'';   // 服务商名作副标(区别于型号); 与型号同名或 auto 时省略
   const desc=esc(t('evoFuseDesc').replace('%v',oldVer||'?').replace('%n',n));
   const chev='<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
@@ -3301,12 +3455,13 @@ function editProvider(id){GAT.emit('view_enter',{view:'provider_edit',edit:!!id}
   provType=p?p.type:'oai';setProvType(provType);
   $('pvName').value=p?provName(p):'';$('pvKey').value=p?p.apikey||'':'';$('pvKey').type='password';$('pvEye').style.color='';
   $('pvBase').value=p?p.apibase||'':'';$('pvProxy').value=p?p.proxy||'':'';$('pvMaxTok').value=p?(p.max_tokens||''):'';
-  $('pvModel').value=editing.model||(editing.models&&editing.models[0])||'';
+  if($('pvModel'))$('pvModel').value=editing.model||(editing.models&&editing.models[0])||'';
   $('pvMaxRetries').value=p&&p.max_retries!=null?p.max_retries:'';$('pvReadTimeout').value=p&&p.read_timeout!=null?p.read_timeout:'';
   $('pvConnTimeout').value=p&&p.timeout!=null?p.timeout:'';$('pvUA').value=p?uaToVer(p.user_agent):'';   // 高级设置回显(需求#1)
   $('pvEnable').classList.toggle('on',p?p.enabled!==false:true);$('pvEnable').setAttribute('aria-checked',(p?p.enabled!==false:true));
-  $('pvResp').classList.toggle('on',!!(p&&p.api_mode==='responses'));$('pvFakeCC').classList.toggle('on',p?!!p.fake_cc:false);   // 新建默认开启透传CC(命中 getoken GA 指纹; 仅 claude 生效)
+  $('pvResp').classList.toggle('on',!!(p&&p.api_mode==='responses'));$('pvFakeCC').classList.toggle('on',p?!!p.fake_cc:(typeof isIOSClient==='function'&&isIOSClient()));
   updateModelCount();updateUARow();
+  if(typeof isIOSClient==='function'&&isIOSClient()){$('setvTest').classList.remove('spin');iosConnectionState('idle')}
   $('setv').classList.add('on');$('setv').setAttribute('aria-hidden','false')}
 function uaToVer(ua){const m=/claude-cli\/([0-9][0-9.]*)/.exec(ua||'');return m?m[1]:''}                 // 'claude-cli/2.1.85 (external, cli)' → '2.1.85'
 function verToUA(v){v=(v||'').trim();return v?('claude-cli/'+v+' (external, cli)'):''}                    // 版本号 → 透传 CC 的完整 UA(llmcore native_ua 同款格式)
@@ -3317,11 +3472,12 @@ function setProvType(t){provType=t;document.querySelectorAll('#pvSeg button').fo
   $('pvName').placeholder=oai?'gpt-native':'claude-native';$('pvBase').placeholder=oai?'https://api.openai.com/v1':'https://api.anthropic.com';updateUARow()}
 function toggleSw(e){const on=e.classList.toggle('on');e.setAttribute('aria-checked',on?'true':'false')}
 function toggleEye(){const i=$('pvKey'),on=i.type==='password';i.type=on?'text':'password';$('pvEye').style.color=on?'var(--acc)':''}
-function saveProvider(){if(runLocked())return;const v=id=>$(id).value.trim();
+function saveProvider(){if(runLocked())return;const v=id=>{const el=$(id);return el?(el.value||'').trim():''};
+  const ios=typeof isIOSClient==='function'&&isIOSClient();
   const disp=v('pvName')||(provType==='claude'?'claude-native':'gpt-native');   // 显示名(label)
   const apikey=v('pvKey'),apibase=v('pvBase');
   if(!apikey||!apibase){toast(t('t_fillKeyBase'));return}
-  if(!v('pvModel')){toast(t('t_fillModel'));$('pvModel').focus();$('pvModel').scrollIntoView({block:'center'});return}
+  if(!ios&&!v('pvModel')){toast(t('t_fillModel'));$('pvModel').focus();$('pvModel').scrollIntoView({block:'center'});return}
   readModelDraft();
   const isMk=!!(editing&&editing.fromMk);
   const backendName=isMk?editing.name:disp;                       // fromMk: 后端 模型选择 键不可改; 否则跟随显示名
@@ -3348,10 +3504,11 @@ function saveProvider(){if(runLocked())return;const v=id=>$(id).value.trim();
   if(provType==='claude'&&$('pvFakeCC').classList.contains('on')){const _ua=verToUA(v('pvUA'));if(_ua)p.user_agent=_ua}
   // Persist the draft first; a rejected write must not change selected/usable providers.
   const r=saveProvToMk(p,p.model);
+  let iosRecovery=null;if(ios){try{iosRecovery=JSON.parse(r||'{}')}catch(e){}}
   if(r&&/error|错误|失败|invalid/i.test(r)){toast(t('t_fetchFail')+r);GAT.emit('provider_save_failed',{cat:GAT.errCat(r),msg:GAT.errMsg(r),type:provType});return}
   if(editingId){const i=providers.findIndex(x=>x.id===editingId);providers[i]=p}else providers.push(p);
   LS.set('providers',providers);
-  if(!active||active.pid===p.id||!providers.find(x=>x.id===active.pid)){active={pid:p.id,model:p.model};LS.set('active',active)}
+  if((!ios||p.model)&&(!active||active.pid===p.id||!providers.find(x=>x.id===active.pid))){active={pid:p.id,model:p.model};LS.set('active',active)}
   ensureActiveEnabled();
   if(editing&&!isMk&&editing.name&&editing.name!==backendName){try{delProvFromMk(editing.name)}catch(e){}}   // 用户自建服务商改名: 删旧 name 块, 否则孤儿块下次 /config 回读成重复服务商
   if(commitStrip)commitStrip();                  // 后端已确认保存 → 才迁移 favs/active(剥 [1m])
@@ -3359,7 +3516,8 @@ function saveProvider(){if(runLocked())return;const v=id=>$(id).value.trim();
   $('pvKey').value='';applySendEnabled();refreshModelUI();setvBack();
   if(!convos.length)setStatus(modelLabel(),false);
   GAT.emit('provider_saved',{type:p.type,hasModels:!!(models&&models.length)}); // key 配置完成
-  toast(t('t_saved')+disp+(models.length?'':t('t_savedFetch')))}
+  toast(t('t_saved')+disp+(models.length?'':t('t_savedFetch')));
+  if(iosRecovery&&iosRecovery.recoveredBackup)gaModal({title:t('iosConfigRecovered'),msg:(lang==='en'?t('iosConfigRecoveryNote'):iosRecovery.recoveryNote)+'\n'+iosRecovery.recoveredBackup,noCancel:true})}
 function deleteProviderCur(){if(!editingId)return;const old=providers.find(p=>p.id===editingId);if(!old)return;
   gaConfirm(t('deleteProvider'),t('confirmDelProv').replace('%s',provName(old)),()=>{if(removeProvider(old)){setvBack();toast(t('t_deleted'))}},true)}   // 危险操作二次确认(与左滑删除一致; 删除键已移到底部右侧更易误触)
 // 删一个服务商: 写 mykey.py(连带从 Auto 链剔除) → 从 /config 重建 → 必要时切走被删的活跃模型。返回是否成功。
@@ -3388,13 +3546,15 @@ function inferGroup(id){const s=id.toLowerCase();
   if(/mistral|mixtral|codestral/.test(s))return 'Mistral'; if(/llama|meta-/.test(s))return 'Llama';
   if(/embed/.test(s))return '嵌入'; return '其他'}
 function isReasoning(id){return /(think|reason|o1-|o3|o4|-r\b|\br1\b|deepseek-r|qwq)/i.test(id)}
-function readModelDraft(){if(!editing)return;
-  const model=$('pvModel').value.trim();editing.model=model;
+function readModelDraft(){if(!editing)return;const pm=$('pvModel');if(!pm)return;
+  const model=(pm.value||'').trim();if(!model&&(typeof isIOSClient==='function'&&isIOSClient()))return;
+  editing.model=model;
   if(model&&!(editing.models||[]).includes(model))editing.models=[...(editing.models||[]),model]}
 function updateModelCount(){const n=(editing&&editing.models||[]).length;$('pvModelCount').textContent=n+t('count');
   const ready=!!($('pvKey').value.trim()&&$('pvBase').value.trim());
   $('rowModels').classList.toggle('dim',!n&&!ready);
-  const rf=$('rowFetch');if(rf)rf.classList.toggle('dim',!ready)}   // 填好 Key+Base 即可获取(无需先保存, issue#1)
+  const rf=$('rowFetch');if(rf)rf.classList.toggle('dim',!ready);   // 填好 Key+Base 即可获取(无需先保存, issue#1)
+  if(typeof isIOSClient==='function'&&isIOSClient())$('setvTest').classList.toggle('dim',!ready)}
 function fetchModelsInEditor(){if(!editing)return;   // 直接用表单当前值获取并打开列表页, 立即拉取
   const disp=$('pvName').value.trim()||(provType==='claude'?'claude-native':'gpt-native');
   editing.label=disp;if(!editing.fromMk)editing.name=disp;
@@ -3411,8 +3571,13 @@ function openModelListPage(){
   if(!editing.apikey||!editing.apibase){toast(t('t_fillKeyBaseFirst'));return}
   $('mlFetch').classList.remove('spin');                       // 清掉上一个服务商遗留的转圈, 否则会卡住本页的获取
   $('mlTitle').textContent=provName(editing)||t('models'); $('mlSearch').value=''; renderModelList();
-  $('modelv').classList.add('on'); $('modelv').setAttribute('aria-hidden','false')}
-function closeModelListPage(){$('modelv').classList.remove('on');$('modelv').setAttribute('aria-hidden','true');$('pvModel').value=editing&&editing.model||'';updateModelCount()}
+  if(typeof isIOSClient==='function'&&isIOSClient()){iosPresentView($('modelv'),true);const nav=iosModelNav();nav.p=0;nav.run(1)}
+  else{$('modelv').classList.add('on'); $('modelv').setAttribute('aria-hidden','false')}}
+function closeModelListPage(){
+  if(typeof isIOSClient==='function'&&isIOSClient()){const view=$('modelv');if(view.classList.contains('on')){const nav=view._iosNav?.gesture?view._iosNav:iosModelNav();nav.gesture=false;iosPresentView(view,false,nav.run(0))}}
+  else{$('modelv').classList.remove('on');$('modelv').setAttribute('aria-hidden','true')}
+  if($('pvModel'))$('pvModel').value=editing&&editing.model||'';
+  updateModelCount()}
 function persistEditing(){updateModelCount();    // 模型增删=即时保存(仅提交模型/名称, 不含未保存的表单字段→杜绝半改泄漏)
   if(editingId){const i=providers.findIndex(x=>x.id===editingId);
     if(i>=0){providers[i].models=editing.models.slice();providers[i].model=editing.model;
@@ -3432,9 +3597,11 @@ function renderModelList(){const body=$('mlBody');const q=$('mlSearch').value.tr
     el('div','mgroup',body).textContent=(g==='嵌入'?t('grpEmbed'):g==='其他'?t('grpOther'):g)+' · '+groups[g].length;
     groups[g].forEach(id=>{const isDef=editing.model===id, key=editing.id+'::'+id, isFav=favs.includes(key);
       const row=el('div','mrow'+(isDef?' def':''),body);
-      row.innerHTML=modelGlyph(id,editing.type)+'<span class="mck">'+ICO_CK+'</span><div class="mmid"><div class="mname"></div><div class="mid"></div></div>'+
+      const can1m=((editingId&&(providers.find(x=>x.id===editingId)||editing).type||editing.type)==='claude')
+        &&(!(typeof isIOSClient==='function'&&isIOSClient())||is1m(id)||/claude|sonnet|opus|haiku/i.test(id));
+      row.innerHTML=modelGlyph(id,editing.type,editing.name||editing.label)+'<span class="mck">'+ICO_CK+'</span><div class="mmid"><div class="mname"></div><div class="mid"></div></div>'+
         (isReasoning(id)?'<span class="mtag rsn">'+t('reasoning')+'</span>':'')+
-        (((editingId&&(providers.find(x=>x.id===editingId)||editing).type||editing.type)==='claude')?'<button class="mact m1mBtn'+(is1m(id)?' on':'')+'" aria-label="1M context">1M</button>':'')+   // 1M 开关仅 Anthropic 型; 已保存服务商以磁盘真值判型(防类型未保存时把 [1m] 写进 oai 块)
+        (can1m?'<button class="mact m1mBtn'+(is1m(id)?' on':'')+'" aria-label="1M context" aria-pressed="'+is1m(id)+'">1M</button>':'')+
         '<button class="mact fav'+(isFav?' on':'')+'" aria-label="'+t('fav')+'">'+ICO_HEART+'</button>'+
         '<button class="mact del" aria-label="del">'+ICO_TRASH+'</button>';
       row.querySelector('.mname').textContent=dispModel(id);row.querySelector('.mid').textContent=isDef?t('curDefault'):dispModel(id);
@@ -3442,7 +3609,11 @@ function renderModelList(){const body=$('mlBody');const q=$('mlSearch').value.tr
       row.querySelector('.fav').onclick=e=>{e.stopPropagation();const i=favs.indexOf(key);if(i<0)favs.push(key);else favs.splice(i,1);LS.set('favs',favs);renderModelList()};
       row.querySelector('.del').onclick=e=>{e.stopPropagation();delModel(id)};
       row.onclick=()=>setDefaultModel(id)})})}
-function asyncModels(cfg,onResult){            // 异步取模型(获取列表/测试连接): 立即返回, 后台轮询 → UI 不冻, spin 能转
+function asyncModels(cfg,onResult,iosApproved){            // 异步取模型(获取列表/测试连接): 立即返回, 后台轮询 → UI 不冻, spin 能转
+  if((typeof isIOSClient==='function'&&isIOSClient())&&!iosApproved){let host='';try{host=new URL(cfg.apibase).origin}catch(e){host=t('iosInvalidEndpoint')}
+    gaModal({title:t('iosModelListTitle'),msg:t('iosModelListBody')+'\n'+host,okText:t('iosContinue'),onCancel:()=>onResult({ok:false,error:t('cancel')}),onOk:()=>asyncModels(cfg,onResult,true)});
+    const mask=$('modalMask');mask.onclick=e=>{if(e.target===mask)$('modalCard').querySelector('.cancel').click()};return;
+  }
   let resp;try{resp=JSON.parse(GA.send('/models '+JSON.stringify(cfg))||'{}')}catch(e){return onResult({ok:false,error:'bridge'})}
   if(!resp.job){return onResult(resp)}        // 兼容直接返回(老/demo)
   jobPoll((cont)=>{
@@ -3461,7 +3632,10 @@ function fetchModels(){if(runLocked())return;
     if(editing!==target)return;                           // 已切换/关闭: 丢弃这次结果(不污染当前对象, 不动 DOM)
     $('mlFetch').classList.remove('spin');
     GAT.emit('key_test',{ok:!!res.ok,cat:res.ok?null:GAT.errCat(res.error),msg:res.ok?null:GAT.errMsg(res.error),type:cfg.type,where:'fetchModels'}); // key 验证结果(脱敏)
-    if(!res.ok){renderModelList();toast(t('t_fetchFail')+(res.error||'?'));return}
+    if(!res.ok){renderModelList();
+      if(!(typeof isIOSClient==='function'&&isIOSClient()))toast(t('t_fetchFail')+(res.error||'?'));
+      else if(res.error!==t('cancel'))toast(t('t_fetchFail')+(iosConnectionReason(res.error)||'?'),IOS_CONNECTION_HOLD.failed);
+      return}
     const base=m=>m.replace(/\s*\[1m\]$/i,'');
     // 获取是「只增不减」的(手工加的模型不能被一次拉取抹掉)。但这也意味着上游抖一次吐出脏项,
     // 该项就永久留在 mykey 里、再点获取也清不掉。故每次成功拉取顺带清一次通配项:
@@ -3543,11 +3717,19 @@ function refreshProvidersFromLlmc(){
       return {...p,fromMk:true,label:p.label||LBL[p.name]||p.name,models,model,fake_cc:p.type==='claude'?(p.fake_cc!==undefined?p.fake_cc:true):p.fake_cc};
     });
     mkMixins=res.items.filter(x=>x.type==='mixin');
+    const ios=typeof isIOSClient==='function'&&isIOSClient();
+    if(ios&&foCfg){
+      const previous=foNos(foCfg),members=previous.filter(name=>providers.some(p=>p.name===name));
+      if(members.length!==previous.length){
+        foCfg={...foCfg,llm_nos:members,enabled:!!foCfg.enabled&&members.length>0};
+        LS.set('foCfg',foCfg);
+      }
+    }
     favs=favs.filter(k=>providers.some(p=>k.indexOf(p.id+'::')===0));LS.set('favs',favs);
     if(active){
       if(active.pid==='__auto__'){
         const an=active.auto||'auto';
-        const hasAuto=(foCfg&&foCfg.name===an)||mkMixins.some(m=>m.name===an);
+        const hasAuto=mkMixins.some(m=>m.name===an)||(!ios&&foCfg&&foCfg.name===an);
         if(!hasAuto)active=null;                                      // auto 不是普通 provider; 成员删减后降级为未选
       }else{const cur=providers.find(p=>p.id===active.pid)||providers.find(p=>prevByName[p.name]&&prevByName[p.name].id===active.pid);
         if(!cur||(active.model&&cur.models&&cur.models.length&&!cur.models.includes(active.model)))active=null}
@@ -3692,7 +3874,7 @@ function refreshFloat(){                                                        
     v.textContent=k?t(k):'';v.className='menuVal '+(k==='floatStOn'?'a11yValOn':(k?'a11yValOff':''))}
   refreshHdrDot();
 }
-function refreshA11y(){                                                            // 唯一收敛点: 顶栏图标/红点/行值/子页(gaOnA11y/refreshHome/开关变更都到这里)
+function refreshA11y(){if(typeof isIOSClient==='function'&&isIOSClient())return;                                                            // 唯一收敛点: 顶栏图标/红点/行值/子页(gaOnA11y/refreshHome/开关变更都到这里)
   const on=a11yOn();
   const st=$('a11yStat');if(st)st.hidden=on;                                      // 溢出菜单内状态行(F2.3 由顶栏收进 hdrMoreSheet, id/显隐逻辑不变): 仅未开启时显示
   refreshFloat();                                                                 // 顺带收敛悬浮窗态(内含 refreshHdrDot): 溢出红点两个来源必须同刷, 否则后刷者覆盖前者
@@ -3710,7 +3892,7 @@ window.openA11ySettings=function(){try{GA.openA11ySettings()}catch(e){}};       
    真正的配对/连接由 agent 侧经 droid.adb_pair/adb_connect 完成(bus 已有) — UI 只负责引导 + 状态展示 + 深链, 不自己实现 SPAKE2。*/
 function adbState(){try{const s=JSON.parse(GA.adbSelfStatus());return s.connected?'on':(s.repair?'repair':'off')}catch(e){return 'on'}}   // 桥缺失/解析异常时视为已连, 不误报
 function adbOn(){return adbState()==='on'}
-function refreshAdb(){
+function refreshAdb(){if(typeof isIOSClient==='function'&&isIOSClient())return;
   const st=adbState(),on=st==='on';
   const dot=$('adbDot');if(dot)dot.hidden=on;                                    // 设置行红点(结构仿 a11yDot): 仅未连接时显示
   refreshGearDot();
@@ -3732,6 +3914,7 @@ window.gaOnAdb=function(){try{refreshAdb()}catch(e){}};                         
    把引导 prompt 预填进输入框(复用编辑重发的填充范式), 用户选模型后自行发送 → GA 走 adb_self_setup SOP
    (droid.adb_pair/adb_connect)协助完成。守单会话不变量: 在飞任务不打断, 仅提示。 */
 window.startAdbAssist=function(promptKey){                                        // promptKey 可选: 无障碍页入口传 apAdbAssistPrompt(带配对后回程指引), 默认通用引导
+  if(typeof isIOSClient==='function'&&isIOSClient())return;
   if(anyRunning()){toast(t('t_taskBusy'));return}   // P3d                                       // 单会话不变量: 在飞任务不打断(同 newConversation/selectModel 守卫)
   closeSettings();newConversation();                                              // 回对话页 + 干净新会话(内部复位空态并 focus, 不 /clear 上一会话)
   inp.value=t(promptKey||'adbAssistPrompt');inp.dispatchEvent(new Event('input'));inp.focus();  // 预填不发送: input 监听只自增高+applySendEnabled, 唯一发送口是 btn.onclick=submit
@@ -3745,7 +3928,7 @@ window.startAdbAssist=function(promptKey){                                      
    旧壳(webui 热更早于 APK)桥缺失 → 服务态退回老桥 a11yOn, 保护卡显示「更新应用后可用」。*/
 function apGrantFallback(){let p='io.github.shenhaostu.gagent';try{p=JSON.parse(GA.appVersion()).packageName||p}catch(e){}return 'adb shell pm grant '+p+' android.permission.WRITE_SECURE_SETTINGS'}
 function apStatus(){try{return JSON.parse(GA.a11yPersistStatus())}catch(e){return null}}
-window.openA11yPersistPage=function(){if(!setStack.length)openSettings();setNav('a11yPersistPanel',t('a11yPerm'),'a11yPerm')};   // 顶栏入口无设置上下文 → 先进设置(返回链自然)
+window.openA11yPersistPage=function(){if(typeof isIOSClient==='function'&&isIOSClient())return;if(!setStack.length)openSettings();setNav('a11yPersistPanel',t('a11yPerm'),'a11yPerm')};   // 顶栏入口无设置上下文 → 先进设置(返回链自然)
 function renderA11yPersistPage(){
   const hero=$('apHeroBody'),card=$('apProtCard'),wrap=$('apProtWrap');if(!hero||!card||!wrap)return;
   const advOpen=!!(wrap.querySelector('details.apFold')||{}).open;   // onResume 等高频重渲染不吞用户展开的「高级」折叠(电脑授权流程天然多次切走切回)
@@ -3831,14 +4014,10 @@ window.apOpenSys=function(which){let ok=false;try{ok=GA.openAppSysSettings(which
   if(!LS.get('emptyMsgMig0',false)){LS.set('emptyMsgMig0',true);   // 一次性: 折叠历史里成串的空 assistant 回合(老版遗留的空气泡/重复气泡)
     let mch=false;convos.forEach(c=>{if(!c.msgs)return;const n=c.msgs.length;c.msgs=c.msgs.filter(m=>!isEmptyAssistant(m));if(c.msgs.length!==n)mch=true});
     if(mch)try{saveConvos()}catch(e){}}
-  if(!LS.get('proxyMig0',false)){LS.set('proxyMig0',true);   // 一次性: 清除自动识别遗留的本地死代理(getoken 直连可达; 用户可再在设置里手填), 修复"获取失败 ProxyError"(issue#6)
+  if(!(typeof isIOSClient==='function'&&isIOSClient())&&!LS.get('proxyMig0',false)){LS.set('proxyMig0',true);   // Android 旧代理缓存迁移
     if(/127\.0\.0\.1|localhost/i.test(globalProxy||'')){globalProxy='';LS.set('proxy','');try{GA.send('/proxy clear')}catch(e){}}}
   const _noSel=!LS.get('active',null);                       // 记录刷新前是否"从未显式选过模型"
   if(!refreshProvidersFromLlmc())_scheduleCfgRetry(0);       // 启动时从 /config(llmcore→mykey.py) 权威覆盖 provider; 失败→退避重试, 全败进可点重试的错误态(不阻塞后续 boot)
-  // 补领必须放在 providers 真正加载**之后**: 领取不能只挂在「登录成功」这一个事件上, 那样只覆盖新注册
-  // 判据用"本机还没有受管块"而非"是否登录过", 已有块的人一次也不会多调; 服务端三道闸 + reused 幂等
-  // 使万一重复也无副作用。
-  
   if(_noSel&&providers.length){                                // 首次/未选过模型 → 默认选第一个
     try{const p=providers[0];selectModel(p,p.model||(p.models&&p.models[0])||'')}catch(e){}}
   else if(!_noSel){                                             // 已有选择 → 启动时同步到后端(选择即切换,无延迟apply)
@@ -3848,55 +4027,60 @@ window.apOpenSys=function(which){let ok=false;try{ok=GA.openAppSysSettings(which
   try{const _a=(typeof getAuth==='function')?getAuth():null,_ok=!!(_a&&_a.token&&(!_a.exp||Date.now()<_a.exp));   // boot 校正埋点账号态: 修 token 过期未显式登出留下的脏 user_id
     if(typeof GA!=='undefined'){if(_ok&&_a.userId!=null&&GA.setUser)GA.setUser(String(_a.userId));else if(!_ok&&GA.clearUser)GA.clearUser();}}catch(e){}
   let _li={};try{_li=JSON.parse((window.GA&&GA.launchInfo&&GA.launchInfo())||'{}')}catch(e){}   // src=唤起来源(launcher|float|notif_*), notif=通知总开关(回访钩子可触达面基线)
+  const _iosBoot=typeof isIOSClient==='function'&&isIOSClient();
   GAT.emit('app_open',{ready:r,hasKey:GAT.hasKey(),providers:GAT.provCount(),authed:false,src:_li.src||'?',notif:!!_li.notif}); // 漏斗起点: 启动即知是否已配置/已登录/从哪唤起
-  try{GA.send('/safemode '+(safeMode?'on':'off'))}catch(e){}
+  if(!_iosBoot)try{GA.send('/safemode '+(safeMode?'on':'off'))}catch(e){}
   try{GA.send('/lang '+lang)}catch(e){}                        // 同步 UI 语言到后端(状态行文案)
-  if(globalProxy)GA.send('/proxy '+globalProxy);              // 同步全局代理到后端(重装后恢复)
-  if(r==='nokey'&&!providers.length){setStatus(cfgUnconfigured?t('notCfgTap'):t('noProvider'),false);GAT.emit('onboarding_shown',{reason:'nokey'});openProviders()}   // 首启无 key: 落到服务商列表; 未配置态保住「点此配置」文案不被覆盖(与 model chip 一致)
+  if(!_iosBoot&&globalProxy)GA.send('/proxy '+globalProxy);    // iOS 直接读取已验证的后端设置
+  if(r==='nokey'&&!providers.length){const _iosQuiet=!!(window.GA&&GA.platform==='ios');
+    setStatus(cfgUnconfigured?t('notCfgTap'):t('noProvider'),false);
+    GAT.emit('onboarding_shown',{reason:'nokey',suppressed:_iosQuiet});
+    if(!_iosQuiet)openProviders()}   // 首启无 key: Android 落到服务商列表; iOS 主界面=pclink 不依赖本机 key, 不当道弹配置
   else{
     if(r!=='ok'&&r!=='nokey')bubble('sys',r);
     setStatus(modelLabel(),false);
-    const j=JSON.parse(GA.poll(0)||'{}');
+    let j=JSON.parse(GA.poll(0)||'{}');
     if(!convos.length&&j.hist&&j.hist.length){          // 首启无本地会话: 用 Python 归档重建为历史会话
       const c={id:uid(),title:(j.hist[0].prompt||t('newChat')).slice(0,60),ts:Date.now(),msgs:[]};
       j.hist.forEach(h=>{c.msgs.push({role:'user',text:h.prompt||'-'});
         c.msgs.push({role:'assistant',prompt:h.prompt,steps:h.steps||[],final:h.final})});
       convos.push(c);saveConvos()}
     const live=convos.filter(c=>!c.deleted);
-    if(!j.running&&j.hist&&j.hist.length){                       // 冷启对账(根治「UI 显 N 步、实际更多步」): 任务在悬浮窗模式下 WebView 被销毁、后台跑到完成 → 会话增量节流落库截断在中途, 而后端 _hist 有完整步骤。逐条按【归属会话 id】对账(后端每条 _hist 已标 convo, 随 chat.json 持久、跨进程被杀仍在)→ 彻底弃用脆弱 prompt 启发(payload 经 goal/附件/override 变换后 ≠ 气泡 raw text, 长多步任务必漏=旧修了个寂寞)
+    if(!j.running&&j.hist&&j.hist.length){                       // 冷启对账(根治「UI 显 N 步、实际更多步」)
       const seen=new Set();let _ch=false;
-      for(let k=j.hist.length-1;k>=0;k--){const h=j.hist[k];   // 从最新往旧: 每会话只由它【最新一条】_hist 对账其末条 assistant, seen 去重防旧条目覆盖同会话的新回合(不变量: 一会话末轮只补一次)
-        let tgt=h.convo?live.find(c=>c.id===h.convo):null;     // 首选: 后端持久标记的归属会话 id(精确、跨进程存活、与长度/prompt 无关)
-        if(!tgt&&k===j.hist.length-1){                          // 兜底(仅最末条, 仅老数据无 convo 字段时): 内存 active_convo → 末以 prompt 前缀近似(均为升级前遗留条目的退路, 新条目不会走到)
+      for(let k=j.hist.length-1;k>=0;k--){const h=j.hist[k];
+        let tgt=h.convo?live.find(c=>c.id===h.convo):null;
+        if(!tgt&&k===j.hist.length-1){
           if(j.active_convo)tgt=live.find(c=>c.id===j.active_convo);
           if(!tgt){const hp=(h.prompt||'').slice(0,400);tgt=live.find(c=>{const ms=c.msgs||[],m=ms[ms.length-1];return m&&m.role==='assistant'&&(m.prompt||'').slice(0,400)===hp})}}
         if(!tgt||seen.has(tgt.id))continue;seen.add(tgt.id);
         const ms=tgt.msgs||[],m=ms[ms.length-1],hs=(h.steps&&h.steps.length)||0;
         const mlen=(m&&m.steps&&m.steps.length)||0;
-        const fuller=hs>mlen||(hs&&hs===mlen&&((h.steps[hs-1].text||'').length>(((m.steps||[])[mlen-1]||{}).text||'').length));   // 步数更多 或 同步数但末步文本更长(旧 STEP_CAP=1000 截断把 ask/报告切掉)→ 用后端完整记录补全
-        if(m&&m.role==='assistant'&&fuller){   // 仅当后端记录更全才补(不覆盖已完整会话、绝不缩短)
+        const fuller=hs>mlen||(hs&&hs===mlen&&((h.steps[hs-1].text||'').length>(((m.steps||[])[mlen-1]||{}).text||'').length));
+        if(m&&m.role==='assistant'&&fuller){
           m.steps=(h.steps||[]).map(s=>({n:s.n,summary:s.summary,text:s.text}));m.final=h.final||m.final;_ch=true}}
       if(_ch)saveConvos();
     }
-    let liveC=live.length?live[live.length-1]:null;{const lv=kvGet('lastView');const m=lv&&lv.id&&live.find(c=>c.id===lv.id);if(m)liveC=m}   // 冷启动回到上次看的会话, 找不到才落最新
+    let liveC=live.length?live[live.length-1]:null;{const lv=kvGet('lastView');if(lv&&lv.id==='')liveC=null;else{const m=lv&&live.find(c=>c.id===lv.id);if(m)liveC=m}}   // 冷启动回到上次看的会话, 找不到才落最新
     // P3d: multi 冷启先 pollAll 重建 N 路 runs 徽标; 焦点只接一个 live 详情
     let multiSess=[];if(multi){try{const rawA=bridgePollAll();if(rawA){const parsed=parseBridge(rawA);multiSess=Array.isArray(parsed)?parsed:((parsed&&parsed.sessions)||[]);
       for(let i=0;i<multiSess.length;i++){const s=multiSess[i];if(!s||s.cid==null)continue;const id=String(s.cid);const rr=ensureRun(id);rr.running=!!s.running;if(typeof s.gen!=='undefined')rr.gen=s.gen;if(s.ask)rr.ask=s.ask}
       running=anyRunning()}}catch(e){}}
-    if(j.running&&j.active_convo){const m=live.find(c=>c.id===j.active_convo);if(m)liveC=m}   // 运行中接续: 精确定位后端 _active_convo
-    else if(multi&&multiSess.length){const pref=multiSess.find(s=>s&&s.running);if(pref){const m=live.find(c=>String(c.id)===String(pref.cid));if(m)liveC=m}}
+    // 恢复页面与后台任务独立；详情必须属于选中的会话。
+    if(multi){try{j=liveC?(parseBridge(bridgePoll(liveC.id,0))||{}):{}}catch(e){j={}}}
+    else if(!liveC||(j.active_convo&&String(j.active_convo)!==String(liveC.id)))j={};
     if(j.running&&liveC&&liveC.msgs){let ms=liveC.msgs;   // 运行中: 末尾「同 prompt」assistant 回合交给实时渲染
       while(ms.length&&ms[ms.length-1].role==='assistant'&&(ms[ms.length-1].prompt||'')===(j.prompt||''))ms.pop()}
     if(liveC){if(j.running||(multi&&ensureRun(liveC.id)&&ensureRun(liveC.id).running)){try{if(multi&&typeof GA.sendC==='function'){/* bind via focus */}else GA.send('/convo.bind '+liveC.id)}catch(e){}}else switchConvo(liveC);renderConvo(liveC)} else{curConvo=null;startNew=true;syncEmpty()}
-    const coldRun=j.running||(multi&&liveC&&ensureRun(liveC.id)&&ensureRun(liveC.id).running);
+    const coldRun=!!j.running;
     if(coldRun&&liveC){curConvo=liveC;ensureConvo(j.prompt||'');const ms=curConvo.msgs,lm=ms[ms.length-1];   // 跨重启接续
       if(!(lm&&lm.role==='user'&&lm.text===(j.prompt||''))&&j.prompt){const um={role:'user',text:j.prompt,ts:Date.now()};ms.push(um);userBubble(j.prompt,null,um.ts,um)}
       newTask(j.prompt||'');task.snap=_filesSnap();(j.steps||[]).forEach(setStep);setRunning(true, liveC.id);setStatus(j.status,true);pinReplyTop(task.box);
       if(multi){const rr=ensureRun(liveC.id);rr.task=task;rr.running=true;if(task.box)task.box._cid=liveC.id;task._cid=liveC.id}}
     if(j.cmd_error)bubble('sys',j.cmd_error);
     if(!j.running&&j.ask&&(j.ask.question||(j.ask.candidates&&j.ask.candidates.length))){
-      if(!j.active_convo||(liveC&&j.active_convo===liveC.id))renderAskPicker(j.ask);
-      else pendingAsk={cid:j.active_convo,ask:j.ask}}
+      if(!j.active_convo||(liveC&&j.active_convo===liveC.id))renderAskPicker(j.ask,j.gen);
+      else pendingAsk={cid:j.active_convo,ask:j.ask,gen:j.gen}}
     renderDrawer();scroll(1)}
   if(_li.cid)try{window.gaOpenConvo(_li.cid)}catch(e){}   // 冷启动通知目标最后覆盖自动续接焦点；不存在/已删会话则保持原焦点
   readDeviceState();

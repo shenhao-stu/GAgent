@@ -490,8 +490,11 @@ class FloatService : Service() {
 
     private fun backToApp() {
         Analytics.track("""{"event":"float_back","props":{"via":"longpress"}}""")   // 长按浮窗回主界面
+        // 返回浮窗正在展示的会话；复用已有 WebView，避免冷启恢复抢走焦点。
         startActivity(Intent(this, MainActivity::class.java)
-            .putExtra("ga_src", "float").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            .putExtra("ga_src", "float")
+            .putExtra("convo_cid", last?.optString("cid").orEmpty())
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
         stopSelf()   // onResume 也会 stopService(本服务), 双停幂等无害
     }
 

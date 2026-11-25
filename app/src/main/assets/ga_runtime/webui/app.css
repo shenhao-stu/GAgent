@@ -321,6 +321,8 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
 .dwItem .cst.run i{background:var(--acc);animation:pul 1s infinite alternate}                       /* 进行中: 脉冲强调点 */
 .dwItem .cst.wait i{background:var(--txt2)}      /* 等待用户交互: 实心中性灰点(对比度达标, 区别于 done 的成功绿) */
 .dwItem .cst.done i{background:var(--md-sys-color-success)}                                         /* 已完成: 实心成功点 */
+.dwItem .cst.failed i{background:var(--err)}                                                          /* 未完成(iOS 任务失败态): 实心红点, 深浅色都可见 */
+.dwItem .cst.interrupted i{background:transparent;box-shadow:inset 0 0 0 1.5px var(--txt2)}            /* 已中断(用户停止): 空心环, 区别于失败 */
 .dwItem .pinBadge{flex:none;display:inline-flex;color:var(--acc);opacity:.65}.dwItem .pinBadge svg{width:13px;height:13px}
 .dwItem .t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dwItem .more{flex:none;width:44px;height:44px;margin:-7px;border:none;background:none;color:var(--mut);border-radius:12px;
@@ -342,8 +344,8 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
 .fchip .fn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fchip .x{flex:none;width:18px;height:18px;border:none;background:none;color:var(--mut);border-radius:50%;display:flex;align-items:center;justify-content:center;padding:0}
 .fchip .x svg{width:13px;height:13px}
-#in{border:none;outline:none;resize:none;background:none;color:var(--txt);font:16px/24px inherit;letter-spacing:-.01em;
-  max-height:140px;width:100%;min-height:26px;padding:8px 8px 4px}
+#in{border:none;outline:none;resize:none;background:none;color:var(--txt);font-family:inherit;font-size:16px;line-height:24px;letter-spacing:-.01em;
+  max-height:140px;width:100%;min-height:26px;padding:6px 8px}
 #in::placeholder{color:var(--txt2)}   /* 占位提示同样是可读文字(WCAG 1.4.3): --mut 双主题仅 ~2:1, 与 #pcIn 同改 --txt2 */
 .captools{display:flex;align-items:center;gap:8px;padding:3px 1px 1px}              /* 紧凑: 控件收进胶囊, 零溢出; 图标间距加大避免热区重叠(语音按钮误点) */
 .chip{position:relative;display:flex;align-items:center;gap:5px;border:none;background:var(--surface3);color:var(--txt2);
@@ -592,7 +594,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
   color:var(--md-sys-color-surface);font-size:14px;padding:11px 18px;border-radius:var(--r-full);box-shadow:var(--elev-2);opacity:0;visibility:hidden;transition:.25s;z-index:var(--z-toast);max-width:80vw;text-align:center}
 #toast.on{opacity:1;visibility:visible;transform:translate(-50%,0)}
 /* ───────── 滚动导航 (回顶/回底竖丸): 显隐仿 #toast.on; --kb 跟随键盘同 #comp; bottom=comp 实测 108px + 10px 间隙 ───────── */
-#scrollNav{position:fixed;right:14px;bottom:calc(var(--compH,108px) + 10px + env(safe-area-inset-bottom));z-index:var(--z-scrollNav);display:flex;flex-direction:column;
+#scrollNav{position:fixed;right:14px;bottom:calc(var(--compH,108px) + 10px + var(--pcFabClearance,0px) + env(safe-area-inset-bottom));z-index:var(--z-scrollNav);display:flex;flex-direction:column;
   border-radius:var(--r-full);overflow:hidden;background:var(--chipBg);
   -webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
   box-shadow:inset 0 0 0 1px var(--line),var(--elev-1);
@@ -1317,8 +1319,9 @@ code.fLink{color:var(--acc);cursor:pointer;text-decoration:underline dotted;text
 #pcFab{position:fixed;right:14px;bottom:calc(var(--compH,108px) + 10px + env(safe-area-inset-bottom));z-index:var(--z-pcFab);width:44px;height:44px;
   border:1px solid var(--line);border-radius:var(--r-full);background:var(--surface);color:var(--icon);
   display:flex;align-items:center;justify-content:center;box-shadow:var(--elev-1);
-  transition:background .15s,transform .12s,opacity .2s,visibility .2s;-webkit-tap-highlight-color:transparent}
+  transition:background .15s,transform .18s ease-out,opacity .2s,visibility .2s;-webkit-tap-highlight-color:transparent}
 #pcFab:active{background:var(--surface2);transform:scale(.9)}
+#pcFab.rc{bottom:calc(var(--pcBarH,calc(136px + env(safe-area-inset-bottom))) + 10px)}
 #pcFab svg{display:block;width:20px;height:20px}   /* 图标尺寸的唯一来源: pclink.js 的 SVG 常量不带 width/height(同一份图形还给锁定组用, 那边由 --lkTile 定尺寸) */
 #pcFab .fi{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   transition:opacity .2s,transform .32s cubic-bezier(.3,1.4,.4,1)}   /* #035: 单钮双态图标交叉旋转淡换(弹簧过冲) */
@@ -1328,10 +1331,7 @@ code.fLink{color:var(--acc);cursor:pointer;text-decoration:underline dotted;text
 #pcFab.rc .fiPc{opacity:0;transform:rotate(-90deg) scale(.5)}
 #pcFab.rc .fiPh{opacity:1;transform:none}
 #pcFab.hid{visibility:hidden;opacity:0;pointer-events:none}   /* #034-P4 承袭: 侧栏开时藏切换钮; 由 pclink.js MutationObserver 驱动(弃 :has, 旧 WebView 静默失效风险) */
-/* #037: 配对态下 PC 悬浮钮常驻右下。① 抬高 #scrollNav 到悬浮钮之上, 滚动时两钮竖排不叠;
-   ② 给 #chat 末尾留出 44+净空的下边距, 让末条消息动作行始终位于悬浮钮之上(悬浮钮落在净空区内, 不压任何内容)。
-   仅作用于已配对用户(未配对 body 无 pcHubFabOn, 布局零变化)。 */
-body.pcHubFabOn #scrollNav{bottom:calc(var(--compH,108px) + 64px + env(safe-area-inset-bottom))}
+body.pcHubFabOn{--pcFabClearance:54px}
 body.pcHubFabOn #chat{padding-bottom:calc(var(--sp-4) + 52px)}
 #pcEdgeFx{position:fixed;inset:0;z-index:var(--z-pcFx);pointer-events:none!important;opacity:0}
 #pcEdgeFx.in{box-shadow:inset 0 0 72px 14px color-mix(in srgb,var(--acc) 55%,transparent);animation:pcFxIn .55s ease-out}
@@ -1481,8 +1481,8 @@ body.pcHubFabOn #chat{padding-bottom:calc(var(--sp-4) + 52px)}
 #pcInBar{flex:none;
   padding:var(--sp-2) max(var(--sp-4),env(safe-area-inset-left)) calc(var(--sp-2) + env(safe-area-inset-bottom)) max(var(--sp-4),env(safe-area-inset-right));
   transform:translateY(calc(-1*var(--kb,0px)));transition:transform .18s ease-out}   /* 对齐 #comp 安全区+键盘平移口径; v2.2: 内包 .cap 胶囊(B7), 弃自造方框 */
-#pcIn{border:none;outline:none;resize:none;background:none;color:var(--txt);font:16px/24px inherit;letter-spacing:-.01em;
-  max-height:120px;width:100%;min-height:26px;padding:8px 8px 4px;display:block}   /* 镜像 #in(胶囊内透明 textarea) */
+#pcIn{border:none;outline:none;resize:none;background:none;color:var(--txt);font-family:inherit;font-size:16px;line-height:24px;letter-spacing:-.01em;
+  max-height:120px;width:100%;min-height:26px;padding:6px 8px;display:block}   /* 镜像 #in(胶囊内透明 textarea); font 简写陷阱与 padding 同批修(监察 P2) */
 #pcIn::placeholder{color:var(--txt2)}   /* --mut 双主题都只有 ~2:1 */
 /* 输入胶囊/悬浮钮的边框是它们唯一的可视边界(浅色主题下 --surface===--bg, 本体与背景零色差),
    --line 的 1.245:1 达不到 WCAG 1.4.11 的 3:1。作用域只圈 pclink 这几件, 不动主界面 .cap —— 那是另一处待办。
@@ -1495,34 +1495,149 @@ body.pcHubFabOn #chat{padding-bottom:calc(var(--sp-4) + 52px)}
 #pcBtn:active{transform:scale(.9)}#pcBtn svg{width:19px;height:19px}#pcBtn.stop{background:var(--err);color:#fff}
 #pcBtn::before{content:"";position:absolute;top:50%;left:50%;width:40px;height:40px;transform:translate(-50%,-50%)}   /* 命中区扩展同 #btn */
 #pcMsgs .assistHead .pcGlyph{display:inline-flex;align-items:center;justify-content:center;background:var(--surface3);color:var(--icon);box-shadow:inset 0 0 0 1px var(--line)}   /* #034-P2: 中性 PC 标, 不借用本机模型品牌色 */
-/* P6(PLAN_CHATPOLISH): 遥控页回底钮 — 复用 #scrollNav 视觉语言(chipBg 毛玻璃丸 + lineUi 描边), 显隐由 pclink.js scroll 监听驱动 */
-#pcDown{position:absolute;right:14px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:var(--z-scrollNav);width:40px;height:40px;border:none;border-radius:var(--r-full);
+#pcDown{position:absolute;right:14px;bottom:calc(var(--pcBarH,calc(136px + env(safe-area-inset-bottom))) + 10px + var(--pcFabClearance,0px));z-index:var(--z-scrollNav);width:40px;height:40px;border:none;border-radius:var(--r-full);
   background:var(--chipBg);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
-  box-shadow:inset 0 0 0 1px var(--lineUi),var(--elev-1);color:var(--icon);display:flex;align-items:center;justify-content:center}   /* 描边取 --lineUi(同上 3:1 口径): 唯一一条 box-shadow, 不再另立一条被本条整体覆盖的死规则 */
+  box-shadow:inset 0 0 0 1px var(--lineUi),var(--elev-1);color:var(--icon);display:flex;align-items:center;justify-content:center}
 #pcDown[hidden]{display:none}
 #pcDown:active{background:var(--surface2)}
+#pcUp{position:absolute;right:14px;bottom:calc(var(--pcBarH,calc(136px + env(safe-area-inset-bottom))) + 58px + var(--pcFabClearance,0px));z-index:var(--z-scrollNav);width:40px;height:40px;border:none;border-radius:var(--r-full);
+  background:var(--chipBg);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
+  box-shadow:inset 0 0 0 1px var(--lineUi),var(--elev-1);color:var(--icon);display:flex;align-items:center;justify-content:center}
+#pcUp[hidden]{display:none}
+#pcUp:active{background:var(--surface2)}
+#pcDown,#pcUp{transform:translateY(calc(-1*var(--kb,0px)));transition:transform .18s ease-out}
+#pcChips{display:flex;gap:8px;overflow-x:auto;padding:0 2px 8px;scrollbar-width:none}
+#pcChips::-webkit-scrollbar{display:none}
+.pcChip{flex:none;border:none;border-radius:var(--r-full);padding:6px 12px;font-size:13px;color:var(--txt2);
+  background:var(--chipBg);box-shadow:inset 0 0 0 1px var(--lineUi);-webkit-tap-highlight-color:transparent}
+.pcChip:active{background:var(--surface2)}
+#pcMsgs .pcCopy{flex:none;margin-left:8px;width:28px;height:28px;border:none;border-radius:var(--r-full);background:transparent;color:var(--icon);
+  display:inline-flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}
+#pcMsgs .pcCopy svg{width:15px;height:15px}
+#pcMsgs .pcCopy:active{background:var(--surface2)}
 /* P3(PLAN_CHATPOLISH, 监察 F3): 首屏骨架 — 常规渲染但 .4s 内 opacity:0(纯 CSS 防闪, 零 JS 计时器); paint 首拍清容器自然移除 */
 .pcSkel{display:flex;flex-direction:column;gap:12px;padding:18px 16px;opacity:0;animation:pcSkelIn .01s .4s both}
 .pcSkel i{display:block;height:14px;border-radius:7px;background:linear-gradient(90deg,var(--surface2) 25%,var(--surface3) 50%,var(--surface2) 75%);background-size:200% 100%;animation:pcSkelSh 1.2s linear infinite}
 .pcSkel i:nth-child(1){width:52%}.pcSkel i:nth-child(2){width:86%}.pcSkel i:nth-child(3){width:70%}
 @keyframes pcSkelIn{to{opacity:1}}
 @keyframes pcSkelSh{to{background-position:-200% 0}}
-/* ═══ 宽屏(PC/平板)显示优化 —— 全仓第一个尺寸断点, 作用域严格限定在 #pcView 内, 不动手机主界面 ═══
-   抽屉在鼠标+大屏上是纯粹的负担: 侧栏改常驻双栏, scrim/汉堡退场, 正文与输入胶囊限宽居中免得一行横穿 27 寸屏。
-   CSS 是唯一真相源(JS 只把 .side 状态位拨回一致), 所以脚本挂了也不会塌成半成品。 */
 @media (min-width:900px){
   #pcView{--pcCol:min(760px,100%)}
-  #pcMenuBtn{visibility:hidden}                  /* 侧栏常驻 ⇒ 汉堡无功能, 但只隐不撤: 44px 前导槽位是字标与 #hdr
-                                                    重合不变量的一环(display:none 会塌位左移); hidden 同样出 tab 序/读屏树 */
-  #pcScrim{display:none}                          /* 结构保险: 即使别处再置 .side 也盖不住主区 */
+  #pcMenuBtn{visibility:hidden}
+  #pcScrim{display:none}
   #pcView #pcSide{position:relative;left:auto;top:auto;bottom:auto;z-index:auto;transform:none;width:288px;flex:none;
     padding-left:max(var(--sp-2),env(safe-area-inset-left))}
-  /* 限宽只作用于 #pcMsgs 的直接子节点 —— paint() 靠 children 索引与 tasks 对账, 插包裹层会让增量重绘全线错位 */
   #pcMsgs>.pcTask,#pcMsgs>.pcEmpty,#pcMsgs>.pcSkel{max-width:var(--pcCol);margin-inline:auto}
-  #pcCap{max-width:var(--pcCol);margin-inline:auto}   /* 必须写在 .cap 上: #pcInBar 的 transform 是 --kb 键盘平移的唯一载体 */
+  #pcCap{max-width:var(--pcCol);margin-inline:auto}
+  #pcChips{max-width:var(--pcCol);margin-inline:auto}
   #pcDown{right:max(14px,calc((100% - var(--pcCol))/2 - 52px))}
-  #pcFab.rc{right:14px;left:auto}   /* #037: 悬浮钮已居右下; 宽屏常驻侧栏在左, 出口钮居右天然让开, 无需再算 288 偏移 */
+  #pcUp{right:max(14px,calc((100% - var(--pcCol))/2 - 52px))}
+  #pcFab.rc{right:14px;left:auto}
 }
+
+#pcVoiceBtn[hidden]{display:none}
+
+/* iOS: stable destinations, a readable first task, and one place for device setup. */
+.iosApp #app,.iosApp #pcView{position:fixed;left:0;right:0;top:var(--ios-viewport-top,0px);bottom:auto;height:var(--ios-viewport-height,100dvh);overflow:hidden}
+.iosApp #app #comp,.iosApp #pcView #pcInBar{transform:none;transition:none}
+.iosApp #pcView{transform:none;transition:opacity .16s ease-out,visibility 0s .16s}
+.iosApp #pcView.on{transition:opacity .16s ease-out,visibility 0s}
+.iosApp #app #scrollNav{position:absolute;left:50%;right:auto;bottom:calc(var(--compH,108px) + 8px);transform:translateX(-50%) scale(.86);transition:opacity .2s,visibility .2s,transform .24s var(--ios-ease)}
+.iosApp #app #scrollNav.on{transform:translateX(-50%)}
+.iosApp #snUp,.iosApp #pcNav #pcUp{display:none!important}
+.iosApp .snBtn{width:44px;height:44px}
+.iosApp #chat,.iosApp body.pcHubFabOn #chat{padding-bottom:calc(var(--sp-4) + 56px)}
+.iosApp body.pcHubFabOn{--pcFabClearance:0px}
+.iosApp #pcView #pcNav{left:50%;right:auto;bottom:calc(var(--pcBarH,136px) + 8px);transform:translateX(-50%);transition:opacity .2s,visibility .2s}
+.iosApp #pcEdgeFx{display:none!important}
+.iosApp #comp,.iosApp #pcInBar{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+html.iosApp.iosKeyboard #comp,html.iosApp.iosKeyboard #pcInBar{padding-bottom:8px}
+.iosApp #hdr #pcFab,.iosApp .pcHd #pcLocalBtn{position:relative;inset:auto;z-index:auto;flex:none;display:flex;align-items:center;gap:6px;width:auto;min-width:0;height:36px;margin:0 2px;padding:0 12px;
+  border:0;border-radius:999px;background:var(--ios-control-bg,var(--surface3));-webkit-backdrop-filter:var(--ios-control-filter,none);backdrop-filter:var(--ios-control-filter,none);
+  box-shadow:inset 0 0 0 1px var(--line);color:var(--txt);font-size:.8rem;font-weight:550;line-height:1;white-space:nowrap;transform:none;transition:background .15s,opacity .15s}
+.iosApp #hdr #pcFab::before,.iosApp .pcHd #pcLocalBtn::before{content:"";position:absolute;inset:-4px -2px}
+.iosApp #hdr #pcFab:active,.iosApp .pcHd #pcLocalBtn:active{background:var(--surface2);transform:none;opacity:.7}
+.iosApp #hdr #pcFab .fi{position:static;inset:auto;display:flex;align-items:center;gap:6px;transform:none;opacity:1}
+.iosApp #hdr #pcFab .fiPh{display:none}
+.iosApp #hdr #pcFab svg,.iosApp .pcHd #pcLocalBtn svg{flex:none;width:17px;height:17px}
+.iosApp #hdr,.iosApp .pcHd{padding:calc(10px + env(safe-area-inset-top)) 16px 10px;gap:4px;min-height:66px}
+.iosApp #hdrtitle,.iosApp .pcHdMid{gap:10px}
+.iosApp .pcHdSp{display:none}
+.iosApp #hdrtitle b,.iosApp .pcHd b{font-size:1.05rem;line-height:1.3}
+.iosApp #hdrsub,.iosApp .pcHdSub{font-size:.75rem;line-height:1.4;max-width:100%}
+.iosApp #hdr .gaLogo,.iosApp .pcHd .gaLogo{width:32px;height:32px;border-radius:11px}
+.iosApp .cap{border-radius:24px;padding:8px 8px 7px 10px;background:var(--surface3);box-shadow:none}
+.iosApp #pcCap{display:flex;align-items:flex-end;gap:8px;min-height:64px}
+.iosApp #pcCap .captools{padding:0;flex:none}
+.iosApp #pcIn{flex:1;min-width:0;width:auto;padding:9px 5px;max-height:140px;font-size:1rem;line-height:1.45}
+.iosApp #pcBtn,.iosApp #btn{width:44px;height:44px;box-shadow:none!important;color:#fff}
+.iosApp #pcBtn.idleOff{color:var(--txt2)}
+.iosApp #pcChips{padding-bottom:10px}
+.iosApp #pcChips .pcChip{min-height:44px;font-size:.8rem}
+.iosApp #pcView.pcNoConversation #pcChips{display:none}
+.iosApp #pcView.pcNoConversation #pcMsgs{padding-bottom:20px}
+.iosApp #pcMsgs{padding:12px 24px calc(72px + var(--pcTail,0px))}
+.iosApp .pcStart{display:flex;flex-direction:column}
+.iosApp .pcHero{min-height:0;margin:clamp(18px,5vh,60px) auto 20px;max-width:520px;padding:12px 0;gap:18px;align-items:flex-start;text-align:left}
+.iosApp .pcHero h2{font-size:1.65rem;line-height:1.3;letter-spacing:-.035em}
+.iosApp .pcHero p{font-size:.94rem;line-height:1.6;max-width:32em}
+.iosApp .pcHero .pcLink2{--lkTile:46px;align-self:flex-start;margin:0 0 8px}
+.iosApp .pcHeroAct{max-width:100%;margin:0}
+.iosApp .pcHeroAct button{min-height:50px;font-size:.94rem}
+.iosApp .pcSteps{gap:16px;margin:8px 0 12px}
+.iosApp .pcSteps li{font-size:.9rem}
+.iosApp .pcGoLocal{min-height:44px;margin:0;font-size:.85rem;padding:8px 0}
+.iosApp .pcPickList{max-width:100%}
+.iosApp .pcRowMore{width:44px;height:44px}
+.iosApp #iosBoardSetup{min-height:58px;gap:12px;flex-wrap:wrap}
+.iosApp .iosSettingCopy{display:flex;flex:1;min-width:110px;flex-direction:column;gap:4px;text-align:left}
+.iosApp .iosSettingCopy .k{font-size:.94rem;line-height:1.3}
+.iosApp #iosBoardSetup .v{font-size:.72rem;gap:6px;line-height:1.4;margin-left:auto;white-space:normal;max-width:42%}
+.iosApp #iosConnectionCard [data-tone=ready]{color:var(--fut)}
+.iosApp #iosConnectionCard #pcLinkRow{gap:12px;flex-wrap:wrap}
+.iosApp #iosConnectionCard #pcLinkK{flex:1;font-size:.94rem}
+.iosApp #iosConnectionCard #pcLinkV{font-size:.78rem}
+.iosApp #pcView #pcCap:focus-within{box-shadow:0 0 0 2px color-mix(in srgb,var(--fut) 25%,transparent)}
+@media(max-width:390px){.iosApp #pcMsgs{padding-inline:20px}.iosApp #iosBoardSetup .v{max-width:100%}}
+.iosApp .sheet:not(.on):not(.iosClosing){visibility:hidden;box-shadow:none}
+.iosApp .captools{flex-wrap:nowrap;gap:4px}
+.iosApp #modelChip{flex:1 1 0;min-width:30px}
+.iosApp #comp .captools .sp{flex:0 0 0;min-width:0}
+@media(max-width:360px){.iosApp #effChip{width:36px;justify-content:center}.iosApp #effChip .cv{display:none}}
+.iosApp #in::placeholder{color:var(--txt2)}
+.iosApp .androidVisionMode{display:none}
+@supports(font:-apple-system-body){html.iosApp{font:-apple-system-body}}
+.iosApp #modalMask{top:var(--ios-viewport-top,0px);bottom:auto;height:var(--ios-viewport-height,100dvh);
+  padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));overflow:hidden}
+.iosApp .modalCard{max-height:100%;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.iosApp .modalCard h4,.iosApp .modalCard>input,.iosApp .modalBtns{flex:none}
+.iosApp .modalCard .msg,.iosApp .modalCard .modalBody{min-height:0;overflow-y:auto;overscroll-behavior:contain;overflow-wrap:anywhere;-webkit-overflow-scrolling:touch}
+.iosApp .modalBtns button{min-height:44px}
+.iosApp .iosTaskFailure{font-size:.75rem;color:var(--err);line-height:1.4}
+.iosApp .iosTaskInterrupted{font-size:.75rem;color:var(--txt2);line-height:1.4}
+.iosApp #hdrMoreBtn.iosNewConversation,.iosApp #pcNewBtn.iosNewConversation{width:44px;height:44px;padding:0;border-radius:999px;color:var(--fut)}
+.iosApp .iosNewConversation svg{width:22px;height:22px;flex:none}
+.iosHint{position:fixed;z-index:var(--z-toast);max-width:min(240px,70vw);padding:9px 12px;border-radius:12px;background:var(--md-sys-color-on-surface);color:var(--md-sys-color-surface);
+  font-size:.82rem;line-height:1.35;box-shadow:var(--elev-2);pointer-events:none;animation:iosHintIn .28s var(--ios-ease) both}
+.iosHint::before{content:"";position:absolute;top:-5px;right:17px;width:10px;height:10px;border-radius:2px;background:inherit;transform:rotate(45deg)}
+.iosHint.out{opacity:0;transform:translateY(-4px);transition:opacity .2s,transform .2s}
+@keyframes iosHintIn{from{opacity:0;transform:translateY(-6px) scale(.96)}to{opacity:1;transform:none}}
+.iosApp #hdrMoreBtn.iosNewConversation[hidden],.iosApp #pcNewBtn.iosNewConversation[hidden]{display:none!important}
+.iosApp .setbar>.iconbtn:first-child{border-radius:999px;background:var(--ios-control-bg,var(--surface));-webkit-backdrop-filter:var(--ios-control-filter,none);backdrop-filter:var(--ios-control-filter,none);box-shadow:inset 0 0 0 1px var(--line)}
+@supports (backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px)){
+  .iosApp{--ios-control-bg:color-mix(in srgb,var(--surface) 86%,transparent);--ios-control-filter:blur(14px) saturate(130%)}
+}
+@media(prefers-reduced-transparency:reduce){.iosApp{--ios-control-bg:var(--surface);--ios-control-filter:none}}
+.iosApp #sheetMask{transition:opacity .24s ease,visibility 0s .24s;pointer-events:none}
+.iosApp #sheetMask.on{transition:opacity .24s ease,visibility 0s;pointer-events:auto}
+.iosApp .artChips{gap:6px}
+.iosApp .artChip{gap:3px;padding:4px 9px 4px 7px;font-size:.7rem;max-width:calc(50% - 3px)}
+.iosApp .artChip .aIco svg{width:12px;height:12px}
+.iosApp .artChip .aNm{max-width:none}
+.iosApp #modelChip,.iosApp #effChip{padding-inline:7px}
+.iosApp #effChip{margin-left:-6px}
+.iosApp [data-ios-quiet-focus]:focus-visible{outline:none}
+@media(prefers-reduced-motion:reduce){.iosApp #pcView,.iosApp #pcView.on,.iosApp #pcView #pcNav{transition:none}}
 /* 分层与转场: 整页层关闭时继续滑出(visibility 延到过渡结束), 未打开/淡出中的遮罩与层不接收指针, 点击穿透到下层 */
 #setv,#modelv{transition:transform .3s cubic-bezier(.32,.72,0,1),visibility 0s linear .3s}
 #setv.on,#modelv.on{transition:transform .3s cubic-bezier(.32,.72,0,1),visibility 0s}

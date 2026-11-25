@@ -25,9 +25,11 @@ def trigger(name, ctx=None):
 
 def discover_and_load():
     """agentmain.py 启动时调用: 导入本包下所有 *_hook.py, 让其在 import 时自注册。"""
-    import os, importlib
+    import os, importlib, sys
     here = os.path.dirname(os.path.abspath(__file__))
-    for f in sorted(os.listdir(here)):
+    files = (['desc_inject_hook.py', 'tool_events_hook.py']
+             if sys.platform == 'ios' else sorted(os.listdir(here)))
+    for f in files:
         if f.endswith('_hook.py'):
             try:
                 importlib.import_module(f'plugins.{f[:-3]}')

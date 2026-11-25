@@ -13,7 +13,9 @@ try{var _th=JSON.parse(localStorage.getItem('ga.theme')||'"system"');
 <script src="marked.min.js"></script>
 <script src="vendor/purify.min.js"></script>
 <link rel="stylesheet" href="assets/fonts.css">
-<link rel="stylesheet" href="app.css"></head>
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="ios_settings.css">
+<link rel="stylesheet" href="ios_shell.css"></head>
 <body>
 <div id="mask" onclick="closeDrawer()"></div>
 <div id="drawer" aria-hidden="true">
@@ -277,14 +279,14 @@ try{var _th=JSON.parse(localStorage.getItem('ga.theme')||'"system"');
       </div>
 
       <!-- 安全模式(默认开): 关时向后端发 /safemode off → GA_SAFE_MODE=0, droid 才允许读控件树; 拦截只在 droid -->
-      <div class="card icoCard">
+      <div class="card icoCard androidVisionMode">
         <div class="row">
           <span class="rowIco ic-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></span>
           <span class="k" data-i18n="safeMode">安全模式</span>
           <span class="v"><button class="sw" id="swSafeMode" role="switch" aria-checked="true" data-i18n-aria="safeMode" aria-label="安全模式" onclick="toggleSafeMode(this)"></button></span>
         </div>
       </div>
-      <p class="hint" data-i18n="safeModeHint">只看截图、不读控件，更难被 App 检测。</p>
+      <p class="hint androidVisionMode" data-i18n="safeModeHint">只看截图、不读控件，更难被 App 检测。</p>
 
       <div class="secLbl"><span data-i18n="grpModel">模型与服务</span></div>
       <div class="card icoCard">
@@ -685,5 +687,5 @@ try{var _th=JSON.parse(localStorage.getItem('ga.theme')||'"system"');
 </div>
 <div id="toast" role="status" aria-live="polite"></div>
 
-<script src="assets/icons.js"></script><script src="assets/util.js"></script><script src="assets/shim.js"></script><script src="assets/i18n.js"></script><script src="assets/humanize.js"></script><script src="share_poster.js"></script><script src="render.js"></script><script src="assets/pace.js"></script><script src="assets/spring.js"></script><script src="app.js"></script><script src="assets/push.js"></script><script src="pclink.js"></script><script src="voice.js"></script><script src="integrations.js"></script>
+<script src="assets/icons.js"></script><script src="assets/util.js"></script><script src="assets/shim.js"></script><script src="assets/i18n.js"></script><script src="assets/humanize.js"></script><script src="share_poster.js"></script><script src="render.js"></script><script src="assets/pace.js"></script><script src="assets/spring.js"></script><script src="ios_ui.js"></script><script src="ios_settings.js"></script><script src="ios_consent.js"></script><script src="ios_statistics.js"></script><script src="app.js"></script><script src="assets/push.js"></script><script src="ios_pc_models.js"></script><script src="pclink.js"></script><script src="voice.js"></script><script src="integrations.js"></script>
 <script src="detector.js"></script></body></html>

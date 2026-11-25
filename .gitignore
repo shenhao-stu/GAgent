@@ -41,3 +41,18 @@ app/src/main/assets/ga_runtime/temp/
 
 # Legacy build-injected relay defaults; never commit or package relay credentials.
 app/src/main/assets/ga_runtime/pclink_defaults.json
+
+# iOS fetched dependencies, generated Xcode projects, local signing overrides, and firmware test binaries.
+ios/Vendor/
+ios/Resources/
+ios/*.xcodeproj/
+ios/.team_id
+ios/.bundle_id
+ios/Presence/.build/
+ios/Presence/build/
+ios/firmware/build/
+ios/firmware/hid_bridge/build/
+ios/firmware/tests/test_hid_command
+ios/firmware/tests/test_hid_state
+ios/firmware/tests/test_hid_input
+*.dSYM/

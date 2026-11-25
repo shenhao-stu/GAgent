@@ -1,0 +1,4 @@
+# GAgent with the Presence status UI (Dynamic Island, Lock Screen Live Activity, in-place answers, and in-app strip).
+#   xcodegen generate -s project.presence.yml     ->  GAgentWithPresence.xcodeproj, scheme GAgent
+include: [project.yml, Presence/presence.yml]
+name: GAgentWithPresence

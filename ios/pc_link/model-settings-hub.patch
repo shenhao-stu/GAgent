@@ -1,0 +1,71 @@
+--- a/frontends/hub.py
++++ b/frontends/hub.py
+@@ -16,8 +16,9 @@
+ NOISE = re.compile(r'\**LLM Running \(Turn \d+\) \.\.\.\**|`{3,}.*?`{3,}|<thinking>.*?</thinking>', re.DOTALL)
+
+ class HubClient:
+-    def __init__(self, name, put_task=None, get_outputs=None, abort=None, state=None, on_ev=None, sub=(), fixed=False, llm=None, inject=None):
++    def __init__(self, name, put_task=None, get_outputs=None, abort=None, state=None, on_ev=None, sub=(), fixed=False, llm=None, inject=None, model_settings=None):
+         self.name, self.put_task, self.get_outputs, self.abort, self.llm, self.inject = name, put_task, get_outputs, abort, llm, inject
++        self.model_settings = model_settings
+         self.state, self.on_ev, self.sub, self.fixed = state or dict, on_ev, list(sub), fixed  # fixed -> stable name
+         self._closed, self._task = False, None
+         self._tc, self._ws, self._lp = {}, None, None   # (i,j) -> (fp, title): a finished step is never re-scanned
+@@ -42,7 +43,7 @@
+             try:
+                 async with websockets.connect(URL, open_timeout=3, max_size=None) as ws:
+                     self._ws, self._lp = ws, asyncio.get_running_loop()
+-                    caps = [k for k, v in (('get', self.get_outputs), ('put', self.put_task), ('abort', self.abort), ('llm', self.llm), ('inject', self.inject)) if v]
++                    caps = [k for k, v in (('get', self.get_outputs), ('put', self.put_task), ('abort', self.abort), ('llm', self.llm), ('inject', self.inject), ('model_settings', self.model_settings)) if v]
+                     await ws.send(json.dumps({'op': 'hello', 'name': self.name, 'pid': os.getpid(),
+                                               'fixed': self.fixed, 'caps': caps, 'sub': self.sub}))
+                     async for raw in ws: await self._on_cmd(ws, json.loads(raw))
+@@ -88,6 +89,7 @@
+         elif op == 'put_task': data = (c.get('text') and await asyncio.to_thread(self.put_task, c['text'])) or {'ok': 1}
+         elif op == 'abort': data = (await asyncio.to_thread(self.abort) or {'ok': 1}) if self.abort else {'error': 'no abort hook', 'code': 'nosupport'}
+         elif op == 'llm': data = await asyncio.to_thread(self.llm, c.get('no')) if self.llm else {'error': 'no llm hook', 'code': 'nosupport'}
++        elif op == 'model_settings': data = await asyncio.to_thread(self.model_settings, c.get('change')) if self.model_settings else {'error': 'Model preferences unavailable', 'code': 'nosupport'}
+         elif op == 'inject': data = (await asyncio.to_thread(self.inject, c.get('kind'), c.get('text')) or {'ok': 1}) if self.inject else {'error': 'no inject hook', 'code': 'nosupport'}
+         after_reply = data if callable(data) else None  # deferred host action, e.g. exit after acknowledgement
+         await ws.send(json.dumps({'op': 'r', 'id': c.get('id'), 'name': self.name, 'data': {'ok': 1} if after_reply else data}, default=str))
+@@ -146,12 +148,20 @@
+         old = getattr(agent, attr, None)
+         setattr(agent, attr, f'{old}\n\n{text}' if old else text)   # append: several injects in one turn all land
+     try:
++        model_settings = None
++        if all(hasattr(agent, key) for key in ('_model_lock', '_llm_config_keys', 'llmclients')):
++            try:
++                from .pc_model_settings import ModelSettings
++            except ImportError:
++                from pc_model_settings import ModelSettings
++            model_settings = ModelSettings(agent)
+         try: serve()                                   # best effort: bring up a local hub if none is listening
+         except Exception: pass
+         if not hasattr(agent, '_hub_inbox'): agent._hub_inbox = []
+         agent._hub = HubClient(name or getattr(agent, 'name', 'agent'), put_task or _put,
+                                get_outputs or (lambda: agent.all_outputs), abort or agent.abort,
+                                llm=llm or (_llm if hasattr(agent, 'list_llms') else None),
++                               model_settings=model_settings,
+                                inject=inject or (_inject if hasattr(agent, 'intervene') else None),
+                                state=lambda: {'run': bool(getattr(agent, 'is_running', False)),
+                                               'llm': getattr(getattr(agent, 'llmclient', None), 'name', '')})
+@@ -175,7 +185,7 @@
+             if os.name != "nt": os.fchmod(f.fileno(), 0o600)
+             f.write(TOKEN)
+     except OSError: pass
+-    STATUS = {'offline': 404, 'gone': 404, 'timeout': 504, 'nosupport': 501, 'badop': 400, 'busy': 409, 'idle': 409,
++    STATUS = {'offline': 404, 'gone': 404, 'timeout': 504, 'nosupport': 501, 'badop': 400, 'busy': 409, 'conflict': 409, 'idle': 409,
+               'history_changed': 409, 'session_start': 503}
+     p2p = None
+     @asynccontextmanager
+@@ -297,6 +307,10 @@
+     async def api_llms(name: str): return out(await ask(name, {'op': 'llm'}))
+     @app.post('/api/{name}/llm')
+     async def api_llm(name: str, body: dict): return out(await ask(name, {'op': 'llm', 'no': int(body.get('no', -1))}))
++    @app.get('/api/{name}/model_settings')
++    async def api_model_settings(name: str): return out(await ask(name, {'op': 'model_settings'}))
++    @app.post('/api/{name}/model_settings')
++    async def api_set_model_settings(name: str, body: dict): return out(await ask(name, {'op': 'model_settings', 'change': body}))
+     # ---- optional P2P pairing; delete this block to remove it completely ----
+     try:
+         from hub_p2p import install as _install_p2p
