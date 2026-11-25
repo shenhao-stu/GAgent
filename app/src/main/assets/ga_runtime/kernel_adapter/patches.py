@@ -33,6 +33,17 @@ def bind_sess(sess):
             _TID_REG[tid] = (lambda s=sess: s)
 
 
+def unbind_sess(sess):
+    """结束的工作线程仅清理自己的归属，不覆盖后来绑定的会话。"""
+    owner = getattr(_tls, 'sess', None)
+    if owner is None:
+        with _TID_LOCK:
+            ref = _TID_REG.get(threading.get_ident())
+        owner = ref() if ref is not None else None
+    if owner is sess:
+        bind_sess(None)
+
+
 def current_sess():
     """当前线程归属 sess；无归属返回 None（绝不误落到焦点）。"""
     s = getattr(_tls, 'sess', None)

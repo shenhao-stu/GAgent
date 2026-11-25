@@ -1,0 +1,73 @@
+name: iOS
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.13'
+      - name: Install Python test dependencies and XcodeGen
+        run: |
+          python -m pip install -r requirements-test.txt
+          python -m playwright install chromium
+          command -v xcodegen || brew install xcodegen
+      - name: Source audit
+        run: python tools/audit_source.py
+      - name: ESP32-S3 HID firmware host unit tests (ASan/UBSan)
+        run: |
+          make -C ios/firmware/tests
+          make -C ios/firmware/tests clean
+      - name: Presence Swift Package, Python snapshot, and WebUI strip tests
+        run: PYTHON="$(command -v python)" bash ios/Presence/test.sh
+      - name: Signed iOS Python runtime, policy, and bridge contract suites
+        run: python ios/tests/run_all.py
+      - name: iOS WebUI JavaScript unit tests and syntax check
+        run: |
+          for f in ios/tests/test_*.js; do
+            node "$f"
+          done
+          find ios/GAgent app/src/main/assets/ga_runtime/webui -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Generate Xcode projects and run BoardKitTests on iOS Simulator
+        run: |
+          cd ios
+          xcodegen generate
+          xcodegen generate -s project.presence.yml
+          xcodegen generate -s project.presence-app.yml
+          SIM_ID="$(xcrun simctl list devices available -j | python -c '
+          import json, sys
+          devs = json.load(sys.stdin).get("devices", {})
+          candidates = [
+              (runtime, d["udid"], d["name"])
+              for runtime, items in devs.items() if "iOS" in runtime
+              for d in items if d.get("isAvailable") and "iPhone" in d.get("name", "")
+          ]
+          candidates.sort(reverse=True)
+          assert candidates, "No available iPhone Simulator found"
+          print(candidates[0][1])
+          ')"
+          echo "Testing BoardKitTests on Simulator UDID: $SIM_ID"
+          xcodebuild test \
+            -project GAgent.xcodeproj \
+            -scheme BoardKitTests \
+            -destination "platform=iOS Simulator,id=$SIM_ID" \
+            CODE_SIGNING_ALLOWED=NO \
+            -quiet

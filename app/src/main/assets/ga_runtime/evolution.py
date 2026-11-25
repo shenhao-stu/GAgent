@@ -12,12 +12,13 @@
 
 纯函数为主, 无副作用的合并核心(merge3/merge_text)可独立单测; 落盘只在 evo_merge 一处。
 """
-import os, io, json, zipfile, difflib, shutil, time
+import os, io, json, zipfile, difflib, shutil, time, sys
 
 # ── 跟踪范围: 只跟"可自演化的文本文件", 排除模型/三方压缩库(必须与 Kotlin isTrackedText 一致) ──
 _TRACKED_EXT = ('.py', '.md', '.txt', '.json', '.js', '.css', '.html')
 
 def is_tracked(rel):
+    if sys.platform == 'ios': return False  # App code updates only through signed releases; memory files remain editable via file tools.
     r = (rel or '').replace('\\', '/').lstrip('/')
     if '..' in r.split('/'):                       # 真·拦目录穿越(evo_prepare/evo_merge 共用此守卫): 防 zip 内 ../ 落盘越界
         return False

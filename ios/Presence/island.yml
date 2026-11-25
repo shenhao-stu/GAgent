@@ -1,0 +1,25 @@
+# Presence's widget extension: the Dynamic Island and the Lock Screen card. It is one more bundle to sign
+# ($(GAGENT_APP_ID).presence); an app built without it keeps everything in app.yml.
+targets:
+  GAgent:
+    dependencies:
+      - target: GAgentPresence
+        embed: true
+  GAgentPresence:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Core
+      - path: Shared
+      - path: Widget
+        excludes: ["Info.plist"]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(GAGENT_APP_ID).presence"
+        INFOPLIST_FILE: Presence/Widget/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"

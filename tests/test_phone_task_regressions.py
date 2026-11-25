@@ -143,20 +143,20 @@ class VisualObservationTest(unittest.TestCase):
                               {'bbox': [30, 6, 50, 26], 'label': '搜索'},
                               {'bbox': [55, 6, 75, 26], 'label': '取消'},
                               {'bbox': [80, 6, 90, 26], 'label': None}]
-                cache = {'thumb': None, 'roi': None, 'dets': None}
-                with patch.object(droid, '_LOOK_CACHE', cache), \
+                prev = {'roi': None, 'dets': None}
+                with patch.object(droid, '_LOOK_PREV', prev), \
                      patch.object(droid, 'shot', return_value=frame) as shot, \
-                     patch.object(droid, 'ui_detect', return_value=detections) as detect:
+                     patch.object(droid, 'ui_detect', side_effect=lambda *a, **kw: [dict(d) for d in detections]) as detect:
                     hits = droid.look(roi='lower', label='搜索')
                     self.assertEqual([d['label'] for d in hits], ['搜索入口', '搜索'])
                     self.assertEqual([(d['x'], d['y']) for d in hits],
                                      [(15, height // 2 + 16), (40, height // 2 + 16)])
                     other = droid.look(roi='lower', label='取消')
                     self.assertEqual([d['label'] for d in other], ['取消'])
-                    self.assertTrue(other[0]['cached'])
+                    self.assertNotIn('cached', other[0])
                     self.assertEqual(len(droid.look(roi='lower')), 4)
                     self.assertEqual(droid.look(roi='lower', label='不存在'), [])
-                    self.assertEqual(detect.call_count, 1)
+                    self.assertEqual(detect.call_count, 4)
                     self.assertEqual(shot.call_count, 4)
 
     def test_invalid_label_is_rejected_before_capture(self):

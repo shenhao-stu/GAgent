@@ -1,0 +1,10 @@
+# Presence in the app: the in-app strip, the settings rows, the notifications and the system progress text.
+# Paths are relative to this folder. The island and the Lock Screen card are island.yml.
+targets:
+  GAgent:
+    sources:
+      - path: Core
+      - path: Shared
+      - path: App
+      - path: Web
+        buildPhase: resources

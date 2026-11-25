@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- 核心 CFBundle 键(GENERATE_INFOPLIST_FILE=NO 时必须自带; 缺 CFBundleVersion ⇒ 资产戳恒"0"⇒引擎永不重解包) -->
+  <key>GAReplayKeychainGroup</key><string>$(AppIdentifierPrefix)$(GAGENT_APP_ID).replaycapture</string>
+  <key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
+  <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+  <key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
+  <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
+  <key>CFBundleDisplayName</key><string>GAgent</string>
+  <key>CFBundleURLTypes</key>
+  <array><dict><key>CFBundleURLSchemes</key><array><string>gagent</string></array></dict></array>
+  <key>UILaunchScreen</key><dict/>
+  <!-- ATS: 仅放行本地网络/回环(本机代理与局域网 Hub); 远端模型与中继连接一律强制 HTTPS/WSS -->
+  <key>NSAppTransportSecurity</key>
+  <dict><key>NSAllowsLocalNetworking</key><true/></dict>
+  <key>NSCameraUsageDescription</key><string>用于拍照附件与扫码配对 / Photos as attachments and QR pairing</string>
+  <key>NSPhotoLibraryUsageDescription</key><string>用于在对话中选择照片作为附件 / Pick photos to attach in chat</string>
+  <key>NSPhotoLibraryAddUsageDescription</key><string>用于保存生成的图片到相册 / Save generated images</string>
+  <key>NSMicrophoneUsageDescription</key><string>用于按住说话在本机将语音转为草稿。 / Dictate a draft on device while holding the microphone.</string>
+  <key>NSSpeechRecognitionUsageDescription</key><string>把你按住说出的内容在 iPhone 上转为草稿，不上传录音。 / Transcribe your speech on this iPhone into a draft without uploading audio.</string>
+  <key>NSBluetoothAlwaysUsageDescription</key><string>连接你的 ESP32-S3，按你的指令通过蓝牙键鼠执行屏幕操作 / Connect your ESP32-S3 to send mouse and keyboard actions for tasks you approve.</string>
+  <key>UIBackgroundModes</key><array><string>bluetooth-central</string><string>processing</string></array>
+  <key>BGTaskSchedulerPermittedIdentifiers</key>
+  <array><string>$(PRODUCT_BUNDLE_IDENTIFIER).agent.*</string></array>
+  <key>NSSupportsLiveActivities</key><true/>
+  <key>UISupportedInterfaceOrientations</key>
+  <array><string>UIInterfaceOrientationPortrait</string></array>
+  <key>ITSAppUsesNonExemptEncryption</key>
+  <false/>
+</dict>
+</plist>

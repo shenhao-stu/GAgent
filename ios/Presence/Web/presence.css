@@ -1,0 +1,28 @@
+/* The strip above the composer. It lives inside #comp, so the composer's own height bookkeeping includes it. */
+#gaPresence{display:flex;flex-wrap:wrap;align-items:center;gap:10px;min-height:46px;margin:0 0 8px;padding:5px 6px 5px 14px;
+  border:1px solid var(--line);border-radius:23px;background:var(--surface);box-shadow:var(--elev-1);
+  font-size:.90625rem;color:var(--txt);transition:border-color .2s,background .2s}
+#gaPresence[hidden],#gaPresence button[hidden]{display:none}   /* the display rules below would otherwise undo `hidden` */
+#gaPresence .gpGlyph{flex:none;width:18px;height:18px;display:flex}
+#gaPresence .gpGlyph svg{width:18px;height:18px}
+#gaPresence .gpText{flex:1 1 8ch;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#gaPresence .gpText b{font-weight:600}
+#gaPresence button{flex:0 1 auto;min-width:44px;min-height:44px;max-width:100%;border:0;border-radius:22px;padding:8px 13px;background:var(--surface2);
+  color:var(--txt);font:inherit;font-size:.875rem;line-height:1.3;font-weight:600;display:flex;align-items:center;gap:6px}
+#gaPresence button svg{flex:none;width:13px;height:13px}
+#gaPresence button span{min-width:0;overflow-wrap:anywhere}
+#gaPresence button:disabled{opacity:.55}
+/* You have the phone: an inverted card that cannot be mistaken for the agent working. */
+#gaPresence[data-phase=paused]{flex-wrap:wrap;padding:11px 12px 10px 14px;border-radius:22px;border-color:transparent;
+  background:var(--md-sys-color-secondary-container);color:var(--md-sys-color-on-secondary-container)}
+#gaPresence[data-phase=paused] .gpText{flex:1 1 calc(100% - 30px)}
+#gaPresence[data-phase=paused] .gpText b{font-weight:650}
+#gaPresence[data-phase=paused] .gpText span{opacity:.62}
+#gaPresence[data-phase=paused] button{flex:1 1 8em;justify-content:center;background:#fff;color:#000}
+#gaPresence[data-phase=paused] button.gpEnd{flex:.5 1 4em;background:rgba(255,255,255,.16);color:#ff6961}
+/* The strip stands in for the page's own line for the tool at work. */
+.gpHandoff #twLive{display:none!important}
+/* The settings rows use the page's own row and switch styles; only the unavailable state is ours. */
+.gpSetting[hidden]{display:none}
+.gpSetting.gpOff{opacity:.45}
+.gpSetting .sw:disabled{pointer-events:none}

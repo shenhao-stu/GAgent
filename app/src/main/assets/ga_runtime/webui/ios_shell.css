@@ -1,0 +1,116 @@
+/* iOS start surface and shared conversation drawers. No engine or task state here. */
+.iosApp #chat:has(#empty),.iosApp #pcView #pcMsgs:has(.pcStart){padding:20px 24px 28px;overflow-x:hidden;display:flex;flex-direction:column}
+.iosApp #empty,.iosApp #pcMsgs .pcStart{position:relative;inset:auto;flex:0 0 auto;min-height:var(--ios-home-height,100%);padding:0;margin:0;max-width:none;align-items:stretch;justify-content:center;pointer-events:auto}
+.iosApp #empty .heroCore,.iosApp .pcStart .heroCore{display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;max-width:440px;margin:auto;padding:30px 0;transform:none!important;will-change:auto}
+.iosApp #empty .gaMark,.iosApp #empty .tipLine,.iosApp .iosHeroFoot{display:none}
+.iosApp #empty h2,.iosApp .pcStart h2{font-size:clamp(1.55rem,6.7vw,1.85rem);font-weight:600;letter-spacing:-.035em;line-height:1.3;margin:0;max-width:none;text-align:center;color:var(--txt)}
+.iosApp #empty p,.iosApp .pcStart p{margin:0;font-size:.88rem;line-height:1.65;max-width:25em;text-align:center;color:var(--txt2)}
+.iosApp #heroChips,.iosApp .pcStarterList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;max-width:none;gap:10px;margin:20px 0 0}
+.iosApp .heroChip,.iosApp .pcStarterList .heroChip{min-height:48px;padding:10px 12px;gap:8px;justify-content:flex-start;border:1px solid var(--line);border-radius:16px;background:transparent;box-shadow:none;color:var(--txt);font-size:.82rem;font-weight:500;line-height:1.4;animation:none;text-align:left}
+.iosApp .heroChip::after,.iosApp .pcStarterList .heroChip::after{display:none}
+.iosApp .heroChip svg,.iosApp .pcStarterList .heroChip svg{width:18px;height:18px;flex:none;color:var(--txt2)}
+.iosApp .heroChip .cv{white-space:normal;overflow:visible}
+.iosApp .heroChip:active,.iosApp .pcStarterList .heroChip:active{background:var(--surface3);transform:scale(.98)}
+.iosApp .iosPhoneCard{display:flex;align-items:center;gap:12px;width:100%;margin-top:12px;padding:14px 16px;min-height:64px;text-align:left;border:0;border-radius:18px;background:var(--surface3);color:var(--txt);box-shadow:inset 0 0 0 .5px var(--line);pointer-events:auto}
+.iosApp .iosPhoneGlyph{display:flex;align-items:center;justify-content:center;flex:none;width:32px;height:36px;color:var(--fut)}
+.iosApp .iosPhoneGlyph svg{width:21px;height:26px}
+.iosApp .iosPhoneCopy{display:flex;flex:1;min-width:0;flex-direction:column;gap:3px}
+.iosApp .iosPhoneCopy b{font-size:.87rem;font-weight:550;line-height:1.3}
+.iosApp .iosPhoneCopy>span{font-size:.73rem;line-height:1.4;color:var(--txt2)}
+.iosApp .iosPhoneArrow{display:flex;align-items:center;color:var(--txt2)}
+.iosApp .iosPhoneArrow svg{width:15px;height:15px}
+.iosApp .iosComputerCard .iosPhoneGlyph svg{height:21px}
+.iosApp .iosComputerCard .iosPhoneArrow{font-size:26px;font-weight:300;line-height:1}
+.iosApp #comp .cap:focus-within{box-shadow:none;border-color:color-mix(in srgb,var(--txt2) 32%,var(--line))}
+.iosApp #comp #attachRow:empty+#in:placeholder-shown~.captools #btn:not(.stop){background:var(--surface2);color:var(--txt2)}
+@media(max-width:360px){.iosApp #chat:has(#empty),.iosApp #pcView #pcMsgs:has(.pcStart){padding-inline:20px}.iosApp .heroChip,.iosApp .pcStarterList .heroChip{font-size:.78rem;padding:9px;gap:7px}.iosApp #empty .heroCore,.iosApp .pcStart .heroCore{padding:16px 0}}
+@media(max-height:700px){.iosApp #empty .heroCore,.iosApp .pcStart .heroCore{padding-block:12px;gap:10px}.iosApp #heroChips,.iosApp .pcStarterList{margin-top:10px}}
+
+.iosApp #drawer,.iosApp #pcView #pcSide{display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;border:0;background:var(--surface);box-shadow:none}
+.iosApp #drawer.on,.iosApp #pcView.side #pcSide{box-shadow:10px 0 40px rgba(0,0,0,.12)}
+.iosApp .iosSidebarHead{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:calc(12px + env(safe-area-inset-top)) 16px 4px 24px}
+.iosApp .iosSidebarHead h2{margin:0;font-size:1.15rem;line-height:1.4;letter-spacing:-.025em;font-weight:650}
+.iosApp .iosSidebarHead .iconbtn{color:var(--txt2);width:44px;height:44px}
+.iosApp .iosSidebarHead .iconbtn svg{width:21px;height:21px}
+.iosApp #drawer .dwTop{flex:none;padding:8px 16px 10px;gap:0}
+.iosApp #drawer .dwClear{display:none}
+.iosApp #drawer .dwSearch,.iosApp #pcView #pcSearch{flex:none;min-height:44px;box-sizing:border-box;border:0;border-radius:13px;background:var(--surface3);padding:10px 12px}
+.iosApp #drawer .dwSearch{width:100%}
+.iosApp #pcView #pcSide #pcSearch{margin:8px 16px 10px}
+.iosApp #drawer .dwSearch input,.iosApp #pcSearch input{font-size:16px;line-height:24px;min-width:0;width:100%}
+.iosApp #drawer .dwNew,.iosApp #pcSide .dwNew{flex:none;margin:0 16px 8px;width:calc(100% - 32px);padding:10px 12px;min-height:46px;border:0;border-radius:13px;background:transparent;color:var(--fut);font-size:.88rem;font-weight:550}
+.iosApp #drawer .dwNew:active,.iosApp #pcSide .dwNew:active{background:var(--surface3)}
+.iosApp #drawer .dwNew svg,.iosApp #pcSide .dwNew svg{width:20px;height:20px}
+.iosApp #drawer .dwList,.iosApp #pcView #pcSideList{flex:1 1 0;min-height:0;padding:0 12px 12px;overflow:auto;overscroll-behavior:contain}
+.iosApp #drawer .dwSec,.iosApp #pcSide .dwSec{font-size:.72rem;font-weight:500;color:var(--txt2);padding:14px 12px 6px}
+.iosApp #drawer .dwItem,.iosApp #pcSide .pcRow{min-height:48px;border-radius:12px;padding:12px;gap:9px}
+.iosApp #drawer .dwItem.cur,.iosApp #pcSide .pcRow.cur{box-shadow:none;background:var(--surface3)}
+.iosApp #pcSide .pcRow{min-height:64px;padding-block:10px}
+.iosApp #pcSide .pcRow .t{font-size:.9rem;line-height:1.45}
+.iosApp #pcSide .pcRowSub{font-size:.72rem;line-height:1.5;margin-top:3px}
+.iosApp #drawer .dwUserBar,.iosApp #pcSide .dwUserBar{position:relative;flex:none;gap:4px;min-height:0;box-sizing:border-box;padding:8px 16px max(8px,env(safe-area-inset-bottom));background:var(--ios-control-bg,var(--surface));backdrop-filter:var(--ios-control-filter,none);border-top:0}
+.iosApp .dwUserBar::before{content:'';position:absolute;top:0;left:24px;right:24px;height:.5px;background:var(--line);pointer-events:none}
+.iosApp .dwUserBar>.dwIcon[data-i18n-aria="logout"]{display:none}
+.iosApp .dwUserBar .dwUser{min-height:48px;padding:6px 8px;gap:10px}
+.iosApp .dwUserBar .dwUserName{font-size:.9rem;font-weight:550}
+.iosApp .dwUserBar>.dwIcon{flex:none;width:44px;height:44px;border-radius:14px;background:transparent;color:var(--txt2)}
+.iosApp .dwUserBar>.dwIcon:active{background:var(--surface3)}
+.iosApp .dwUserBar .userAvatar{width:36px;height:36px}
+.iosApp .dwUserBar>.dwIcon svg{width:22px;height:22px}
+.iosApp .dwUserBar>.dwIcon{transition:background .15s,opacity .15s}
+.iosApp #pcCap{display:block;padding:10px 10px 8px}
+.iosApp #pcCap #pcIn{display:block;width:100%;box-sizing:border-box;padding:8px 6px 12px}
+.iosApp #pcCap .captools{width:100%;gap:8px}
+.iosApp #pcModelBtn{display:inline-flex;align-items:center;gap:6px;min-width:0;min-height:44px;max-width:calc(100% - 110px);padding:0 12px;border:0;border-radius:16px;background:transparent;color:var(--txt2);font-size:.82rem;font-weight:550;transition:background .15s,transform .12s}
+.iosApp .pcModelLabel{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2}
+.iosApp .pcModelChevron{display:block;flex:none;width:16px;height:16px;transition:transform .18s var(--ios-ease)}
+.iosApp #pcModelBtn[aria-expanded=true]{background:var(--surface2)}
+.iosApp #pcModelBtn[aria-expanded=true] .pcModelChevron{transform:rotate(180deg)}
+.iosApp #pcModelBtn:active:not(:disabled){background:var(--surface2);transform:scale(.97)}
+.iosApp #pcModelBtn:disabled{opacity:.45}
+.iosApp #pcVoiceBtn{display:flex;flex:none;align-items:center;justify-content:center;width:44px;height:44px;color:var(--txt)}
+.iosApp #pcVoiceBtn[hidden]{display:none}
+.iosApp .iosPCModelOverlay{position:fixed;inset:0;z-index:400;display:flex;align-items:flex-end;justify-content:center}
+.iosApp .iosPCModelMask{position:absolute;inset:0;background:rgba(0,0,0,.28);animation:pcModelFade .2s ease}
+.iosApp .iosPCModelSheet{position:relative;width:min(100%,600px);max-height:85dvh;display:flex;flex-direction:column;border-radius:28px 28px 0 0;background:var(--surface);box-shadow:0 -12px 48px rgba(0,0,0,.12);overflow:hidden;animation:pcModelRise .3s cubic-bezier(.2,.8,.2,1)}
+.iosApp .iosPCModelSheet header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:24px 24px 18px;border-bottom:.5px solid var(--line);background:var(--ios-control-bg,var(--surface));backdrop-filter:var(--ios-control-filter,none)}
+.iosApp .iosPCModelSheet h2{margin:0;font-size:1.15rem;letter-spacing:-.02em;font-weight:650}
+.iosApp .iosPCModelSheet header p{margin:5px 0 0;font-size:.76rem;line-height:1.5;color:var(--txt2)}
+.iosApp .pcModelDone{flex:none;min-width:56px;min-height:44px;border:0;border-radius:22px;background:var(--surface3);color:var(--fut);font-weight:600}
+.iosApp .pcModelContent{overflow:auto;padding:20px 20px max(20px,env(safe-area-inset-bottom));overscroll-behavior:contain}
+.iosApp .pcModelList{border-radius:20px;background:var(--surface3);overflow:hidden}
+.iosApp .pcModelOption{display:flex;align-items:center;gap:16px;width:100%;padding:16px;text-align:left;border:0;border-bottom:.5px solid var(--line);background:transparent;color:var(--txt);min-height:68px}
+.iosApp .pcModelOption:last-child{border-bottom:0}
+.iosApp .pcModelOption>span:first-child{min-width:0;flex:1}
+.iosApp .pcModelOption b{display:block;font-size:.92rem;font-weight:550;overflow-wrap:anywhere;line-height:1.4}
+.iosApp .pcModelOption small{display:block;margin-top:4px;color:var(--txt2);font-size:.76rem;overflow-wrap:anywhere;line-height:1.5}
+.iosApp .pcModelCheck{color:var(--fut);font-size:1.1rem;visibility:hidden}
+.iosApp .pcModelOption[aria-pressed=true] .pcModelCheck{visibility:visible}
+.iosApp .pcModelOption[aria-pressed=true]{background:color-mix(in srgb,var(--fut) 7%,transparent)}
+.iosApp .pcReasoning{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px;padding:4px 4px;font-size:.9rem}
+.iosApp .pcReasoning[hidden]{display:none}
+.iosApp .pcReasoning select{min-height:44px;max-width:65%;border:0;border-radius:12px;padding:6px 12px;font:inherit;background:var(--surface3);color:var(--txt)}
+.iosApp .pcModelNote{margin:14px 4px;font-size:.78rem;line-height:1.6;color:var(--txt2)}
+.iosApp .pcModelError{font-size:.8rem;line-height:1.5;color:var(--danger,#c93535)}
+.iosApp .pcModelError:empty{display:none}
+.iosApp .pcModelSave{min-height:50px;width:100%;border:0;border-radius:18px;background:var(--fut);color:white;font-size:.9rem;font-weight:600;margin-top:6px}
+.iosApp .pcModelSave:disabled,.iosApp .pcModelOption:disabled{opacity:.5}
+.iosApp .iosPCModelOverlay.out{pointer-events:none;opacity:0;transition:opacity .18s}
+@keyframes pcModelRise{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes pcModelFade{from{opacity:0}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.iosApp .iosPCModelSheet,.iosApp .iosPCModelMask{animation:none}.iosApp .iosPCModelOverlay.out,.iosApp #pcModelBtn,.iosApp .pcModelChevron{transition:none}.iosApp #pcModelBtn:active:not(:disabled){transform:none}}
+@media(max-width:899px){
+  .iosApp #drawer,.iosApp #pcView #pcSide{position:fixed;left:0;top:var(--ios-viewport-top,0px);bottom:auto;width:min(86vw,360px);height:var(--ios-viewport-height,100dvh);max-width:none;border-radius:0 24px 24px 0;z-index:var(--z-drawer);transition:transform .32s cubic-bezier(.22,.75,.2,1)}
+  .iosApp #pcView #pcScrim{position:fixed;inset:0;z-index:var(--z-mask)}
+}
+@media(min-width:900px){.iosApp #pcSide .iosSidebarHead{padding-top:12px}.iosApp #pcSide .iosSidebarHead .iconbtn{display:none}}
+@media(prefers-reduced-motion:reduce){.iosApp #drawer,.iosApp #pcView #pcSide{transition:none}}
+
+.iosApp .dwSearch input::placeholder{color:var(--txt2);opacity:1}
+.iosApp .dwItem .more,.iosApp .pcRow .pcRowMore{color:var(--txt2);opacity:1}
+/* Centred by its margins, so a long message can use the width of the screen (centring with left:50% would wrap it at
+   half of that). A toast that wraps reads as a rounded rectangle rather than a swollen pill, and a long token breaks
+   instead of spilling out. One line is still fully rounded: the radius is more than half its height. */
+.iosApp #toast{left:16px;right:16px;width:fit-content;max-width:min(calc(100% - 32px),440px);margin-inline:auto;transform:translateY(12px);
+  border-radius:22px;line-height:1.4;overflow-wrap:anywhere;pointer-events:none}
+.iosApp #toast.on{transform:none}

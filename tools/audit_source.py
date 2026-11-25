@@ -17,11 +17,25 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 SKIP_ROOT = {'.git', '.gradle', 'build', '.pytest_cache', '.venv', 'dist', '.kotlin'}
-BUILD_DIRS = {('app', 'build'), ('tsbridge', 'build')}
+BUILD_DIRS = {
+    ('app', 'build'),
+    ('tsbridge', 'build'),
+    ('ios', 'Vendor'),
+    ('ios', 'Resources'),
+    ('ios', 'build'),
+    ('ios', 'GAgent.xcodeproj'),
+    ('ios', 'GAgentWithPresence.xcodeproj'),
+}
+BUILD_SUBDIRS = {
+    ('ios', 'Presence', 'build'),
+    ('ios', 'Presence', '.build'),
+    ('ios', 'firmware', 'build'),
+}
 CACHE_DIRS = {'__pycache__', '.pytest_cache'}
 FORBIDDEN_NAMES = {'local.properties', 'debug.keystore', 'mykey.py', 'mykey.json',
                    '.bus_token', 'keypatch.json', '_ga_voice_sig.py', 'gakey_gen.h', '.env',
                    'ga.integrations.json', 'pclink_rooms.json', 'devices.json',
+                   '.team_id', '.bundle_id',
                    # Build-injected relay defaults are shared, extractable signing material.
                    'pclink_defaults.json'}
 FORBIDDEN_SUFFIXES = {'.keystore', '.jks', '.p12', '.pfx', '.pem', '.key', '.db', '.sqlite', '.sqlite3'}
@@ -52,8 +66,6 @@ PUBLIC_SITE_ANCHORS = {
 def public_documentation_link(name, data, start, end):
     if name not in PUBLIC_LINK_DOCS:
         return False
-    # The endpoint rule ends at the hostname. Inspect the entire URL so a path,
-    # query, suffix domain or embedded credential cannot inherit the exception.
     token = re.match(rb'[^\s\x00\x22\x27<>`)\]]+', data[start:])
     if token is None or start + token.end() < end:
         return False
@@ -66,17 +78,12 @@ def public_documentation_link(name, data, start, end):
             and url.fragment in PUBLIC_SITE_ANCHORS[url.netloc])
 
 
-# Optional modules offers one public relay as an explicit, user-confirmed preset (never a default).
-# Exact file and exact quoted URL only; any other hosted endpoint, in any file, still fails.
 PUBLIC_RELAY_PRESET_FILES = {'app/src/main/assets/ga_runtime/webui/integrations.js', 'assets/ga_runtime/webui/integrations.js'}
-PUBLIC_RELAY_PRESET_URL = b"'wss://p2p." + b"gaagent" + b".ai/ws'"   # split so this tool does not contain the literal
-
-
+PUBLIC_RELAY_PRESET_URL = b"'wss://p2p." + b"gaagent" + b".ai/ws'"
 PUBLIC_RELAY_PRESET_DECL = b'const PUBLIC_RELAY={url:'
 
 
 def public_relay_preset(name, data, start):
-    # One occurrence, as the declared preset's url literal: a copy, a concatenation or a silent default fails.
     decl = PUBLIC_RELAY_PRESET_DECL + PUBLIC_RELAY_PRESET_URL
     return (name in PUBLIC_RELAY_PRESET_FILES and data.count(PUBLIC_RELAY_PRESET_URL[1:-1]) == 1
             and data[start - 1 - len(PUBLIC_RELAY_PRESET_DECL):start - 1 + len(PUBLIC_RELAY_PRESET_URL)] == decl)
@@ -115,8 +122,6 @@ def audit_archive(name, data, depth=0, *, allow_public_docs=False):
                     else:
                         findings.extend(audit_archive(nested, archive.extractfile(member).read(), depth + 1))
     elif data.startswith(b'PK\x03\x04'):
-        # Chaquopy's .imy files are ZIPs too. Scanning only their compressed bytes
-        # would miss strings and files inside the packaged Python environment.
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             for member in archive.infolist():
                 if member.is_dir():
@@ -133,10 +138,10 @@ def audit_archive(name, data, depth=0, *, allow_public_docs=False):
 
 
 def source_files(root):
-    # Include new untracked files too; an allowlisted clean export must be checked before its first commit.
     def included(path):
         parts = path.relative_to(root).parts
         return (parts[0] not in SKIP_ROOT and parts[:2] not in BUILD_DIRS
+                and parts[:3] not in BUILD_SUBDIRS
                 and not any(x in CACHE_DIRS for x in parts))
     return sorted(p for p in root.rglob('*') if (p.is_file() or p.is_symlink()) and included(p))
 

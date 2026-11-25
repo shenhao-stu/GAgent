@@ -75,6 +75,64 @@ console.log('chat preservation, status grace, resume dedup and failed-send draft
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_peer_list_gaps_preserve_selected_chat():
+    """A successful but incomplete peer list must not navigate or reset reading state."""
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is required for JS behavior tests')
+    src = (CORE / 'webui/pclink.js').read_text(encoding='utf-8')
+    names = {'round': 'done', 'setPeer': 'name', 'pickPeer': 'ps'}
+    funcs = '\n'.join('function %s(%s){%s}' % (n, args, _func_body(src, n))
+                      for n, args in names.items())
+    harness = r'''
+const assert=require('assert');
+const original='chat-123@A',other={name:'other-1@B',caps:['get']};
+let curPeer=original,tok=1,offN=0,connected=true,idleRounds=0,newWatch=null;
+let knownNames=new Set(),gen=0,lastSig='sig',sigAge=0,pendingPut={text:'pending'};
+let segTxt={'0/0':{txt:'answer'}},taskSnap=[{folded:true}];
+const segments=segTxt,snapshots=taskSnap,pending=pendingPut;
+const task={folded:true},box={firstElementChild:task,innerHTML:'old chat',scrollTop:321,
+  _pcStick:false,_pcUserScroll:true,_pcPinSeq:7,style:{setProperty(){}}};
+const input={value:'draft'},sub={textContent:''};
+const document={getElementById:id=>({pcMsgs:box,pcIn:input,pcHdSub:sub})[id]};
+const t=k=>k,metaOf=()=>({}),isNew=()=>false,isAgent=p=>p.caps.includes('get');
+const lastPeerSaved=()=>({name:original}),lastPeer=lastPeerSaved,baseOf=n=>n.replace(/-\d+(?=@|$)/,''),noHub=n=>n.split('@')[0];
+const hasPid=n=>/-\d+(?=@|$)/.test(n);
+let response,doneCount=0,pulls=0,homes=0,skels=0,run=true,side;
+const api=(m,p,b,cb)=>cb(response),guard=(fn)=>fn();
+const renderRow=()=>{},renderOffline=()=>{},setRunBtn=v=>{run=v};
+const setPcHd=()=>{sub.textContent='connected'},renderSide=ps=>{side=ps};
+const renderHome=()=>{homes++},skel=()=>{skels++};
+const pullMsgs=done=>{pulls++;done()};
+function poll(ps){response=ps;const before=doneCount;round(()=>doneCount++);
+  assert.equal(doneCount,before+1,'each round must re-arm exactly once')}
+function preserved(){
+  assert.equal(curPeer,original);assert.equal(gen,0);assert.equal(lastSig,'sig');
+  assert.strictEqual(segTxt,segments);assert.strictEqual(taskSnap,snapshots);
+  assert.strictEqual(pendingPut,pending);assert.strictEqual(box.firstElementChild,task);
+  assert.equal(box.innerHTML,'old chat');assert.equal(box.scrollTop,321);
+  assert.equal(box._pcStick,false);assert.equal(box._pcUserScroll,true);
+  assert.equal(box._pcPinSeq,7);assert.equal(task.folded,true);assert.equal(input.value,'draft');
+  assert.equal(homes,0);assert.equal(skels,0);
+}
+for(const ps of [[],[other],[other,{name:'other-2@B',caps:['get']}],
+                [{name:'chat-456@A',caps:['get']}],[]]){
+  poll(ps);preserved();assert.equal(pulls,0);assert.equal(run,false);
+  assert.equal(sub.textContent,original+' · pcWaiting');assert.strictEqual(side,ps);
+}
+poll({error:'offline'});poll({error:'offline'});preserved();
+poll([{name:original,caps:['get']}]);preserved();assert.equal(pulls,1);
+// Explicit selection and the genuinely unselected home retain normal behavior.
+setPeer(other.name);poll([other]);assert.equal(curPeer,other.name);assert.equal(pulls,2);
+setPeer(null);poll([]);assert.equal(homes,1);
+poll([other]);assert.equal(curPeer,other.name);assert.equal(pulls,3);
+console.log('empty/partial lists, unrelated/restarted peers, recovery, manual selection: OK');
+'''
+    result = subprocess.run([node, '-e', funcs + '\n' + harness],
+                            capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def _module():
     spec = importlib.util.spec_from_file_location('pclink_reconnect_test', CORE / 'pclink.py')
     mod = importlib.util.module_from_spec(spec)

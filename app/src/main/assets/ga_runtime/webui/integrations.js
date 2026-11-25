@@ -51,8 +51,8 @@ function openIntegrations(focus){   // focus=module name: scroll its card into v
   upload.setAttribute('aria-label',en?'Import connection profile':'导入连接配置');importRow.appendChild(upload);
   section(en?'Connection profile':'连接配置').appendChild(importRow);
 
-  const inputs={};
-  for(const [name,spec] of Object.entries(MODULES)){
+  const inputs={},entries=(typeof isIOSClient==='function'&&isIOSClient())?Object.entries(MODULES).filter(([name])=>name==='pclink'):Object.entries(MODULES);
+  for(const [name,spec] of entries){
     const saved=config[name]||{},on=!!saved.url;
     const chip=el('span','intChip'+(on?' on':''),on?(en?'Enabled':'已启用'):(en?'Not set':'未配置'));
     const card=section(L([spec.zh[0],spec.en[0]]),chip);card.classList.add('intCard');

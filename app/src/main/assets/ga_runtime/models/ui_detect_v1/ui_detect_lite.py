@@ -111,6 +111,21 @@ def _containment(a, b):
     return inter / area_b if area_b > 0 else 0
 
 
+def _icon_name(img, bbox):
+    """符号图标命名是增强项: 模板缺失/异常时静默降级为 cls 回退, 不影响检测主流程。"""
+    try:
+        import icon_label
+        return icon_label.name_box(img, bbox)
+    except Exception:
+        return None
+
+
+def _glyph_like(text):
+    """OCR 把符号图标误读出的短碎片: <=2 个字符, 不含中文, 不是纯数字。"""
+    t = (text or '').strip()
+    return 0 < len(t) <= 2 and not t.isdigit() and not any('\u4e00' <= ch <= '\u9fff' for ch in t)
+
+
 def detect(image, conf=0.25, contain_thresh=0.5):
     """image: 路径 或 BGR ndarray → 元素列表(YOLO 21类 + 全图OCR 空间匹配)。
     conf: 仅向上过滤(见 NMS_CONF_FLOOR, 低于地板无效)。
@@ -142,9 +157,14 @@ def detect(image, conf=0.25, contain_thresh=0.5):
                     label = text
                     matched.add(i)
                     break
-        # 无文字: 文字类→None(不可造假文本), 其余控件→回退控件语义(Switch/EditText/Icon...)
+        # 无文字: 文字类→None(不可造假文本), 其余控件→常见符号图标名(search/plus/close/...),
+        # 认不出再回退控件语义(Switch/EditText/Icon...)
         if label is None and name not in TEXT_CLASSES:
-            label = name
+            label = _icon_name(img, (x1, y1, x2, y2)) or name
+        # OCR 常把符号图标读成 1-2 个字符的碎片(放大镜→"Q", 加号→"+", 菜单→"&=")。
+        # 这类非中文、非纯数字(角标 "2" 要保留)的短文本, 若模板能认出符号则以图标名为准。
+        elif name not in TEXT_CLASSES and _glyph_like(label):
+            label = _icon_name(img, (x1, y1, x2, y2)) or label
         elements.append({'bbox': [x1, y1, x2, y2],
                          'type': 'text' if name in TEXT_CLASSES else 'icon',
                          'label': label, 'cls': name, 'confidence': c})

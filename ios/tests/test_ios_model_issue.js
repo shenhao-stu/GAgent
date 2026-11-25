@@ -1,0 +1,11 @@
+const vm=require('node:vm'),assert=require('node:assert/strict');
+const {app,extract}=require('./webui_source.cjs'),c={};vm.createContext(c);
+vm.runInContext(['cleanStepText','iosModelIssue'].map(n=>extract(app,n)).join('\n'),c);
+const quota='**LLM Running (Turn 1) ...**\n\n!!!Error: HTTP 429: {"error":{"code":"1310","message":"Weekly/Monthly Limit Exhausted"}}';
+assert.equal(c.iosModelIssue(quota,'zh').title,'模型额度已用完');
+assert.equal(c.iosModelIssue('!!!Error: HTTP 429: rate_limit_error','zh').title,'请求暂时受限');
+assert.equal(c.iosModelIssue('!!!Error: HTTP 402: insufficient_credits','en').title,'Model quota exhausted');
+assert.equal(c.iosModelIssue('!!!Error: HTTP 401: invalid key','zh').title,'模型授权失败');
+for(const text of ['HTTP 429 means rate limiting.','Example:\n```\n!!!Error: HTTP 429\n```','Partial answer\n!!!Error: HTTP 429: busy','!!!Error: unexpected failure','!!!Error: HTTP 500: unknown'])assert.equal(c.iosModelIssue(text,'zh'),null);
+assert(quota.includes('Weekly/Monthly'));assert.equal(c.iosModelIssue(quota,'zh').details.includes('code'),true);
+console.log('PASS: quota exhaustion differs from temporary throttling; original errors retained; ordinary prose and partial answers unchanged.');
